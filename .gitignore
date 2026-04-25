@@ -1,0 +1,40 @@
+# data assets
+data/
+results/
+projects/
+input/
+output/
+
+# documents for development
+idea/
+specs/
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.uv/
+
+# test/lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# nix
+result
+result-*
+
+# editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
