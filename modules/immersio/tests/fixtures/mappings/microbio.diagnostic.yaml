@@ -1,0 +1,33 @@
+metadata:
+  semester: "2026-1"
+  course_slug: microbiology
+  course_name_kr: "미생물학"
+  mapping_version: 1
+
+columns:
+  - source: "학번"
+    kind: identity
+
+  - source: "M01_미생물에_관심"
+    axis: motivation
+    kind: likert
+
+  - source: "M02_세균에_대한_불안"
+    axis: anxiety
+    kind: likert
+
+  - source: "M03_관심있는_분야"
+    axis: interest_chapters
+    kind: multiselect
+
+  - source: "M04_불안_자유서술"
+    axis: anxiety_freetext
+    kind: freetext
+
+axes:
+  required:
+    - motivation
+    - anxiety
+    - interest_chapters
+  optional:
+    - anxiety_freetext
