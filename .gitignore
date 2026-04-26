@@ -31,6 +31,8 @@ htmlcov/
 # nix
 result
 result-*
+_workspace/
+.direnv/
 
 # editor / OS
 .DS_Store
@@ -38,3 +40,4 @@ result-*
 *.swo
 .idea/
 .vscode/
+
