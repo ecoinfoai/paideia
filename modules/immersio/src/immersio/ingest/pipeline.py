@@ -99,16 +99,26 @@ def _detect_unique_yaml(dir_path: Path) -> Path:
 
 
 def _walk_unrecognized(bronze_dir: Path, used_paths: set[Path]) -> list[str]:
+    """Enumerate non-input files inside bronze_dir without following symlinks.
+
+    AV-4b hardening: ``Path.rglob('*')`` follows symlinks and silently
+    pulls files outside the Bronze tree into the manifest. We use
+    ``os.walk(followlinks=False)`` and skip every symlinked entry so
+    attacker-planted links cannot poison ``unrecognized_files``.
+    """
+    import os
+
     unrecognized: list[str] = []
-    for path in sorted(bronze_dir.rglob("*")):
-        if path.is_dir():
-            continue
-        if path in used_paths:
-            continue
-        # Skip files under recognized subdir if they were used; everything else
-        # is reported under the path relative to bronze_dir.
-        rel = path.relative_to(bronze_dir).as_posix()
-        unrecognized.append(rel)
+    for current_dir, subdirs, filenames in os.walk(bronze_dir, followlinks=False):
+        subdirs[:] = [d for d in subdirs if not Path(current_dir, d).is_symlink()]
+        for filename in filenames:
+            entry = Path(current_dir, filename)
+            if entry.is_symlink():
+                continue
+            if entry in used_paths:
+                continue
+            rel = entry.relative_to(bronze_dir).as_posix()
+            unrecognized.append(rel)
     return sorted(unrecognized)
 
 
@@ -494,11 +504,25 @@ def _relative_or_abs(path: Path, repo_root: Path) -> Path:
 
 
 def _sha256_dir_concat(dir_path: Path) -> str:
-    """SHA-256 over the concatenation of every regular file under dir (sorted)."""
+    """SHA-256 over the concatenation of every regular file under dir (sorted).
+
+    AV-4b hardening: walks without following symlinks and explicitly skips
+    every symlinked entry so attacker-planted links cannot smuggle external
+    bytes into the manifest's input hash.
+    """
     import hashlib
+    import os
 
     digest = hashlib.sha256()
-    for entry in sorted(dir_path.rglob("*")):
+    entries: list[Path] = []
+    for current_dir, subdirs, filenames in os.walk(dir_path, followlinks=False):
+        subdirs[:] = [d for d in subdirs if not Path(current_dir, d).is_symlink()]
+        for filename in filenames:
+            entry = Path(current_dir, filename)
+            if entry.is_symlink():
+                continue
+            entries.append(entry)
+    for entry in sorted(entries):
         if entry.is_file():
             digest.update(entry.name.encode("utf-8"))
             digest.update(b"\0")

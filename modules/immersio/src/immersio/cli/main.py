@@ -16,6 +16,7 @@ Exit codes (per contracts/cli.md):
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import IO
@@ -23,6 +24,70 @@ from typing import IO
 from pydantic import ValidationError
 
 from ..ingest import DataIntegrityError, IngestValidationError, run_ingest
+
+_OUTPUT_KEY_PATTERN = re.compile(r"^\d{4}-[12SW]-[a-z][a-z0-9-]{1,39}$")
+
+
+def _validate_paths(
+    *,
+    bronze_dir: Path,
+    mapping: Path,
+    exam_yaml: Path | None,
+    output_dir: Path | None,
+    output_key: str | None,
+) -> None:
+    """Reject path traversal, symlink escape, NUL/control bytes, and ancestor coupling.
+
+    Closure of adversary AV-3 (path traversal). Called from ``app()`` before
+    ``run_ingest`` so structural rejections raise as ValueError → exit code 2.
+
+    Args:
+        bronze_dir: --bronze-dir argument.
+        mapping: --mapping argument.
+        exam_yaml: --exam-yaml argument or None.
+        output_dir: --output-dir argument or None.
+        output_key: --output-key argument or None.
+
+    Raises:
+        ValueError: For any structural rejection (NUL/control bytes, symlinked
+            inputs, output coupled to bronze, device files, malformed output_key).
+        FileNotFoundError: If bronze_dir / mapping / exam_yaml does not exist.
+    """
+    if output_key is not None:
+        if "\x00" in output_key:
+            raise ValueError("output_key contains NUL byte")
+        if any(ord(c) < 32 or ord(c) == 127 for c in output_key):
+            raise ValueError("output_key contains control bytes")
+        if not _OUTPUT_KEY_PATTERN.fullmatch(output_key):
+            raise ValueError(
+                f"output_key '{output_key}' does not match required pattern "
+                f"'{{YYYY}}-[12SW]-{{course-slug}}'"
+            )
+
+    bronze_real = bronze_dir.resolve(strict=True)
+    if not bronze_real.is_dir():
+        raise ValueError(f"bronze_dir ({bronze_real}) is not a directory")
+    if bronze_dir.is_symlink():
+        raise ValueError(f"bronze_dir ({bronze_dir}) must not be a symlink")
+
+    for label, path in (("mapping", mapping), ("exam_yaml", exam_yaml)):
+        if path is None:
+            continue
+        if path.is_symlink():
+            raise ValueError(f"{label} ({path}) must not be a symlink")
+        real = path.resolve(strict=True)
+        if not real.is_file():
+            raise ValueError(f"{label} ({real}) is not a regular file")
+
+    if output_dir is not None:
+        output_real = output_dir.resolve()
+        try:
+            output_real.relative_to(bronze_real)
+        except ValueError:
+            return
+        raise ValueError(
+            f"output_dir ({output_real}) cannot be inside bronze_dir ({bronze_real})"
+        )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -62,6 +127,21 @@ def app(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "ingest":
+        try:
+            _validate_paths(
+                bronze_dir=args.bronze_dir,
+                mapping=args.mapping,
+                exam_yaml=args.exam_yaml,
+                output_dir=args.output_dir,
+                output_key=args.output_key,
+            )
+        except FileNotFoundError as exc:
+            print(f"ERROR: missing input — {exc}", file=sys.stderr)
+            return 2
+        except ValueError as exc:
+            print(f"ERROR: invalid argument — {exc}", file=sys.stderr)
+            return 2
+
         try:
             run_ingest(
                 bronze_dir=args.bronze_dir,
