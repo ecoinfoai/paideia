@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..ingest.errors import DuplicateStudentIdError
 from ..normalize import normalize_student_id
 
 EXPECTED_HEADER: tuple[str, ...] = (
@@ -58,7 +59,7 @@ def parse_attendance_xlsx(path: Path) -> pd.DataFrame:
     for _, row in body.iterrows():
         student_id = normalize_student_id(str(row["학번"]))
         if student_id in seen_ids:
-            raise ValueError(
+            raise DuplicateStudentIdError(
                 f"parse_attendance_xlsx: duplicate student_id {student_id!r} in {path}."
             )
         seen_ids.append(student_id)

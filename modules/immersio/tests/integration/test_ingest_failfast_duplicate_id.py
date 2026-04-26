@@ -1,15 +1,21 @@
-"""US2: duplicate student_id in OMR results triggers a violation."""
+"""US2: duplicate student_id in OMR results triggers a violation.
+
+Per contracts/cli.md, post-normalization duplicates are exit code 4
+(data integrity), distinct from generic format violations (exit 1).
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from immersio.ingest import IngestValidationError, run_ingest
+from immersio.ingest import DuplicateStudentIdError, run_ingest
 from openpyxl import load_workbook
 
 
-def test_duplicate_student_id_in_omr(corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path) -> None:
+def test_duplicate_student_id_in_omr(
+    corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path
+) -> None:
     target = corrupt_bronze / "시험성적" / "인체구조와기능_A반_결과.xlsx"
     workbook = load_workbook(target)
     sheet = workbook["결과"]
@@ -19,7 +25,7 @@ def test_duplicate_student_id_in_omr(corrupt_bronze: Path, corrupt_mapping: Path
     workbook.save(target)
 
     out = tmp_path / "silver"
-    with pytest.raises(IngestValidationError) as exc:
+    with pytest.raises(DuplicateStudentIdError) as exc:
         run_ingest(
             bronze_dir=corrupt_bronze,
             mapping_path=corrupt_mapping,
@@ -29,3 +35,4 @@ def test_duplicate_student_id_in_omr(corrupt_bronze: Path, corrupt_mapping: Path
     rendered = str(exc.value)
     assert "duplicate student_id" in rendered or str(duplicate_id) in rendered
     assert not (out / "2026-1-anatomy").exists()
+

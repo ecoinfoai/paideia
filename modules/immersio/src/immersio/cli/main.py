@@ -22,7 +22,7 @@ from typing import IO
 
 from pydantic import ValidationError
 
-from ..ingest import IngestValidationError, run_ingest
+from ..ingest import DuplicateStudentIdError, IngestValidationError, run_ingest
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -72,7 +72,18 @@ def app(argv: list[str] | None = None) -> int:
                 no_git_commit=args.no_git_commit,
                 verbose_stream=_resolve_stream(args),
             )
+        except DuplicateStudentIdError as exc:
+            print(f"ERROR: data integrity — {exc}", file=sys.stderr)
+            return 4
         except IngestValidationError as exc:
+            # Distinguish duplicate-student violations bubbling through aggregator.
+            for violation in exc.violations:
+                if isinstance(violation.found, str) and (
+                    "duplicate student_id" in violation.found
+                    or "appearing in multiple sections" in violation.found
+                ):
+                    print(str(exc), file=sys.stderr)
+                    return 4
             print(str(exc), file=sys.stderr)
             return 1
         except FileNotFoundError as exc:
@@ -89,6 +100,10 @@ def app(argv: list[str] | None = None) -> int:
             return 1
         except PermissionError as exc:
             print(f"ERROR: output permission — {exc}", file=sys.stderr)
+            return 3
+        except OSError as exc:
+            # Generic system errors (ENOSPC, EROFS, EIO, ...) per qa-engineer note.
+            print(f"ERROR: system I/O — {exc}", file=sys.stderr)
             return 3
         return 0
 

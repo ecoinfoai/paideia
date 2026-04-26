@@ -8,6 +8,7 @@ from typing import Literal
 
 import pandas as pd
 
+from ..ingest.errors import DuplicateStudentIdError
 from ..normalize import normalize_student_id
 
 EXPECTED_SHEETS: frozenset[str] = frozenset({"결과", "결시", "OX", "문항분석"})
@@ -108,7 +109,7 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
     for _, row in results.iterrows():
         student_id = normalize_student_id(str(row["학번"]))
         if student_id in seen_student_ids:
-            raise ValueError(
+            raise DuplicateStudentIdError(
                 f"exam_omr parser: duplicate student_id {student_id!r} in 결과 sheet of {path}."
             )
         seen_student_ids.append(student_id)
@@ -149,7 +150,7 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
             continue
         student_id = normalize_student_id(str(row["학번"]))
         if student_id in seen_student_ids:
-            raise ValueError(
+            raise DuplicateStudentIdError(
                 f"exam_omr parser: student_id {student_id!r} listed in both "
                 f"결과 and 결시 sheets of {path}."
             )
@@ -235,7 +236,7 @@ def parse_exam_omr_xls(
     cross_section_dupes = summary_df["student_id"].duplicated()
     if cross_section_dupes.any():
         offenders = summary_df.loc[cross_section_dupes, "student_id"].tolist()
-        raise ValueError(
+        raise DuplicateStudentIdError(
             f"parse_exam_omr_xls: student_id values appearing in multiple sections "
             f"under {dir_path}: {sorted(set(offenders))}."
         )

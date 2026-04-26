@@ -69,3 +69,11 @@ def raise_if_any(violations: list[IngestViolation]) -> None:
     """Raise IngestValidationError if any violation is present."""
     if violations:
         raise IngestValidationError(violations=violations)
+
+
+class DuplicateStudentIdError(ValueError):
+    """Student ID collision after canonical normalization.
+
+    Mapped to CLI exit code 4 per contracts/cli.md (data integrity violation).
+    Distinct from generic ValueError so the CLI can surface it separately.
+    """

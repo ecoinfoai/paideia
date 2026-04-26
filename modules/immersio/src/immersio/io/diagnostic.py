@@ -9,6 +9,7 @@ from typing import Literal
 import pandas as pd
 from paideia_shared.schemas import DiagnosticMappingConfig
 
+from ..ingest.errors import DuplicateStudentIdError
 from ..normalize import normalize_student_id, read_text_with_fallback
 
 
@@ -60,7 +61,7 @@ def parse_diagnostic_csv(
     duplicate_ids = raw_df["__student_id__"].duplicated()
     if duplicate_ids.any():
         offenders = raw_df.loc[duplicate_ids, "__student_id__"].tolist()
-        raise ValueError(
+        raise DuplicateStudentIdError(
             f"parse_diagnostic_csv: duplicate student_id values in {path}: "
             f"{sorted(set(offenders))}."
         )
