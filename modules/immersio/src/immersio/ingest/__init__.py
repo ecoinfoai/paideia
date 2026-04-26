@@ -2,6 +2,7 @@
 
 from .combine import combine_sources
 from .errors import (
+    DataIntegrityError,
     DuplicateStudentIdError,
     IngestValidationError,
     IngestViolation,
@@ -18,6 +19,7 @@ __all__ = [
     "run_ingest",
     "IngestViolation",
     "IngestValidationError",
+    "DataIntegrityError",
     "DuplicateStudentIdError",
     "raise_if_any",
 ]

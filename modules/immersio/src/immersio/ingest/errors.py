@@ -72,8 +72,23 @@ def raise_if_any(violations: list[IngestViolation]) -> None:
 
 
 class DuplicateStudentIdError(ValueError):
-    """Student ID collision after canonical normalization.
+    """Single-site student ID collision raised by a parser.
 
-    Mapped to CLI exit code 4 per contracts/cli.md (data integrity violation).
-    Distinct from generic ValueError so the CLI can surface it separately.
+    Pipelined upward into ``DataIntegrityError`` for CLI exit code 4 mapping.
+    Carries no aggregated violation list on its own; ``DataIntegrityError``
+    is the user-facing aggregate.
+    """
+
+
+class DataIntegrityError(IngestValidationError):
+    """Aggregate exception for data-integrity violations.
+
+    Examples include duplicate student IDs after canonical normalization,
+    cross-source ID collisions, and any other integrity break that survives
+    structural validation. Mapped to CLI exit code 4 per contracts/cli.md
+    (separate from format/schema violations which exit 1).
+
+    Inherits the multi-violation rendering of ``IngestValidationError`` so
+    operators see the same locator-aware report shape regardless of which
+    exit code applies.
     """

@@ -34,9 +34,25 @@ from ..io import (
 from ..mapping import apply_mapping, load_mapping
 from ..normalize import sha256_file
 from .combine import combine_sources
-from .errors import DuplicateStudentIdError, IngestValidationError, IngestViolation
+from .errors import (
+    DataIntegrityError,
+    DuplicateStudentIdError,
+    IngestValidationError,
+    IngestViolation,
+)
 from .validate import validate_outputs
 from .write import write_silver
+
+
+def _data_integrity_violation(file_repr: str, exc: DuplicateStudentIdError) -> IngestViolation:
+    """Wrap a DuplicateStudentIdError into a single IngestViolation."""
+    return IngestViolation(
+        file_path=file_repr,
+        row_or_item_id=None,
+        column_or_field="student_id",
+        expected="unique student_id after canonical normalization",
+        found=str(exc),
+    )
 
 _RECOGNIZED_SUBDIRS: tuple[str, ...] = ("진단평가", "시험성적", "출석", "시험문제")
 
@@ -258,8 +274,10 @@ def run_ingest(
                 f"      rows={len(diagnostic_df)}, columns={len(diagnostic_df.columns)}, "
                 f"encoding={diagnostic_encoding}",
             )
-        except DuplicateStudentIdError:
-            raise
+        except DuplicateStudentIdError as exc:
+            raise DataIntegrityError(
+                violations=[_data_integrity_violation(str(diag_csv_path), exc)]
+            ) from exc
         except (ValueError, ValidationError) as exc:
             _track(str(diag_csv_path), "parse_diagnostic_csv", exc)
 
@@ -274,8 +292,10 @@ def run_ingest(
             f"      responses={len(exam_responses_df)}, "
             f"students_in_summary={len(exam_summary_df)}",
         )
-    except DuplicateStudentIdError:
-        raise
+    except DuplicateStudentIdError as exc:
+        raise DataIntegrityError(
+            violations=[_data_integrity_violation(str(exam_dir), exc)]
+        ) from exc
     except (ValueError, ValidationError) as exc:
         _track(str(exam_dir), "parse_exam_omr_xls", exc)
 
@@ -294,8 +314,10 @@ def run_ingest(
     try:
         attendance_df = parse_attendance_xlsx(attendance_path)
         _print(verbose_stream, f"      rows={len(attendance_df)}")
-    except DuplicateStudentIdError:
-        raise
+    except DuplicateStudentIdError as exc:
+        raise DataIntegrityError(
+            violations=[_data_integrity_violation(str(attendance_path), exc)]
+        ) from exc
     except (ValueError, ValidationError) as exc:
         _track(str(attendance_path), "parse_attendance_xlsx", exc)
 
@@ -357,6 +379,9 @@ def run_ingest(
 
     try:
         validate_outputs(student_masters, diagnostic_responses, exam_results, exam_items)
+    except DataIntegrityError:
+        # Already an aggregate, exit code 4 — re-raise unchanged.
+        raise
     except (ValueError, ValidationError) as exc:
         _track("<cross-validate>", "validate_outputs", exc)
         raise IngestValidationError(violations=violations) from exc
