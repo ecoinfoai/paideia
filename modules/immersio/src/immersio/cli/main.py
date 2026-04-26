@@ -22,7 +22,7 @@ from typing import IO
 
 from pydantic import ValidationError
 
-from ..ingest import run_ingest
+from ..ingest import IngestValidationError, run_ingest
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -72,6 +72,9 @@ def app(argv: list[str] | None = None) -> int:
                 no_git_commit=args.no_git_commit,
                 verbose_stream=_resolve_stream(args),
             )
+        except IngestValidationError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         except FileNotFoundError as exc:
             print(f"ERROR: missing input — {exc}", file=sys.stderr)
             return 2

@@ -26,6 +26,8 @@ from paideia_shared.schemas import (
     SemesterCode,
 )
 
+from pydantic import ValidationError
+
 from ..io import (
     parse_attendance_xlsx,
     parse_diagnostic_csv,
@@ -35,6 +37,7 @@ from ..io import (
 from ..mapping import apply_mapping, load_mapping
 from ..normalize import sha256_file
 from .combine import combine_sources
+from .errors import IngestValidationError, IngestViolation
 from .validate import validate_outputs
 from .write import write_silver
 
@@ -157,6 +160,8 @@ def run_ingest(
     # === [1/7] Discover ===
     _print(verbose_stream, f"[1/7] Discovering Bronze inputs at {bronze_dir} ...")
 
+    violations: list[IngestViolation] = []
+
     diag_csvs = sorted(diag_dir.glob("*.csv"))
     if len(diag_csvs) != 1:
         raise ValueError(
@@ -182,6 +187,30 @@ def run_ingest(
                 f"run_ingest: --exam-yaml file missing: {exam_yaml_path}."
             )
 
+    def _track(file_repr: str, stage: str, exc: Exception) -> None:
+        if isinstance(exc, ValidationError):
+            for error in exc.errors():
+                loc = ".".join(str(part) for part in error["loc"])
+                violations.append(
+                    IngestViolation(
+                        file_path=file_repr,
+                        row_or_item_id=None,
+                        column_or_field=loc,
+                        expected=error.get("msg", "valid value"),
+                        found=error.get("input"),
+                    )
+                )
+        else:
+            violations.append(
+                IngestViolation(
+                    file_path=file_repr,
+                    row_or_item_id=None,
+                    column_or_field=stage,
+                    expected="successful parse / validation",
+                    found=str(exc),
+                )
+            )
+
     used_paths = {diag_csv_path, attendance_path, exam_yaml_path}
     used_paths.update(exam_dir.glob("*.xls"))
     used_paths.update(exam_dir.glob("*.xlsx"))
@@ -198,61 +227,137 @@ def run_ingest(
 
     # === [2/7] Mapping ===
     _print(verbose_stream, f"[2/7] Loading mapping {mapping_path} ...")
-    mapping: DiagnosticMappingConfig = load_mapping(mapping_path)
-    semester: SemesterCode = mapping.metadata.semester
-    course_slug: CourseSlug = mapping.metadata.course_slug
-    course_name_kr = mapping.metadata.course_name_kr
+    mapping: DiagnosticMappingConfig | None = None
+    try:
+        mapping = load_mapping(mapping_path)
+    except (ValidationError, ValueError) as exc:
+        _track(str(mapping_path), "load_mapping", exc)
+
+    semester: SemesterCode = (
+        mapping.metadata.semester if mapping is not None else "1900-1"
+    )
+    course_slug: CourseSlug = (
+        mapping.metadata.course_slug if mapping is not None else "unknown"
+    )
+    course_name_kr = mapping.metadata.course_name_kr if mapping is not None else None
     derived_output_key: OutputKey = (
         output_key if output_key is not None else f"{semester}-{course_slug}"
     )
-    _print(
-        verbose_stream,
-        f"      mapping_version={mapping.metadata.mapping_version}, "
-        f"axes.required={mapping.axes.required}",
-    )
+    if mapping is not None:
+        _print(
+            verbose_stream,
+            f"      mapping_version={mapping.metadata.mapping_version}, "
+            f"axes.required={mapping.axes.required}",
+        )
 
     # === [3/7] Diagnostic CSV ===
     _print(verbose_stream, f"[3/7] Parsing diagnostic CSV {diag_csv_path.name} ...")
-    diagnostic_df, diagnostic_encoding = parse_diagnostic_csv(diag_csv_path, mapping)
-    _print(
-        verbose_stream,
-        f"      rows={len(diagnostic_df)}, columns={len(diagnostic_df.columns)}, "
-        f"encoding={diagnostic_encoding}",
-    )
+    diagnostic_df: pd.DataFrame = pd.DataFrame()
+    diagnostic_encoding: Literal["utf-8", "cp949"] = "utf-8"
+    if mapping is not None:
+        try:
+            diagnostic_df, diagnostic_encoding = parse_diagnostic_csv(diag_csv_path, mapping)
+            _print(
+                verbose_stream,
+                f"      rows={len(diagnostic_df)}, columns={len(diagnostic_df.columns)}, "
+                f"encoding={diagnostic_encoding}",
+            )
+        except (ValueError, ValidationError) as exc:
+            _track(str(diag_csv_path), "parse_diagnostic_csv", exc)
 
     # === [4/7] Exam OMR ===
     _print(verbose_stream, "[4/7] Parsing exam OMR XLS (4 sections × 4 sheets) ...")
-    exam_responses_df, exam_summary_df, items_df = parse_exam_omr_xls(exam_dir)
-    _print(
-        verbose_stream,
-        f"      responses={len(exam_responses_df)}, "
-        f"students_in_summary={len(exam_summary_df)}, items={len(items_df)}",
-    )
+    exam_responses_df: pd.DataFrame = pd.DataFrame()
+    exam_summary_df: pd.DataFrame = pd.DataFrame()
+    try:
+        exam_responses_df, exam_summary_df, _items_df = parse_exam_omr_xls(exam_dir)
+        _print(
+            verbose_stream,
+            f"      responses={len(exam_responses_df)}, "
+            f"students_in_summary={len(exam_summary_df)}",
+        )
+    except (ValueError, ValidationError) as exc:
+        _track(str(exam_dir), "parse_exam_omr_xls", exc)
 
     # === [5/7] Attendance ===
     _print(verbose_stream, f"[5/7] Parsing attendance {attendance_path.name} ...")
-    attendance_df = parse_attendance_xlsx(attendance_path)
-    _print(verbose_stream, f"      rows={len(attendance_df)}")
+    attendance_df: pd.DataFrame = pd.DataFrame(
+        columns=[
+            "student_id",
+            "name_kr",
+            "attendance_present_count",
+            "attendance_absent_count",
+            "attendance_late_count",
+            "attendance_excused_count",
+        ]
+    )
+    try:
+        attendance_df = parse_attendance_xlsx(attendance_path)
+        _print(verbose_stream, f"      rows={len(attendance_df)}")
+    except (ValueError, ValidationError) as exc:
+        _track(str(attendance_path), "parse_attendance_xlsx", exc)
 
-    # Exam YAML is the canonical ExamItem source; OMR 문항분석 sheet is metadata-only
-    exam_items = parse_exam_yaml(exam_yaml_path, semester, course_slug)
+    # Exam YAML
+    exam_items: list = []
+    try:
+        exam_items = parse_exam_yaml(exam_yaml_path, semester, course_slug)
+    except (ValueError, ValidationError) as exc:
+        _track(str(exam_yaml_path), "parse_exam_yaml", exc)
+
+    # Stop and report if any of the upstream stages collected violations.
+    if violations:
+        raise IngestValidationError(violations=violations)
+
+    # Cross-reference: OMR item count vs exam YAML item count
+    if not exam_responses_df.empty and exam_items:
+        omr_items = sorted({int(no) for no in exam_responses_df["item_no"].unique()})
+        yaml_items = sorted({item.item_no for item in exam_items})
+        if omr_items != yaml_items:
+            violations.append(
+                IngestViolation(
+                    file_path=f"{exam_dir} | {exam_yaml_path}",
+                    row_or_item_id=None,
+                    column_or_field="item_no coverage",
+                    expected=f"OMR item_nos {yaml_items}",
+                    found=f"OMR item_nos {omr_items}",
+                )
+            )
+            raise IngestValidationError(violations=violations)
+
+    if mapping is None:
+        # Defensive: should already have raised above.
+        raise IngestValidationError(violations=violations)
 
     # === [6/7] Combine + apply mapping + validate ===
     _print(verbose_stream, "[6/7] Combining sources and validating outputs ...")
-    axis_scores, diagnostic_responses, multiselect_new = apply_mapping(
-        diagnostic_df, mapping, semester, course_slug
-    )
-    student_masters, exam_results = combine_sources(
-        diagnostic_df=diagnostic_df,
-        exam_responses_df=_attach_section_to_responses(exam_responses_df, exam_summary_df),
-        exam_summary_df=exam_summary_df,
-        attendance_df=attendance_df,
-        axis_scores_by_student=axis_scores,
-        items=exam_items,
-        semester=semester,
-        course_slug=course_slug,
-    )
-    validate_outputs(student_masters, diagnostic_responses, exam_results, exam_items)
+    try:
+        axis_scores, diagnostic_responses, multiselect_new = apply_mapping(
+            diagnostic_df, mapping, semester, course_slug
+        )
+    except (ValueError, ValidationError) as exc:
+        _track(str(diag_csv_path), "apply_mapping", exc)
+        raise IngestValidationError(violations=violations) from exc
+
+    try:
+        student_masters, exam_results = combine_sources(
+            diagnostic_df=diagnostic_df,
+            exam_responses_df=_attach_section_to_responses(exam_responses_df, exam_summary_df),
+            exam_summary_df=exam_summary_df,
+            attendance_df=attendance_df,
+            axis_scores_by_student=axis_scores,
+            items=exam_items,
+            semester=semester,
+            course_slug=course_slug,
+        )
+    except (ValueError, ValidationError) as exc:
+        _track("<combine>", "combine_sources", exc)
+        raise IngestValidationError(violations=violations) from exc
+
+    try:
+        validate_outputs(student_masters, diagnostic_responses, exam_results, exam_items)
+    except (ValueError, ValidationError) as exc:
+        _track("<cross-validate>", "validate_outputs", exc)
+        raise IngestValidationError(violations=violations) from exc
 
     _print(
         verbose_stream,
