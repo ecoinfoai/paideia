@@ -19,6 +19,7 @@
             ruff
             pyright
             git
+            noto-fonts-cjk-sans
           ];
 
           shellHook = ''
