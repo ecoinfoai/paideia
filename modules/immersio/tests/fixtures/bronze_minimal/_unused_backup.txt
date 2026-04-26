@@ -1,0 +1,3 @@
+backup placeholder - this file is intentionally outside the recognized
+ingest input set so that the manifest's unrecognized_files list can be
+asserted in T025 (US1 happy-path test).

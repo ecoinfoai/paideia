@@ -1,0 +1,38 @@
+metadata:
+  semester: "2026-1"
+  course_slug: anatomy
+  course_name_kr: "인체구조와기능"
+  mapping_version: 1
+
+columns:
+  - source: "학번"
+    kind: identity
+
+  - source: "Q01_나는_의학에_관심이_많다"
+    axis: motivation
+    kind: likert
+    aggregate: mean
+  - source: "Q02_나는_간호사가_되고_싶다"
+    axis: motivation
+    kind: likert
+    aggregate: mean
+
+  - source: "Q05_나는_시험이_두렵다"
+    axis: anxiety
+    kind: likert
+
+  - source: "Q11_관심있는_챕터"
+    axis: interest_chapters
+    kind: multiselect
+
+  - source: "Q62_시험에_대한_불안"
+    axis: anxiety_freetext
+    kind: freetext
+
+axes:
+  required:
+    - motivation
+    - anxiety
+    - interest_chapters
+  optional:
+    - anxiety_freetext
