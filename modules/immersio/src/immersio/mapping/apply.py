@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable
-from typing import cast
 
 import pandas as pd
 from paideia_shared.schemas import (
@@ -89,7 +88,11 @@ def apply_mapping(
                 f"absent from diagnostic dataframe."
             )
         axis = column.axis
-        assert axis is not None  # MappingColumn V1 ensures this
+        if axis is None:
+            # MappingColumn V1 already enforces this; keep an explicit raise.
+            raise ValueError(
+                f"apply_mapping: non-identity column {column.source!r} has axis=None."
+            )
         if column.kind == "likert":
             if column.aggregate is not None:
                 likert_aggregate_by_axis.setdefault(axis, column.aggregate)
@@ -113,7 +116,7 @@ def apply_mapping(
             # under new_options_by_axis since the mapping does not enumerate them
             # (spec Edge Case: dynamic option growth is preserved in manifest).
             seen_options: list[str] = list(multiselect_options[axis])
-            for student_id, raw_value in diagnostic_df[column.source].items():
+            for _student_id, raw_value in diagnostic_df[column.source].items():
                 if raw_value is None or raw_value == "":
                     continue
                 options = expand_multiselect(str(raw_value))
@@ -143,11 +146,7 @@ def apply_mapping(
                     )
         elif column.kind == "freetext":
             for student_id, raw_value in diagnostic_df[column.source].items():
-                text_value: str
-                if raw_value is None:
-                    text_value = ""
-                else:
-                    text_value = str(raw_value)
+                text_value = "" if raw_value is None else str(raw_value)
                 responses.append(
                     DiagnosticResponse(
                         student_id=str(student_id),

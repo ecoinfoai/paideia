@@ -7,9 +7,7 @@ them atomically with the manifest sidecar.
 
 from __future__ import annotations
 
-import os
 import subprocess
-import sys
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -25,7 +23,6 @@ from paideia_shared.schemas import (
     OutputKey,
     SemesterCode,
 )
-
 from pydantic import ValidationError
 
 from ..io import (
@@ -41,7 +38,6 @@ from .errors import IngestValidationError, IngestViolation
 from .validate import validate_outputs
 from .write import write_silver
 
-
 _RECOGNIZED_SUBDIRS: tuple[str, ...] = ("진단평가", "시험성적", "출석", "시험문제")
 
 
@@ -54,8 +50,8 @@ def _safe_version(pkg: str) -> str:
 
 def _git_commit_or_none(repo_root: Path) -> str | None:
     try:
-        out = subprocess.run(  # noqa: S603, S607
-            ["git", "rev-parse", "HEAD"],
+        out = subprocess.run(  # noqa: S603
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
             cwd=repo_root,
             check=False,
             capture_output=True,
@@ -426,7 +422,14 @@ def run_ingest(
     )
 
     _print(verbose_stream, f"[7/7] Writing Silver to {silver_dir} ...")
-    write_silver(silver_dir, student_masters, diagnostic_responses, exam_results, exam_items, manifest)
+    write_silver(
+        silver_dir,
+        student_masters,
+        diagnostic_responses,
+        exam_results,
+        exam_items,
+        manifest,
+    )
     _print(verbose_stream, "Completed.")
     return manifest
 

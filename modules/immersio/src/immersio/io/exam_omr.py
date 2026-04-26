@@ -20,9 +20,9 @@ class OMRSectionResult:
     """Per-section parsed payload."""
 
     section: SectionLabel
-    responses_long: pd.DataFrame  # student_id, section, item_no, response
-    summary: pd.DataFrame  # student_id, section, exam_taken, exam_total_score, exam_max_score
-    items: pd.DataFrame  # item_no, chapter, source, expected_difficulty, bloom, answer_key, points, text
+    responses_long: pd.DataFrame  # cols: student_id, section, item_no, response
+    summary: pd.DataFrame  # cols: student_id, section, exam_taken, exam_total/max_score
+    items: pd.DataFrame  # item metadata extracted from the 문항분석 sheet
 
 
 def _engine_for(path: Path) -> str:
@@ -59,7 +59,8 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
     missing = EXPECTED_SHEETS - sheet_names
     if missing:
         raise ValueError(
-            f"exam_omr parser: {path} missing sheets {sorted(missing)}; found {sorted(sheet_names)}."
+            f"exam_omr parser: {path} missing sheets {sorted(missing)}; "
+            f"found {sorted(sheet_names)}."
         )
 
     # Items metadata from 문항분석 sheet
@@ -72,7 +73,9 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
                 "chapter": (str(row["chapter"]) if pd.notna(row["chapter"]) else None),
                 "source": (str(row["source"]) if pd.notna(row["source"]) else None),
                 "expected_difficulty": (
-                    str(row["expected_difficulty"]) if pd.notna(row["expected_difficulty"]) else None
+                    str(row["expected_difficulty"])
+                    if pd.notna(row["expected_difficulty"])
+                    else None
                 ),
                 "bloom": (str(row["bloom"]) if pd.notna(row["bloom"]) else None),
                 "answer_key": str(row["answer_key"]),
@@ -80,7 +83,11 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
                 "text": (str(row["text"]) if pd.notna(row["text"]) else None),
             }
         )
-    items_df = pd.DataFrame.from_records(items_records).sort_values("item_no").reset_index(drop=True)
+    items_df = (
+        pd.DataFrame.from_records(items_records)
+        .sort_values("item_no")
+        .reset_index(drop=True)
+    )
 
     # Detect duplicate item_no
     if items_df["item_no"].duplicated().any():

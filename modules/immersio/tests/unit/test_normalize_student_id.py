@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from immersio.normalize import normalize_student_id
 
 

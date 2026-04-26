@@ -30,7 +30,9 @@ def _canonicalize(text: str) -> str:
     return _WHITESPACE_PATTERN.sub(" ", nfkc.strip())
 
 
-_TABLE_CANONICAL: Final[dict[str, int]] = {_canonicalize(k): v for k, v in LIKERT_TEXT_TO_INT.items()}
+_TABLE_CANONICAL: Final[dict[str, int]] = {
+    _canonicalize(k): v for k, v in LIKERT_TEXT_TO_INT.items()
+}
 _TABLE_NO_SPACE: Final[dict[str, int]] = {
     _canonicalize(k).replace(" ", ""): v for k, v in LIKERT_TEXT_TO_INT.items()
 }

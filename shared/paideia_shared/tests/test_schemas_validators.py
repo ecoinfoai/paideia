@@ -9,8 +9,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import (
     DiagnosticMappingConfig,
     DiagnosticResponse,
@@ -24,7 +22,7 @@ from paideia_shared.schemas import (
     MappingMetadata,
     StudentMaster,
 )
-
+from pydantic import ValidationError
 
 # ---------- StudentMaster ----------
 

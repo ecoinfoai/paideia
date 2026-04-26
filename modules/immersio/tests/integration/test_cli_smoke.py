@@ -12,8 +12,8 @@ MAPPING = FIXTURES / "mappings" / "anatomy.diagnostic.yaml"
 
 def test_cli_smoke(tmp_path: Path) -> None:
     out = tmp_path / "silver"
-    completed = subprocess.run(  # noqa: S603, S607
-        [
+    completed = subprocess.run(  # noqa: S603
+        [  # noqa: S607
             "uv",
             "run",
             "--python",

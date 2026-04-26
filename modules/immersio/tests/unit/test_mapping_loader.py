@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from immersio.mapping import load_mapping
 from paideia_shared.schemas import DiagnosticMappingConfig
 from pydantic import ValidationError
-
-from immersio.mapping import load_mapping
 
 _VALID_MAPPING_YAML = """\
 metadata:

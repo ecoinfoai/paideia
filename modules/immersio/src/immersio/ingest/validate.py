@@ -40,7 +40,8 @@ def validate_outputs(
     if len(item_keys) != len(set(item_keys)):
         duplicates = sorted({k for k in item_keys if item_keys.count(k) > 1})
         raise ValueError(
-            f"validate_outputs: duplicate (semester, course_slug, item_no) in ExamItem: {duplicates}."
+            f"validate_outputs: duplicate (semester, course_slug, item_no) in "
+            f"ExamItem: {duplicates}."
         )
 
     # 3. ExamResult.item_no ⊆ ExamItem.item_no

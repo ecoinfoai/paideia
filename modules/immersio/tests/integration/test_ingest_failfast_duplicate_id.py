@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from openpyxl import load_workbook
-
 from immersio.ingest import IngestValidationError, run_ingest
+from openpyxl import load_workbook
 
 
 def test_duplicate_student_id_in_omr(corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path) -> None:

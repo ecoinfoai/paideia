@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from immersio.normalize import read_text_with_fallback
 
 

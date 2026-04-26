@@ -18,7 +18,6 @@ from paideia_shared.schemas import (
     StudentMaster,
 )
 
-
 _STUDENT_MASTER_COLUMNS: list[str] = [
     "student_id",
     "semester",

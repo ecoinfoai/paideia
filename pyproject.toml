@@ -15,7 +15,9 @@ target-version = "py311"
 select = ["E", "F", "I", "B", "UP", "N", "ANN", "S", "C4", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "ANN"]
+"**/tests/**" = ["S101", "ANN", "S108", "B007", "E501"]
+"**/scripts/**" = ["ANN", "S101"]
+"**/tests/fixtures/**" = ["ANN", "S101", "S108", "E501"]
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"

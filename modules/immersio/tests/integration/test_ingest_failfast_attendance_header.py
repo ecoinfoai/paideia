@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from openpyxl import load_workbook
-
 from immersio.ingest import IngestValidationError, run_ingest
+from openpyxl import load_workbook
 
 
 def test_attendance_header_drift_blocks_silver(
