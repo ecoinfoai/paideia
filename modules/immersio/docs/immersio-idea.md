@@ -21,11 +21,11 @@
 
 ### 0.1 데이터 자산 (paideia data/ 레이아웃 기준)
 
-**Bronze (원시 입력)**
-- `data/bronze/진단평가/진단평가_1차_결과.csv` — 응답 194명, 63문항(식별·동기·학습선호·협업·불안 등 7개 영역)
-- `data/bronze/시험성적/인체구조와기능_{A,B,C,D}반 결과(*).xls` — 분반별 결과·결시·OX·문항분석 12개 + 백업 zip
-- `data/bronze/시험문제/{실제_출제문제,중간고사_문항,테스트용_문제}.yaml` + 시험지(hwp/docx) + 채점키(xlsx)
-- `data/bronze/출석/출석부명단.xlsx` (+ 분석사본)
+**Bronze (원시 입력)** — 각 데이터의 가변성 정도가 다름:
+- `data/bronze/진단평가/진단평가_1차_결과.csv` **[가변]** — 응답 194명, 63문항. **과목마다 설문 문항이 달라짐** → immersio는 컬럼 의미를 설정파일(YAML)로 받고 코드에 컬럼명 하드코딩 금지. 코드는 매핑된 의미축(motivation/anxiety/interest 등)에만 의존.
+- `data/bronze/시험성적/인체구조와기능_{A,B,C,D}반 결과(*).xls` **[고정]** — 학과 OMR 시스템 표준 출력. 분반별 결과·결시·OX·문항분석 4종 × 4분반 = 12개 + 백업 zip. **항상 같은 구조** → 단단한 파서 1개로 충분.
+- `data/bronze/시험문제/{실제_출제문제,중간고사_문항,테스트용_문제}.yaml` **[고정 후보]** + 시험지(hwp/docx) + 채점키(xlsx) — yaml은 immersio가 정한 스키마(`paideia_shared.schemas.ExamItem`)로 표준화.
+- `data/bronze/출석/출석부명단.xlsx` **[템플릿 제공]** (+ 분석사본) — 사용자가 온라인 출석부 시스템에서 복붙하여 수기 작성. **immersio가 표준 템플릿(`templates/attendance.xlsx`)을 제공**하고, 사용자는 그 템플릿에 데이터만 채워넣음.
 
 **Silver (이전 LLM 분석 결과 — immersio가 새로 생성하여 대체할 것)**
 - `data/silver/legacy/중간고사_분석결과.xlsx`
@@ -53,6 +53,18 @@
 ### 0.4 v0.1 산출 위치
 - `data/silver/immersio/{학생마스터.parquet, 시험품질.parquet, 진단×시험.parquet, ...}`
 - `data/gold/immersio/{cards/2026-1-anatomy/{학번}.pdf, 시험품질보고서.pdf, 라벨_상담우선순위.xlsx}`
+
+### 0.5 입출력 계약 — 가변성에 따른 처리 전략
+
+| 데이터 | 가변성 | immersio 처리 전략 |
+|---|---|---|
+| 진단평가 CSV | 과목마다 다름 | 컬럼 매핑 YAML(`config/{과목}.diagnostic.yaml`)을 별도 입력. 코드는 매핑된 의미축(motivation·anxiety·interest 등)에만 의존 |
+| 시험성적 XLS | 학과 OMR 표준 | 단단한 파서 1개 (`immersio.io.exam_omr`). 시트명·컬럼 좌표 고정 가정 |
+| 출석부 XLSX | 사용자 수기 | immersio가 표준 템플릿 제공 (`modules/immersio/templates/attendance.xlsx`). 사용자는 빈칸만 채움 |
+| 시험문제 YAML | 사용자 작성 | `paideia_shared.schemas.ExamItem` Pydantic 검증. 위반 시 명확한 에러 |
+| **분석결과** (silver/gold) | **immersio 출력** | **고정 스키마 + 고정 템플릿** — 매 학기 동일 구조의 xlsx/PDF가 나오도록. legacy의 7개 시트(전체요약·히스토그램·메타데이터통계·변별력·정답률·오답분석·학생성적)를 표준화 |
+
+**핵심 원칙**: 입력의 가변성은 설정·템플릿으로 흡수하고, **출력은 항상 고정 구조**. 이래야 매 학기·다른 교과목에서 동일한 후속 운영(상담·회고)이 가능. 분석결과 xlsx/PDF의 시트명·컬럼·섹션 순서·차트 위치까지 명세하여 외부 도구(retro-mester 등)가 안전하게 소비.
 
 ---
 
