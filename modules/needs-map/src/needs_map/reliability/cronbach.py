@@ -98,7 +98,10 @@ def compute_reliability(
     """Compute α + label per declared standard axis.
 
     Returns Pydantic-validated :class:`ScaleReliabilityReport`. One row per
-    declared axis (``required ∪ optional``).
+    declared *quantitative* axis (``required`` only — auxiliary group keys
+    in ``axes.optional`` such as ``interest_topics`` carry no likert items
+    and would otherwise fail ``ScaleReliabilityRow.axis_key`` Literal
+    validation under the v0.1.1 8-key vocabulary).
 
     For each axis:
       * 0 likert items mapped → label='no_items', alpha=None.
@@ -106,7 +109,7 @@ def compute_reliability(
       * ≥ 3 likert items → label='computed' if α finite (with operational_warning
         when α < 0.7); else label='not_applicable'.
     """
-    declared_axes = list(dict.fromkeys(mapping.axes.required + mapping.axes.optional))
+    declared_axes = list(mapping.axes.required)
     rows: list[ScaleReliabilityRow] = []
     for axis_key in declared_axes:
         sources = _likert_columns_for_axis(mapping, axis_key)

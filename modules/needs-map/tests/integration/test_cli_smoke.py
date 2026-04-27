@@ -71,7 +71,9 @@ def test_cli_smoke_phase_ab_green(tmp_path: Path) -> None:
     )
     assert proc.returncode == 0, f"expected exit 0, got {proc.returncode}. stderr={proc.stderr}"
     assert "[needs-map 0.1.0]" in proc.stdout
-    assert "phase=A rows_written=6" in proc.stdout
+    # v0.1.1 fixture refresh (1839c4d): anatomy_full.diagnostic.yaml declares
+    # 8 quantitative axes (was 6 in v0.1.0), so Phase A emits 8 reliability rows.
+    assert "phase=A rows_written=8" in proc.stdout
     assert "phase=B rows_written=9" in proc.stdout
     silver = tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy"
     assert (silver / "scale_reliability.parquet").is_file()
