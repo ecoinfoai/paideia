@@ -8,6 +8,11 @@ from ._common import (
     SemesterCode,
     StandardAxisKey,
 )
+from .cluster_assignment import (
+    ClusterAssignmentRow,
+    ClusterCandidate,
+    ClusterReport,
+)
 from .diagnostic_mapping import (
     DiagnosticMappingConfig,
     MappingAxes,
@@ -53,4 +58,7 @@ __all__ = [
     "ScaleReliabilityRow",
     "ScaleReliabilityReport",
     "FactorScoreRow",
+    "ClusterAssignmentRow",
+    "ClusterCandidate",
+    "ClusterReport",
 ]
