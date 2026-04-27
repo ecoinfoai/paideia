@@ -46,6 +46,15 @@ _BOLD_ENV_VAR = "PAIDEIA_KR_FONT_BOLD_PATH"
 
 _FC_MATCH_TIMEOUT_SECONDS = 5.0
 
+# env-var path security hardening (T022 followup, adversary権).
+# Operator-supplied paths are validated against an extension whitelist and a
+# size cap before being handed to reportlab/matplotlib. Unsupported extensions
+# usually mean the operator pointed the env-var at the wrong file (or worse —
+# an executable); oversized files imply an unrelated artifact and would slow
+# subsequent font-loading paths considerably.
+_FONT_EXTENSION_WHITELIST: frozenset[str] = frozenset({".ttf", ".otf", ".ttc", ".otc"})
+_FONT_SIZE_CAP_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
 
 class KoreanFontUnavailableError(RuntimeError):
     """Raised when NanumGothic Regular or Bold cannot be resolved.
@@ -81,19 +90,7 @@ def _resolve_face(face: FaceKind, env_var: str, fc_pattern: str) -> Path:
     """Resolve one face. env-var first, then fc-match, then validate."""
     env_value = os.environ.get(env_var)
     if env_value:
-        env_path = Path(env_value)
-        if not env_path.is_file():
-            raise KoreanFontUnavailableError(
-                _format_error_block(
-                    face=face,
-                    env_var=env_var,
-                    env_var_status=f"set → {env_value} (file not found)",
-                    fc_pattern=fc_pattern,
-                    fc_match_status="not consulted (env-var set)",
-                    fc_match_path=None,
-                )
-            )
-        return env_path
+        return _resolve_env_var_path(face, env_var, env_value, fc_pattern)
 
     # fc-match path
     fc_match_path = _run_fc_match(fc_pattern)
@@ -135,6 +132,84 @@ def _resolve_face(face: FaceKind, env_var: str, fc_pattern: str) -> Path:
             )
         )
     return fc_match_path
+
+
+def _resolve_env_var_path(
+    face: FaceKind, env_var: str, env_value: str, fc_pattern: str
+) -> Path:
+    """Validate an operator-supplied env-var font path (T022 hardening).
+
+    Three guards (in order — earliest possible rejection):
+      1. ``Path.resolve(strict=True)`` — refuses dangling symlinks /
+         non-existent paths, normalises traversal segments.
+      2. extension whitelist (.ttf / .otf / .ttc / .otc).
+      3. size cap (50 MB) — defends against pointing at a giant blob.
+
+    All three failure modes share the multi-line error block format from
+    contracts/cli.md so operator-facing output stays uniform.
+    """
+    candidate = Path(env_value)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        raise KoreanFontUnavailableError(
+            _format_error_block(
+                face=face,
+                env_var=env_var,
+                env_var_status=f"set → {env_value} (file not found / unresolvable)",
+                fc_pattern=fc_pattern,
+                fc_match_status="not consulted (env-var set)",
+                fc_match_path=None,
+            )
+        ) from None
+
+    if not resolved.is_file():
+        raise KoreanFontUnavailableError(
+            _format_error_block(
+                face=face,
+                env_var=env_var,
+                env_var_status=f"set → {resolved} (not a regular file)",
+                fc_pattern=fc_pattern,
+                fc_match_status="not consulted (env-var set)",
+                fc_match_path=None,
+            )
+        )
+
+    if resolved.suffix.lower() not in _FONT_EXTENSION_WHITELIST:
+        allowed = ", ".join(sorted(_FONT_EXTENSION_WHITELIST))
+        raise KoreanFontUnavailableError(
+            _format_error_block(
+                face=face,
+                env_var=env_var,
+                env_var_status=(
+                    f"set → {resolved} (extension {resolved.suffix!r} not in "
+                    f"allowed font extensions: {allowed})"
+                ),
+                fc_pattern=fc_pattern,
+                fc_match_status="not consulted (env-var set)",
+                fc_match_path=None,
+            )
+        )
+
+    size_bytes = resolved.stat().st_size
+    if size_bytes > _FONT_SIZE_CAP_BYTES:
+        cap_mb = _FONT_SIZE_CAP_BYTES // (1024 * 1024)
+        actual_mb = size_bytes / (1024 * 1024)
+        raise KoreanFontUnavailableError(
+            _format_error_block(
+                face=face,
+                env_var=env_var,
+                env_var_status=(
+                    f"set → {resolved} (size {actual_mb:.1f} MB exceeds "
+                    f"{cap_mb} MB cap — refusing to load)"
+                ),
+                fc_pattern=fc_pattern,
+                fc_match_status="not consulted (env-var set)",
+                fc_match_path=None,
+            )
+        )
+
+    return resolved
 
 
 def _run_fc_match(pattern: str) -> Path | None:

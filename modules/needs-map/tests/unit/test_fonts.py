@@ -201,3 +201,83 @@ def test_resolve_fc_match_subprocess_failure_is_unavailable(
     with pytest.raises(KoreanFontUnavailableError) as exc:
         resolve_korean_font_paths()
     assert "fc-match" in str(exc.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Adversary hardening (T022 followup) — env-var path security
+# ---------------------------------------------------------------------------
+
+
+def test_env_var_extension_whitelist_rejects_non_font(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """env-var path with a non-font extension MUST be rejected (e.g. .sh, .py).
+
+    Adversary scenario: operator misconfigures the env-var to point at an
+    arbitrary executable. Even if the file exists, the resolver must refuse
+    anything outside the ``.ttf`` / ``.otf`` whitelist.
+    """
+    from needs_map.fonts import KoreanFontUnavailableError, resolve_korean_font_paths
+
+    bogus = _make_real_path(tmp_path, "rogue.sh")
+    real_bold = _make_real_path(tmp_path, "NanumGothicBold.ttf")
+
+    monkeypatch.setenv("PAIDEIA_KR_FONT_PATH", str(bogus))
+    monkeypatch.setenv("PAIDEIA_KR_FONT_BOLD_PATH", str(real_bold))
+    _patch_fc_match(monkeypatch, {})
+
+    with pytest.raises(KoreanFontUnavailableError) as exc:
+        resolve_korean_font_paths()
+    msg = str(exc.value)
+    assert (
+        "extension" in msg.lower() or ".ttf" in msg or ".otf" in msg
+    ), f"expected extension whitelist message, got: {msg}"
+
+
+def test_env_var_size_cap_rejects_oversized_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """env-var path > size cap (50MB) MUST be rejected — adversary DoS guard."""
+    from needs_map.fonts import KoreanFontUnavailableError, resolve_korean_font_paths
+
+    huge = tmp_path / "huge.ttf"
+    # write a sparse 60MB file (fast — uses seek)
+    with huge.open("wb") as f:
+        f.seek(60 * 1024 * 1024 - 1)
+        f.write(b"\0")
+    real_bold = _make_real_path(tmp_path, "NanumGothicBold.ttf")
+
+    monkeypatch.setenv("PAIDEIA_KR_FONT_PATH", str(huge))
+    monkeypatch.setenv("PAIDEIA_KR_FONT_BOLD_PATH", str(real_bold))
+    _patch_fc_match(monkeypatch, {})
+
+    with pytest.raises(KoreanFontUnavailableError) as exc:
+        resolve_korean_font_paths()
+    msg = str(exc.value)
+    assert (
+        "size" in msg.lower() or "MB" in msg or "50" in msg
+    ), f"expected size-cap message, got: {msg}"
+
+
+def test_env_var_path_traversal_resolved_strict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """env-var path uses ``Path.resolve(strict=True)`` — broken symlink rejected.
+
+    A path that resolves to a non-existent target (e.g. dangling symlink)
+    must be rejected so the resolver does not silently accept invalid paths.
+    """
+    from needs_map.fonts import KoreanFontUnavailableError, resolve_korean_font_paths
+
+    real_target = _make_real_path(tmp_path, "Real.ttf")
+    real_target.unlink()  # delete target so symlink dangles
+    symlink = tmp_path / "link.ttf"
+    symlink.symlink_to(real_target)
+
+    real_bold = _make_real_path(tmp_path, "NanumGothicBold.ttf")
+    monkeypatch.setenv("PAIDEIA_KR_FONT_PATH", str(symlink))
+    monkeypatch.setenv("PAIDEIA_KR_FONT_BOLD_PATH", str(real_bold))
+    _patch_fc_match(monkeypatch, {})
+
+    with pytest.raises(KoreanFontUnavailableError):
+        resolve_korean_font_paths()
