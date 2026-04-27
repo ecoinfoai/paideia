@@ -1,7 +1,19 @@
-"""Contract tests for MappingColumn V5 + DiagnosticMappingConfig V6.
+"""Contract tests for MappingColumn V5/V7/V8 + DiagnosticMappingConfig V6.
 
-Existing v1-v4 tests live elsewhere; this module covers the new validators added
-for needs-map (T009 partition_axis + V5, T010 V6 standard vocabulary).
+v0.1.1 deltas (T006 inline patch):
+- ``StandardAxisKey`` is the 8-key v1.1.0 vocabulary; V6 strict requires
+  ``axes.required`` to equal that set exactly. Tests that previously used
+  the 6-key vocabulary now build with the 8-key set.
+- ``MappingColumn.kind`` adds ``single_select``; auxiliary group keys
+  (``prior_readiness`` / ``interest_topics`` / ``categorical_intent``) are
+  used in lieu of v0.1.0 ``prior_knowledge`` for non-likert columns.
+- Freetext columns must target ``FreetextAreaKey``
+  (``anxiety_freetext`` / ``experience_freetext``).
+- New V7 (aggregate='mean' only on likert) and V8 (ordinal_map only on
+  likert) validators are exercised in the dedicated v0.1.1 contract test
+  module (``modules/needs-map/tests/contract/test_shared_schemas_v0_1_1.py``);
+  this file focuses on the V5/V6/V4-freetext patterns inherited from
+  v0.1.0.
 """
 
 from __future__ import annotations
@@ -14,6 +26,18 @@ from paideia_shared.schemas import (
     MappingMetadata,
 )
 from pydantic import ValidationError
+
+# v0.1.1 — the 8 quantitative axes (constitution v1.1.0).
+_ALL_AXES = (
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
+)
 
 
 def _identity_col() -> MappingColumn:
@@ -31,36 +55,48 @@ def _likert_col(axis: str = "motivation", partition: bool = False) -> MappingCol
 
 
 def _multiselect_col(
-    axis: str = "prior_knowledge", partition: bool = False
+    axis: str = "interest_topics", partition: bool = False
 ) -> MappingColumn:
+    """Auxiliary group multiselect (v0.1.1 — non-scoring, no aggregate=mean)."""
     return MappingColumn(
         source=f"Q03_{axis}",
         kind="multiselect",
         axis=axis,
-        aggregate="sum",
         partition_axis=partition,
     )
 
 
-def _freetext_col(axis: str = "anxiety", partition: bool = False) -> MappingColumn:
+def _freetext_col(
+    axis: str = "anxiety_freetext", partition: bool = False
+) -> MappingColumn:
+    """Freetext column targeting a FreetextAreaKey (v0.1.1)."""
     return MappingColumn(
-        source=f"Q14_{axis}_freetext",
+        source=f"Q62_{axis}",
         kind="freetext",
         axis=axis,
         partition_axis=partition,
     )
 
 
-def _config(columns: list[MappingColumn], required: list[str]) -> DiagnosticMappingConfig:
+def _full_eight_axis_columns() -> list[MappingColumn]:
+    """One likert column per quantitative axis to satisfy V6 strict."""
+    return [_identity_col()] + [_likert_col(axis) for axis in _ALL_AXES]
+
+
+def _config(
+    columns: list[MappingColumn],
+    required: list[str],
+    optional: list[str] | None = None,
+) -> DiagnosticMappingConfig:
     return DiagnosticMappingConfig(
         metadata=MappingMetadata(
             semester="2026-1",
             course_slug="anatomy",
             course_name_kr="인체구조와기능",
-            mapping_version=1,
+            mapping_version=2,
         ),
         columns=columns,
-        axes=MappingAxes(required=required, optional=[]),
+        axes=MappingAxes(required=required, optional=optional or []),
     )
 
 
@@ -88,57 +124,62 @@ def test_v5_partition_default_false() -> None:
     assert _likert_col().partition_axis is False
 
 
-# --- V6: declared axes must belong to standard 6 ---
+# --- V6: declared axes must equal the 8-key v1.1.0 vocabulary exactly ---
 
 
-def test_v6_all_standard_axes_pass() -> None:
+def test_v6_full_eight_axes_pass() -> None:
     config = _config(
-        columns=[_identity_col(), _likert_col("motivation"), _likert_col("anxiety")],
-        required=["motivation", "anxiety"],
+        columns=_full_eight_axis_columns(),
+        required=list(_ALL_AXES),
     )
-    assert config.axes.required == ["motivation", "anxiety"]
+    assert set(config.axes.required) == set(_ALL_AXES)
 
 
 def test_v6_non_standard_required_axis_rejected() -> None:
+    """A non-vocabulary required axis triggers V6 — error mentions the axis."""
+    columns = _full_eight_axis_columns() + [_likert_col("self_regulation")]
     with pytest.raises(ValidationError) as exc:
         _config(
-            columns=[_identity_col(), _likert_col("self_regulation")],
-            required=["self_regulation"],
+            columns=columns,
+            required=[*_ALL_AXES, "self_regulation"],
         )
     msg = str(exc.value)
     assert "V6" in msg
     assert "self_regulation" in msg
-    assert "minor version bump" in msg
+    assert "minor-version bump" in msg
 
 
 def test_v6_non_standard_optional_axis_rejected() -> None:
-    cols = [_identity_col(), _likert_col("motivation"), _likert_col("metacognition")]
-    cfg = DiagnosticMappingConfig.model_construct  # bypass would silence v6 — use full
+    """V6 limits ``axes.optional`` to AuxiliaryGroupKey ∪ FreetextAreaKey.
+
+    Add a column targeting the bogus optional axis so V3 (declared axis must
+    have ≥1 backing column) does not pre-empt V6 with a different complaint.
+    """
+    columns = [
+        *_full_eight_axis_columns(),
+        # Use multiselect so V7 (mean only on likert) isn't violated either.
+        MappingColumn(source="Q_meta", kind="multiselect", axis="metacognition"),
+    ]
     with pytest.raises(ValidationError) as exc:
-        DiagnosticMappingConfig(
-            metadata=MappingMetadata(
-                semester="2026-1",
-                course_slug="anatomy",
-                mapping_version=1,
-            ),
-            columns=cols,
-            axes=MappingAxes(required=["motivation"], optional=["metacognition"]),
+        _config(
+            columns=columns,
+            required=list(_ALL_AXES),
+            optional=["metacognition"],
         )
     assert "V6" in str(exc.value)
     assert "metacognition" in str(exc.value)
-    _ = cfg  # silence ruff F841 — keep reference for symmetry
 
 
 def test_v6_existing_v1_v4_validators_still_run() -> None:
-    """V6 addition must not silently bypass earlier validators."""
-    # V2: missing identity → still ValueError before V6 even fires
+    """V6 addition must not silently bypass earlier validators.
+
+    Build a config without any identity column → V2 (exactly one identity)
+    fires before V6 even gets a chance.
+    """
     with pytest.raises(ValidationError) as exc:
-        DiagnosticMappingConfig(
-            metadata=MappingMetadata(
-                semester="2026-1", course_slug="anatomy", mapping_version=1
-            ),
-            columns=[_likert_col("motivation"), _likert_col("anxiety")],
-            axes=MappingAxes(required=["motivation", "anxiety"]),
+        _config(
+            columns=[_likert_col(axis) for axis in _ALL_AXES],  # no identity
+            required=list(_ALL_AXES),
         )
     assert "V2" in str(exc.value)
 
@@ -147,47 +188,51 @@ def test_v6_existing_v1_v4_validators_still_run() -> None:
 
 
 def test_v4_freetext_and_likert_same_axis_passes() -> None:
-    """likert(aggregate=mean) + freetext(aggregate=None) under one axis must NOT raise V4.
+    """likert(aggregate=mean) + freetext(aggregate=None) are independent.
 
-    Freetext columns carry no score aggregation (Phase D consumes raw text).
-    contracts/diagnostic_mapping_extension.md explicitly documents this pattern as
-    valid (e.g. Q05 anxiety likert + Q62 anxiety freetext sharing axis='anxiety').
+    In v0.1.1 the freetext axis must live in ``FreetextAreaKey``, not in the
+    quantitative vocabulary; the V4 exemption is therefore exercised by
+    co-existing axes (motivation likert + anxiety_freetext) inside the same
+    config.
     """
     cfg = _config(
         columns=[
-            _identity_col(),
-            _likert_col("anxiety"),
-            _freetext_col("anxiety"),
+            *_full_eight_axis_columns(),
+            _freetext_col("anxiety_freetext"),
         ],
-        required=["anxiety"],
+        required=list(_ALL_AXES),
+        optional=["anxiety_freetext"],
     )
-    assert {c.axis for c in cfg.columns if c.kind != "identity"} == {"anxiety"}
+    quant_axes = {c.axis for c in cfg.columns if c.kind == "likert"}
+    freetext_axes = {c.axis for c in cfg.columns if c.kind == "freetext"}
+    assert quant_axes == set(_ALL_AXES)
+    assert freetext_axes == {"anxiety_freetext"}
 
 
 def test_v4_two_likert_inconsistent_aggregate_still_rejected() -> None:
     """Non-freetext columns with mixed aggregate values are still V4 violations."""
+    columns = [
+        _identity_col(),
+        MappingColumn(
+            source="Q01_motivation_a",
+            kind="likert",
+            axis="motivation",
+            aggregate="mean",
+        ),
+        MappingColumn(
+            source="Q02_motivation_b",
+            kind="likert",
+            axis="motivation",
+            aggregate="sum",
+        ),
+    ]
+    # Need the remaining 7 axes too so V6 does not pre-empt V4 with a stricter
+    # complaint.
+    for axis in _ALL_AXES:
+        if axis != "motivation":
+            columns.append(_likert_col(axis))
     with pytest.raises(ValidationError) as exc:
-        DiagnosticMappingConfig(
-            metadata=MappingMetadata(
-                semester="2026-1", course_slug="anatomy", mapping_version=1
-            ),
-            columns=[
-                _identity_col(),
-                MappingColumn(
-                    source="Q01_motivation_a",
-                    kind="likert",
-                    axis="motivation",
-                    aggregate="mean",
-                ),
-                MappingColumn(
-                    source="Q02_motivation_b",
-                    kind="likert",
-                    axis="motivation",
-                    aggregate="sum",
-                ),
-            ],
-            axes=MappingAxes(required=["motivation"]),
-        )
+        _config(columns=columns, required=list(_ALL_AXES))
     assert "V4" in str(exc.value)
     assert "motivation" in str(exc.value)
 
@@ -196,15 +241,15 @@ def test_v4_two_freetext_same_axis_passes() -> None:
     """Two freetext columns sharing one axis pass — both exempt from V4."""
     cfg = _config(
         columns=[
-            _identity_col(),
-            _likert_col("anxiety"),  # anchor scoring column
-            MappingColumn(source="Q62_a", kind="freetext", axis="anxiety"),
-            MappingColumn(source="Q62_b", kind="freetext", axis="anxiety"),
+            *_full_eight_axis_columns(),
+            MappingColumn(source="Q62_a", kind="freetext", axis="anxiety_freetext"),
+            MappingColumn(source="Q62_b", kind="freetext", axis="anxiety_freetext"),
         ],
-        required=["anxiety"],
+        required=list(_ALL_AXES),
+        optional=["anxiety_freetext"],
     )
     freetext_axes = [c.axis for c in cfg.columns if c.kind == "freetext"]
-    assert freetext_axes == ["anxiety", "anxiety"]
+    assert freetext_axes == ["anxiety_freetext", "anxiety_freetext"]
 
 
 def test_v5_partition_axis_does_not_apply_to_freetext_under_v4_exemption() -> None:
@@ -213,7 +258,7 @@ def test_v5_partition_axis_does_not_apply_to_freetext_under_v4_exemption() -> No
         MappingColumn(
             source="Q62_anxiety_free",
             kind="freetext",
-            axis="anxiety",
+            axis="anxiety_freetext",
             partition_axis=True,
         )
     assert "V5" in str(exc.value)

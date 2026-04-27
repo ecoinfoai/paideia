@@ -113,7 +113,7 @@ def test_report_accepts_unique_axis_rows() -> None:
     report = ScaleReliabilityReport(
         rows=[
             _row(axis_key="motivation"),
-            _row(axis_key="anxiety", cronbach_alpha=0.78),
+            _row(axis_key="study_strategy", cronbach_alpha=0.78),
         ],
         semester="2026-1",
         course_slug="anatomy",

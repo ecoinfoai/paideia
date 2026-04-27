@@ -25,7 +25,10 @@ def _input() -> NeedsMapInput:
         diagnostic_mapping_sha256=_OK_SHA,
         keyword_dictionary_path="paideia_shared/keywords/ko.yaml",
         keyword_dictionary_sha256=_ALT_SHA,
-        missing_policy_source={"motivation": "yaml", "anxiety": "default"},
+        missing_policy_source={
+            "motivation": "yaml",
+            "study_strategy": "default",
+        },
     )
 
 
@@ -37,8 +40,8 @@ def _manifest(**overrides: object) -> NeedsMapManifest:
         "module_version": "needs-map/0.1.0",
         "created_at_utc": "2026-04-27T00:00:00Z",
         "inputs": _input(),
-        "standard_axes_used": ["motivation", "anxiety"],
-        "standard_axes_skipped": ["interest"],
+        "standard_axes_used": ["motivation", "study_strategy"],
+        "standard_axes_skipped": ["material_preference"],
         "phases_executed": ["A", "B"],
         "rows_per_phase": [
             NeedsMapPhaseRowCount(phase="A", rows_written=6),
@@ -97,7 +100,7 @@ def test_v1_output_key_must_match_semester_course() -> None:
 def test_v2_used_and_skipped_axes_disjoint() -> None:
     with pytest.raises(ValidationError) as exc:
         _manifest(
-            standard_axes_used=["motivation", "anxiety"],
+            standard_axes_used=["motivation", "study_strategy"],
             standard_axes_skipped=["motivation"],
         )
     assert "V2" in str(exc.value)
@@ -143,7 +146,10 @@ def test_llm_call_stat_failure_kinds_default_empty() -> None:
 
 def test_missing_policy_source_accepts_yaml_or_default() -> None:
     m = _manifest()
-    assert m.inputs.missing_policy_source == {"motivation": "yaml", "anxiety": "default"}
+    assert m.inputs.missing_policy_source == {
+        "motivation": "yaml",
+        "study_strategy": "default",
+    }
 
 
 def test_missing_policy_source_rejects_unknown_value() -> None:

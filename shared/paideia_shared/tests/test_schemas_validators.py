@@ -317,21 +317,51 @@ def test_manifest_v3_negative_invalid_version() -> None:
 # ---------- DiagnosticMappingConfig ----------
 
 
+_V1_1_QUANT_AXES = (
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
+)
+
+
 def _base_mapping_kwargs() -> dict:
+    """Build a v0.1.1-compliant mapping fixture: 8 quantitative likert columns
+    + 1 identity + 1 auxiliary multiselect targeting an AuxiliaryGroupKey."""
+    columns: list[MappingColumn] = [MappingColumn(source="학번", kind="identity")]
+    for axis in _V1_1_QUANT_AXES:
+        columns.append(
+            MappingColumn(
+                source=f"Q_{axis}",
+                kind="likert",
+                axis=axis,
+                aggregate="mean",
+            )
+        )
+    # Auxiliary multiselect — non-scoring, no aggregate=mean (V7).
+    columns.append(
+        MappingColumn(
+            source="Q11_interest",
+            kind="multiselect",
+            axis="interest_topics",
+        )
+    )
     return {
         "metadata": MappingMetadata(
             semester="2026-1",
             course_slug="anatomy",
             course_name_kr="인체구조와기능",
-            mapping_version=1,
+            mapping_version=2,
         ),
-        "columns": [
-            MappingColumn(source="학번", kind="identity"),
-            MappingColumn(source="Q01", kind="likert", axis="motivation"),
-            MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-            MappingColumn(source="Q11", kind="multiselect", axis="interest"),
-        ],
-        "axes": MappingAxes(required=["motivation", "anxiety", "interest"]),
+        "columns": columns,
+        "axes": MappingAxes(
+            required=list(_V1_1_QUANT_AXES),
+            optional=["interest_topics"],
+        ),
     }
 
 
@@ -351,52 +381,59 @@ def test_mapping_column_v1_negative_non_identity_no_axis() -> None:
 
 def test_mapping_v2_negative_two_identities() -> None:
     kwargs = _base_mapping_kwargs()
-    kwargs["columns"] = [
-        MappingColumn(source="학번", kind="identity"),
-        MappingColumn(source="ID", kind="identity"),
-        MappingColumn(source="Q01", kind="likert", axis="motivation"),
-    ]
+    extra_identity = MappingColumn(source="ID2", kind="identity")
+    kwargs["columns"] = [extra_identity, *kwargs["columns"]]
     with pytest.raises(ValidationError, match="V2"):
         DiagnosticMappingConfig(**kwargs)
 
 
 def test_mapping_v2_negative_zero_identity() -> None:
     kwargs = _base_mapping_kwargs()
-    kwargs["columns"] = [
-        MappingColumn(source="Q01", kind="likert", axis="motivation"),
-        MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-    ]
+    kwargs["columns"] = [c for c in kwargs["columns"] if c.kind != "identity"]
     with pytest.raises(ValidationError, match="V2"):
         DiagnosticMappingConfig(**kwargs)
 
 
 def test_mapping_v3_negative_required_axis_unmapped() -> None:
+    """A required axis that has no backing column raises V3 *before* V6 strict.
+
+    Use a configuration that drops one likert column (study_strategy) but still
+    keeps it in axes.required — V3 fires because no column maps to that axis.
+    """
     kwargs = _base_mapping_kwargs()
-    kwargs["axes"] = MappingAxes(required=["motivation", "anxiety", "missing_axis"])
+    kwargs["columns"] = [
+        c for c in kwargs["columns"] if c.axis != "study_strategy"
+    ]
+    # axes.required intentionally still names study_strategy — V3 violation.
     with pytest.raises(ValidationError, match="V3"):
         DiagnosticMappingConfig(**kwargs)
 
 
 def test_mapping_v4_negative_inconsistent_aggregate() -> None:
+    """Two likert columns on the same quantitative axis with mixed aggregates → V4."""
     kwargs = _base_mapping_kwargs()
-    kwargs["columns"] = [
-        MappingColumn(source="학번", kind="identity"),
-        MappingColumn(source="Q01", kind="likert", axis="motivation", aggregate="mean"),
-        MappingColumn(source="Q02", kind="likert", axis="motivation"),  # missing aggregate
-        MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-        MappingColumn(source="Q11", kind="multiselect", axis="interest"),
-    ]
+    # Add a second motivation likert column with a different aggregate to fire V4.
+    kwargs["columns"].append(
+        MappingColumn(
+            source="Q02_motivation_b",
+            kind="likert",
+            axis="motivation",
+            aggregate="sum",
+        )
+    )
     with pytest.raises(ValidationError, match="V4"):
         DiagnosticMappingConfig(**kwargs)
 
 
 def test_mapping_v4_positive_consistent_aggregate() -> None:
+    """Two likert columns on the same axis with identical aggregates pass."""
     kwargs = _base_mapping_kwargs()
-    kwargs["columns"] = [
-        MappingColumn(source="학번", kind="identity"),
-        MappingColumn(source="Q01", kind="likert", axis="motivation", aggregate="mean"),
-        MappingColumn(source="Q02", kind="likert", axis="motivation", aggregate="mean"),
-        MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-        MappingColumn(source="Q11", kind="multiselect", axis="interest"),
-    ]
+    kwargs["columns"].append(
+        MappingColumn(
+            source="Q02_motivation_b",
+            kind="likert",
+            axis="motivation",
+            aggregate="mean",
+        )
+    )
     DiagnosticMappingConfig(**kwargs)
