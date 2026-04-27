@@ -37,11 +37,13 @@ from paideia_shared.schemas import (
     CourseSlug,
     DiagnosticMappingConfig,
     FactorScoreRow,
+    FactorScoresLongRow,
     FontResolutionInfo,
     FreeTextRow,  # noqa: E402
     NeedsMapInput,
     NeedsMapManifest,
     NeedsMapPhaseRowCount,
+    NewOutputsInfo,
     ScaleReliabilityRow,
     SemesterCode,
 )
@@ -64,8 +66,10 @@ from .io.silver import load_diagnostic_response, load_student_master
 from .llm.client import make_client
 from .llm.fallback import LLMCallTracker
 from .reliability.cronbach import compute_reliability
+from .report.aggregation import build_axis_summary_rows
 from .report.cluster_summary import write_cluster_summary_xlsx
 from .report.distribution import compute_axis_distributions
+from .report.exports import write_axis_summary, write_factor_scores_long
 from .report.partitions import compute_partition_for_axis
 from .report.pdf_writer import render_group_distribution_pdf
 
@@ -424,6 +428,104 @@ def _write_manifest_atomic(silver_dir: Path, manifest: NeedsMapManifest) -> None
     )
 
 
+def _factor_score_dict_to_long_row(
+    fs_dict: dict, semester: str, course_slug: str
+) -> FactorScoresLongRow:
+    """Bridge a Phase B FactorScoreRow dict into a v0.1.1 long-form row.
+
+    The Phase B dict carries 8 axis × {raw, z, missing} fields plus
+    student_id / on_roster / responded / section. Auxiliary group, cluster,
+    and freetext fields are not yet wired (Phase 6/8 will hydrate them).
+    They are left at their schema defaults (``None`` / ``False``).
+    """
+    payload: dict = {
+        "student_id": fs_dict["student_id"],
+        "semester": semester,
+        "course_slug": course_slug,
+        "on_roster": fs_dict["on_roster"],
+        "section": fs_dict.get("section"),
+        "responded": fs_dict["responded"],
+    }
+    for axis in _STANDARD_AXES:
+        raw = fs_dict.get(axis)
+        z = fs_dict.get(f"{axis}_z")
+        missing = fs_dict.get(f"{axis}_missing", raw is None)
+        payload[f"{axis}_raw"] = raw
+        payload[f"{axis}_z"] = z
+        payload[f"{axis}_missing"] = bool(missing)
+    return FactorScoresLongRow(**payload)
+
+
+def _emit_v011_exports(
+    *,
+    gold_dir: Path,
+    fs_rows: list[dict],
+    scale_reliability_rows: list[ScaleReliabilityRow],
+    free_text_rows: list,  # noqa: ANN401  # FreeTextRow imported lazily
+    cluster_report: ClusterReport | None,
+    cohort_size: int,
+) -> NewOutputsInfo:
+    """Run the v0.1.1 long CSV/YAML + axis_summary CSV/YAML writers (T038).
+
+    Returns the populated :class:`NewOutputsInfo` with the four export
+    paths set; ``manual_pdf`` and ``freetext_audit_parquet`` carry the
+    canonical sibling paths even though Phase 7 / Phase 8 own their
+    creation.
+    """
+    _ = cluster_report, free_text_rows  # not yet hydrated into long rows
+
+    semester_str = next(
+        iter({r.get("semester") for r in fs_rows if r.get("semester")}), ""
+    )
+    course_slug_str = next(
+        iter({r.get("course_slug") for r in fs_rows if r.get("course_slug")}),
+        "",
+    )
+    long_rows = [
+        _factor_score_dict_to_long_row(
+            r, semester_str or _placeholder_semester(), course_slug_str or "anatomy"
+        )
+        for r in fs_rows
+    ]
+    long_csv, long_yaml = write_factor_scores_long(long_rows, gold_dir)
+
+    summary_rows = build_axis_summary_rows(
+        scale_reliability=[
+            r.model_dump() if hasattr(r, "model_dump") else r
+            for r in scale_reliability_rows
+        ],
+        factor_scores_long=[lr.model_dump() for lr in long_rows],
+        auxiliary_columns={},
+        freetext_summaries={},
+        n_cohort=cohort_size,
+    )
+    summary_csv, summary_yaml = write_axis_summary(summary_rows, gold_dir)
+
+    return NewOutputsInfo(
+        factor_scores_long_csv=str(long_csv),
+        factor_scores_long_yaml=str(long_yaml),
+        axis_summary_csv=str(summary_csv),
+        axis_summary_yaml=str(summary_yaml),
+        # Phase 7 (T048) writes manual.pdf; Phase 8 (T060) writes
+        # freetext_audit.parquet. Path placeholders are recorded now so the
+        # manifest is structurally complete; downstream phases will overwrite
+        # these paths atomically.
+        manual_pdf=str(gold_dir / "needs-map_manual.pdf"),
+        freetext_audit_parquet=str(
+            gold_dir.parent.parent.parent
+            / "silver"
+            / "needs-map"
+            / gold_dir.name
+            / "freetext_audit.parquet"
+        ),
+    )
+
+
+def _placeholder_semester() -> str:
+    """Fallback semester string for empty-cohort smoke tests (FR-014)."""
+    return "1900-1"
+
+
 def _build_font_resolution_info() -> FontResolutionInfo:
     """Resolve NanumGothic paths + tag the source per-face for the manifest (T026).
 
@@ -493,6 +595,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
 
     rows_per_phase: list[NeedsMapPhaseRowCount] = []
     phases_executed: list[Literal["A", "B", "C", "D", "E", "F"]] = []
+    new_outputs: NewOutputsInfo | None = None
 
     if "A" in args.phases:
         report = compute_reliability(diag_df, mapping)
@@ -641,6 +744,20 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
                     factor_scores_df=fs_df,
                     output_path=gold / "cluster_summary.xlsx",
                 )
+            # v0.1.1 Phase E append (T038): factor_scores_long + axis_summary
+            # exports. The two writers are pure (FR-035 byte-equal) so they
+            # can run unconditionally — operators always get the new gold
+            # files alongside group_distribution.pdf + cluster_summary.xlsx.
+            new_outputs = _emit_v011_exports(
+                gold_dir=gold,
+                fs_rows=fs_rows,
+                scale_reliability_rows=(
+                    list(report.rows) if "A" in args.phases else []
+                ),
+                free_text_rows=free_text_rows,
+                cluster_report=cluster_report,
+                cohort_size=len(fs_rows),
+            )
         rows_per_phase.append(NeedsMapPhaseRowCount(phase="E", rows_written=1))
         phases_executed.append("E")
 
@@ -724,6 +841,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         warnings=[],
         unrecognized_inputs=[],
         font_resolution=font_resolution,
+        new_outputs=new_outputs,
     )
 
     if not args.dry_run:
