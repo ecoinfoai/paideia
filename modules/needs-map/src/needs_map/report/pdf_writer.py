@@ -9,6 +9,12 @@ Sections (FR-017):
   (b) cluster summary table (size + name + silhouette)
   (c) free-text category bar chart
   (d) partition comparison table (section + partition_axis columns)
+
+v0.1.1 (T025) — Korean font registration is delegated to the shared
+``needs_map.fonts.register_for_reportlab`` /
+``register_for_matplotlib`` helpers. CLI pre-flight (T023) guarantees the
+fonts are resolvable at run start; the legacy candidate-chain + Helvetica
+fallback have been removed.
 """
 
 from __future__ import annotations
@@ -24,39 +30,27 @@ import matplotlib.pyplot as plt
 from paideia_shared.schemas import ClusterReport
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as canvas_module
 
+from ..fonts import (
+    register_for_matplotlib,
+    register_for_reportlab,
+    resolve_korean_font_paths,
+)
+
 _PRODUCER = "paideia/needs-map/0.1.0"
-_KOREAN_FONT_NAME = "NotoSansCJKKR"
-_KOREAN_FONT_REGISTERED: bool = False
 
 
 def _register_korean_font() -> str:
-    global _KOREAN_FONT_REGISTERED
-    if _KOREAN_FONT_REGISTERED:
-        return _KOREAN_FONT_NAME
-    candidates = [
-        "/run/current-system/sw/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/nix/store/4q2wdcakn6likmvqsh94rbjbbnr2lz0x-home-manager-path/share/fonts/opentype/noto-cjk/NotoSansCJK-VF.otf.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ]
-    import os
+    """Resolve NanumGothic + register for both reportlab and matplotlib.
 
-    env_override = os.environ.get("PAIDEIA_KR_FONT_PATH")
-    if env_override:
-        candidates.insert(0, env_override)
-    for path in candidates:
-        if Path(path).is_file():
-            try:
-                pdfmetrics.registerFont(TTFont(_KOREAN_FONT_NAME, path, subfontIndex=1))
-                _KOREAN_FONT_REGISTERED = True
-                return _KOREAN_FONT_NAME
-            except Exception:  # noqa: BLE001, S112 — font load failure → next candidate
-                continue  # noqa: S112 — fallback chain by design
-    return "Helvetica"
+    Re-resolves the paths each call (idempotent — registration helpers
+    dedupe). Returns the regular face name used by reportlab text drawing.
+    """
+    regular_path, bold_path = resolve_korean_font_paths()
+    regular_name, _bold_name = register_for_reportlab(regular_path, bold_path)
+    register_for_matplotlib(regular_path)
+    return regular_name
 
 
 def _render_histogram_png(values: list[float], title: str) -> bytes:

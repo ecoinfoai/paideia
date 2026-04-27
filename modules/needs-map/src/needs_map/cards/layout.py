@@ -4,53 +4,39 @@ Reportlab Canvas-based. Determinism axis 4: setProducer + setCreator +
 setCreationDate fixed via the ``created_at_utc`` argument so two runs
 with identical input + the same NeedsMapArgs.created_at_utc yield byte-equal PDFs.
 
-Korean font: registered via _register_korean_font (Noto Sans CJK KR if
-available; falls back to Helvetica + romanized labels — never raises).
+v0.1.1 (T024) — Korean font registration is delegated to the shared
+``needs_map.fonts.register_for_reportlab`` helper, which assumes the CLI
+pre-flight (T023) has already validated NanumGothic Regular + Bold via
+``resolve_korean_font_paths``. The legacy candidate-chain + Helvetica
+fallback have been removed: missing fonts now exit the pipeline at entry
+with code 6 (FR-005), so card rendering never has to choose between
+correct text and degraded glyphs.
 """
 
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as canvas_module
 
+from ..fonts import register_for_reportlab, resolve_korean_font_paths
+
 _PRODUCER = "paideia/needs-map/0.1.0"
-_KOREAN_FONT_NAME = "NotoSansCJKKR"
-_KOREAN_FONT_REGISTERED: bool = False
 
 
 def _register_korean_font() -> str:
-    """Register Noto Sans CJK KR if a TTF/OTF is locatable; return font name to use."""
-    global _KOREAN_FONT_REGISTERED
-    if _KOREAN_FONT_REGISTERED:
-        return _KOREAN_FONT_NAME
-    candidates = [
-        "/run/current-system/sw/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/nix/store/4q2wdcakn6likmvqsh94rbjbbnr2lz0x-home-manager-path/share/fonts/opentype/noto-cjk/NotoSansCJK-VF.otf.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ]
-    import os
+    """Register NanumGothic Regular + Bold and return the regular face name.
 
-    env_override = os.environ.get("PAIDEIA_KR_FONT_PATH")
-    if env_override:
-        candidates.insert(0, env_override)
-
-    for path in candidates:
-        if Path(path).is_file():
-            try:
-                pdfmetrics.registerFont(TTFont(_KOREAN_FONT_NAME, path, subfontIndex=1))
-                _KOREAN_FONT_REGISTERED = True
-                return _KOREAN_FONT_NAME
-            except Exception:  # noqa: BLE001, S112 — font load failure → next candidate
-                continue  # noqa: S112 — fallback chain by design
-    return "Helvetica"
+    Re-resolves the font paths via ``resolve_korean_font_paths`` so card
+    rendering remains valid even when invoked outside the CLI pre-flight
+    (e.g. unit tests). Both calls are idempotent.
+    """
+    regular_path, bold_path = resolve_korean_font_paths()
+    regular_name, _bold_name = register_for_reportlab(regular_path, bold_path)
+    return regular_name
 
 
 def render_card_pdf(

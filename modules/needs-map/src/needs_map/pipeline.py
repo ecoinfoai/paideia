@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -36,6 +37,7 @@ from paideia_shared.schemas import (
     CourseSlug,
     DiagnosticMappingConfig,
     FactorScoreRow,
+    FontResolutionInfo,
     FreeTextRow,  # noqa: E402
     NeedsMapInput,
     NeedsMapManifest,
@@ -53,6 +55,7 @@ from .clustering.silhouette import recommend_k
 from .factor_scores.aggregate import aggregate_axis
 from .factor_scores.missing import apply_missing_policy
 from .factor_scores.zscore import zscore
+from .fonts import resolve_korean_font_paths
 from .free_text.dictionary import classify_dictionary
 from .free_text.llm_fallback import classify_with_llm_fallback
 from .io.keywords import compute_match_rate, load_keywords
@@ -417,6 +420,37 @@ def _write_manifest_atomic(silver_dir: Path, manifest: NeedsMapManifest) -> None
     )
 
 
+def _build_font_resolution_info() -> FontResolutionInfo:
+    """Resolve NanumGothic paths + tag the source per-face for the manifest (T026).
+
+    The CLI pre-flight (T023) has already proven the fonts are resolvable;
+    this re-resolves to capture the path + source enum for the manifest.
+    Source is ``env-var-PAIDEIA_KR_FONT_PATH`` /
+    ``env-var-PAIDEIA_KR_FONT_BOLD_PATH`` when the corresponding env-var is
+    set, ``fc-match`` otherwise.
+
+    Optional sha256 fingerprints are NOT computed yet — the manifest field
+    is left as None pending a follow-up determinism check (FR-035).
+    """
+    regular_path, bold_path = resolve_korean_font_paths()
+    regular_source = (
+        "env-var-PAIDEIA_KR_FONT_PATH"
+        if os.environ.get("PAIDEIA_KR_FONT_PATH")
+        else "fc-match"
+    )
+    bold_source = (
+        "env-var-PAIDEIA_KR_FONT_BOLD_PATH"
+        if os.environ.get("PAIDEIA_KR_FONT_BOLD_PATH")
+        else "fc-match"
+    )
+    return FontResolutionInfo(
+        regular_path=str(regular_path),
+        bold_path=str(bold_path),
+        regular_source=regular_source,
+        bold_source=bold_source,
+    )
+
+
 def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
     """Orchestrate Phase A-F per ``args.phases``.
 
@@ -656,6 +690,8 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         missing_policy_source=dict(missing_policy_source),  # type: ignore[arg-type]
     )
 
+    font_resolution = _build_font_resolution_info()
+
     manifest = NeedsMapManifest(
         semester=args.semester,
         course_slug=args.course_slug,
@@ -683,6 +719,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         previous_run_archive_path=archive_label,
         warnings=[],
         unrecognized_inputs=[],
+        font_resolution=font_resolution,
     )
 
     if not args.dry_run:
