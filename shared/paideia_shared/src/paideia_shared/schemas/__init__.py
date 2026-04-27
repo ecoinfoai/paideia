@@ -17,6 +17,7 @@ from .diagnostic_mapping import (
 from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
+from .factor_scores import FactorScoreRow
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .needs_map_manifest import (
     LLMCallStat,
@@ -24,6 +25,7 @@ from .needs_map_manifest import (
     NeedsMapManifest,
     NeedsMapPhaseRowCount,
 )
+from .scale_reliability import ScaleReliabilityReport, ScaleReliabilityRow
 from .student_master import StudentMaster
 
 __all__ = [
@@ -48,4 +50,7 @@ __all__ = [
     "LLMCallStat",
     "NeedsMapPhaseRowCount",
     "NeedsMapManifest",
+    "ScaleReliabilityRow",
+    "ScaleReliabilityReport",
+    "FactorScoreRow",
 ]
