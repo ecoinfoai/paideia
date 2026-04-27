@@ -3,6 +3,13 @@
 Pydantic v2 schema with the same ``extra='forbid'`` + ``frozen=True`` discipline as
 the rest of ``paideia_shared.schemas``. Written alongside both the Silver and Gold
 output trees so audit trail survives directory moves.
+
+v0.1.1 deltas (T017, contracts/manifest.md):
+- ``schema_version`` defaults to '1.1.0' (was '1.0.0' implicit).
+- New sub-models: ``FontResolutionInfo``, ``SentimentRunInfo``,
+  ``NewOutputsInfo``, ``VocabularyInfo`` — surface the v0.1.1 cross-cutting
+  concerns (Korean font fail-fast, RoBERTa sentiment, new exports + manual,
+  vocabulary audit).
 """
 
 from __future__ import annotations
@@ -12,8 +19,11 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._common import (
+    STANDARD_AXIS_KEYS,
+    AuxiliaryGroupKey,
     CanonicalStudentId,
     CourseSlug,
+    FreetextAreaKey,
     OutputKey,
     SemesterCode,
     StandardAxisKey,
@@ -21,6 +31,124 @@ from ._common import (
 
 _SHA256_PATTERN = r"^[0-9a-f]{64}$"
 _ISO8601_UTC_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+
+
+class FontResolutionInfo(BaseModel):
+    """Provenance of the resolved Korean font paths (v0.1.1, T017 + T026).
+
+    Either fc-match or env-var override resolves NanumGothic Regular + Bold
+    at pipeline entry. Recorded so two runs can be compared byte-for-byte
+    once font sha256 fingerprints are pinned (FR-035).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    regular_path: Annotated[str, Field(min_length=1)]
+    bold_path: Annotated[str, Field(min_length=1)]
+    regular_source: Literal["fc-match", "env-var-PAIDEIA_KR_FONT_PATH"]
+    bold_source: Literal["fc-match", "env-var-PAIDEIA_KR_FONT_BOLD_PATH"]
+    regular_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
+    bold_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
+
+
+class SentimentRunInfo(BaseModel):
+    """RoBERTa sentiment phase accounting (v0.1.1 US6, T017 + T061).
+
+    ``enabled=False`` represents the fallback branch (CLI ``--no-roberta``,
+    torch missing, or model unavailable). The ``fallback_reason`` enum
+    distinguishes those three causes so operators can tell why sentiment
+    fields are missing.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool
+    model_id: Annotated[str, Field(min_length=1)] | None = None
+    model_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
+    tokenizer_vocab_sha256: (
+        Annotated[str, Field(pattern=_SHA256_PATTERN)] | None
+    ) = None
+    negative_label_subset_sha256: (
+        Annotated[str, Field(pattern=_SHA256_PATTERN)] | None
+    ) = None
+    n_attempted: Annotated[int, Field(ge=0)] = 0
+    n_succeeded: Annotated[int, Field(ge=0)] = 0
+    n_fallback: Annotated[int, Field(ge=0)] = 0
+    fallback_reason: (
+        Literal["torch-unavailable", "model-unavailable", "cli-disabled"] | None
+    ) = None
+
+    @model_validator(mode="after")
+    def v1_counts_consistent(self) -> Self:
+        """succeeded + fallback ≤ attempted; enabled iff model_id is set."""
+        if self.n_succeeded + self.n_fallback > self.n_attempted:
+            raise ValueError(
+                f"SentimentRunInfo V1: n_succeeded({self.n_succeeded}) + "
+                f"n_fallback({self.n_fallback}) > n_attempted({self.n_attempted})."
+            )
+        if self.enabled and self.model_id is None:
+            raise ValueError(
+                "SentimentRunInfo V1: enabled=True requires model_id to be set."
+            )
+        if not self.enabled and self.model_id is not None:
+            raise ValueError(
+                "SentimentRunInfo V1: enabled=False requires model_id=None "
+                "(fallback path; no model loaded)."
+            )
+        if not self.enabled and self.fallback_reason is None:
+            raise ValueError(
+                "SentimentRunInfo V1: enabled=False requires fallback_reason "
+                "to be set (one of 'torch-unavailable', 'model-unavailable', "
+                "'cli-disabled')."
+            )
+        return self
+
+
+class NewOutputsInfo(BaseModel):
+    """Paths for the v0.1.1 new exports + manual + sentiment audit (T017)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    factor_scores_long_csv: Annotated[str, Field(min_length=1)]
+    factor_scores_long_yaml: Annotated[str, Field(min_length=1)]
+    axis_summary_csv: Annotated[str, Field(min_length=1)]
+    axis_summary_yaml: Annotated[str, Field(min_length=1)]
+    manual_pdf: Annotated[str, Field(min_length=1)]
+    freetext_audit_parquet: Annotated[str, Field(min_length=1)]
+
+
+class VocabularyInfo(BaseModel):
+    """Cross-module vocabulary audit (T017 + contracts/manifest.md §vocabulary).
+
+    Allows downstream modules / external auditors to verify that a given
+    needs-map silver/gold output was produced under the expected
+    constitution + axis/kind sets without re-deriving them from the schema.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    constitution_version: Annotated[str, Field(min_length=1)] = "1.1.0"
+    axes: list[StandardAxisKey] = Field(default_factory=lambda: list(STANDARD_AXIS_KEYS))
+    auxiliary_groups: list[AuxiliaryGroupKey | FreetextAreaKey] = Field(
+        default_factory=lambda: [
+            "prior_readiness",
+            "interest_topics",
+            "categorical_intent",
+            "anxiety_freetext",
+            "experience_freetext",
+        ]
+    )
+    column_kinds: list[
+        Literal["identity", "likert", "single_select", "multiselect", "freetext"]
+    ] = Field(
+        default_factory=lambda: [
+            "identity",
+            "likert",
+            "single_select",
+            "multiselect",
+            "freetext",
+        ]
+    )
 
 
 class NeedsMapInput(BaseModel):
@@ -96,6 +224,8 @@ class NeedsMapManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    schema_version: Annotated[str, Field(min_length=1)] = "1.1.0"
+
     semester: SemesterCode
     course_slug: CourseSlug
     output_key: OutputKey
@@ -122,6 +252,14 @@ class NeedsMapManifest(BaseModel):
     previous_run_archive_path: Annotated[str, Field(min_length=1)] | None = None
     warnings: list[str] = Field(default_factory=list)
     unrecognized_inputs: list[str] = Field(default_factory=list)
+
+    # v0.1.1 cross-cutting concerns (T017). All four are nullable so that
+    # partial pipelines (Phase A-only smoke runs) can still emit a valid
+    # manifest without populating sentiment/exports/manual.
+    font_resolution: FontResolutionInfo | None = None
+    sentiment: SentimentRunInfo | None = None
+    new_outputs: NewOutputsInfo | None = None
+    vocabulary: VocabularyInfo | None = None
 
     @model_validator(mode="after")
     def v1_output_key_matches_semester_and_course(self) -> Self:

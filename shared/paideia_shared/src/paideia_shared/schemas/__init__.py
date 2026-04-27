@@ -32,10 +32,14 @@ from .free_text_categorization import FreeTextRow
 from .freetext_audit import FreetextAuditRow
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .needs_map_manifest import (
+    FontResolutionInfo,
     LLMCallStat,
     NeedsMapInput,
     NeedsMapManifest,
     NeedsMapPhaseRowCount,
+    NewOutputsInfo,
+    SentimentRunInfo,
+    VocabularyInfo,
 )
 from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
 from .student_master import StudentMaster
@@ -72,6 +76,10 @@ __all__ = [
     "FactorScoresLongRow",
     "AxisSummaryRow",
     "FreetextAuditRow",
+    "FontResolutionInfo",
+    "SentimentRunInfo",
+    "NewOutputsInfo",
+    "VocabularyInfo",
     "ClusterAssignmentRow",
     "ClusterCandidate",
     "ClusterReport",
