@@ -23,12 +23,14 @@ if TYPE_CHECKING:
     import instructor
 
 _AXES: tuple[str, ...] = (
+    "digital_efficacy",
     "motivation",
-    "anxiety",
-    "self_efficacy",
-    "interest",
-    "prior_knowledge",
-    "life_context",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 )
 
 

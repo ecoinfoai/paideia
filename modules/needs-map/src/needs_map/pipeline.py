@@ -73,20 +73,24 @@ PhaseSet = frozenset[Literal["A", "B", "C", "D", "E", "F"]]
 _MODULE_VERSION = "needs-map/0.1.0"
 _DEFAULT_MISSING_POLICY: Literal["drop", "mean_impute"] = "drop"
 _STANDARD_AXES: tuple[str, ...] = (
+    "digital_efficacy",
     "motivation",
-    "anxiety",
-    "self_efficacy",
-    "interest",
-    "prior_knowledge",
-    "life_context",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 )
 _AXIS_LABELS_KR: dict[str, str] = {
-    "motivation": "동기",
-    "anxiety": "불안",
-    "self_efficacy": "자기효능",
-    "interest": "흥미",
-    "prior_knowledge": "사전지식",
-    "life_context": "생활맥락",
+    "digital_efficacy": "도구 적응성",
+    "motivation": "학습동기",
+    "time_availability": "학습시간",
+    "material_preference": "학습자료",
+    "study_strategy": "학습전략",
+    "study_environment": "학습환경",
+    "social_learning": "협업",
+    "feedback_seeking": "피드백",
 }
 _WEAK_STRUCTURE_THRESHOLD = 0.2
 _SAMPLE_RATIO_THRESHOLD = 10  # sample/k must be ≥ this for k to be a valid candidate
