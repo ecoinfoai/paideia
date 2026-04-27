@@ -20,6 +20,13 @@ dependencies = [
     "python-dotenv>=1",
 ]
 
+[project.optional-dependencies]
+roberta = [
+    "torch>=2.2",
+    "transformers>=4.40",
+    "tokenizers>=0.19",
+]
+
 [project.scripts]
 paideia-needs-map = "needs_map.cli.main:main"
 
