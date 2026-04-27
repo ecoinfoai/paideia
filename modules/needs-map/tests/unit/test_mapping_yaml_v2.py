@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 _FIXTURE = Path(
     "modules/needs-map/tests/fixtures/mappings/mapping_v2_with_anchors.yaml"
 )
@@ -61,3 +63,72 @@ def test_anchor_resolved_drops_top_level_holder() -> None:
     # Bare reload — if drop logic regressed this would raise.
     config = load_mapping(_FIXTURE)
     assert config.metadata.mapping_version == 2
+
+
+# ---------------------------------------------------------------------------
+# Adversary contract (T030 followup) — YAML safe_load + size cap
+# ---------------------------------------------------------------------------
+
+
+def test_yaml_python_object_apply_blocked(tmp_path: Path) -> None:
+    """``!!python/object/apply`` MUST raise — load_mapping uses safe_load.
+
+    Adversary scenario: operator (or compromised supply-chain artifact)
+    embeds an arbitrary-code-execution tag in the mapping YAML.
+    yaml.safe_load refuses such tags (only the safe constructor set), so
+    an attempt to load them raises ``yaml.constructor.ConstructorError``
+    (a subclass of ``yaml.YAMLError``) before any Pydantic validator runs.
+    """
+    import yaml
+    from needs_map.io.mapping import load_mapping
+
+    target = tmp_path / "rogue.yaml"
+    target.write_text(
+        "metadata:\n"
+        "  semester: '2026-1'\n"
+        "  course_slug: anatomy\n"
+        "  mapping_version: 2\n"
+        "  course_name_kr: !!python/object/apply:os.system ['echo pwned']\n"
+        "columns: []\n"
+        "axes:\n"
+        "  required: []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(yaml.YAMLError):
+        load_mapping(target)
+
+
+def test_mapping_file_size_cap_rejected(tmp_path: Path) -> None:
+    """Mapping YAML > size cap (256 KB) MUST be rejected.
+
+    Adversary DoS guard: a YAML balloon (e.g. anchor multiplication, deeply
+    nested aliases) can exhaust memory at parse time. The loader rejects
+    files larger than the cap before yaml.safe_load is even called.
+    """
+    from needs_map.io.mapping import MappingFileTooLargeError, load_mapping
+
+    target = tmp_path / "huge.yaml"
+    payload = "# " + "x" * 100 + "\n"
+    chunks = (300 * 1024 // len(payload)) + 1
+    target.write_text(payload * chunks, encoding="utf-8")
+    with pytest.raises(MappingFileTooLargeError) as exc:
+        load_mapping(target)
+    msg = str(exc.value)
+    assert "size" in msg.lower() or "256" in msg or "KB" in msg
+
+
+def test_load_uses_yaml_safe_load_only() -> None:
+    """``load_mapping`` source MUST call ``yaml.safe_load`` exclusively.
+
+    Regression guard against accidentally switching to ``yaml.load`` (which
+    enables the FullLoader and re-introduces arbitrary code execution).
+    """
+    import inspect
+
+    from needs_map.io import mapping as mapping_module
+
+    source = inspect.getsource(mapping_module)
+    assert "yaml.safe_load" in source
+    assert "yaml.load(" not in source, (
+        "yaml.load() detected — use yaml.safe_load to block !!python tags."
+    )

@@ -26,7 +26,11 @@ from pydantic import ValidationError
 from .. import fonts as _fonts_module
 from ..archive.mover import ArchivalError
 from ..fonts import KoreanFontUnavailableError
-from ..io.mapping import MappingKindError, MappingVersionError
+from ..io.mapping import (
+    MappingFileTooLargeError,
+    MappingKindError,
+    MappingVersionError,
+)
 from ..pipeline import NeedsMapArgs, run_needs_map
 
 _ALLOWED_PHASE_RANGES = {
@@ -210,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     except ArchivalError as exc:
         sys.stderr.write(f"ERROR [needs-map] archival failed: {exc}\n")
         return 4
-    except (MappingVersionError, MappingKindError) as exc:
+    except (MappingFileTooLargeError, MappingVersionError, MappingKindError) as exc:
         # v0.1.1 mapping loader (T018) raises these as ValueError subclasses
         # carrying an operator-actionable multi-line block in ``args[0]``
         # (per contracts/cli.md "매핑 YAML kind 검증 실패 메시지 형식" and

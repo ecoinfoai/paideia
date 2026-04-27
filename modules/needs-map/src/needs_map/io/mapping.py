@@ -38,6 +38,22 @@ _QUANT_AXES: frozenset[str] = frozenset(STANDARD_AXIS_KEYS)
 _AUX_GROUP_KEYS: frozenset[str] = frozenset(typing.get_args(AuxiliaryGroupKey))
 _FREETEXT_KEYS: frozenset[str] = frozenset(typing.get_args(FreetextAreaKey))
 
+# Adversary DoS guard (T030 followup): an oversized mapping YAML — whether
+# maliciously crafted (anchor multiplication / deep alias nesting) or operator
+# error (wrong file pointed at) — would burn significant memory at parse time.
+# Reject before yaml.safe_load is even called.
+_MAPPING_FILE_SIZE_CAP_BYTES: int = 256 * 1024  # 256 KB
+
+
+class MappingFileTooLargeError(ValueError):
+    """Raised when the mapping YAML exceeds the size cap.
+
+    256 KB is comfortably above the largest sensible operator mapping
+    (the 2026-1 anatomy v2 spec is ~5 KB) while still bounded enough to
+    block adversary balloon attacks. Subclassing ``ValueError`` keeps it
+    consumable by the CLI's existing ``except ValueError`` chain.
+    """
+
 
 class MappingVersionError(ValueError):
     """Raised when ``metadata.mapping_version`` is not the expected v0.1.1 value (2).
@@ -88,6 +104,17 @@ def load_mapping(path: Path) -> DiagnosticMappingConfig:
         )
     if not path.is_file():
         raise FileNotFoundError(f"Mapping YAML not found: {path}")
+
+    size_bytes = path.stat().st_size
+    if size_bytes > _MAPPING_FILE_SIZE_CAP_BYTES:
+        cap_kb = _MAPPING_FILE_SIZE_CAP_BYTES // 1024
+        actual_kb = size_bytes / 1024
+        raise MappingFileTooLargeError(
+            f"load_mapping: {path} is {actual_kb:.1f} KB, exceeds the "
+            f"{cap_kb} KB size cap. Refusing to parse — point at the "
+            "intended mapping file or split oversized YAML into multiple "
+            "courses."
+        )
 
     text = path.read_text(encoding="utf-8")
     # pyyaml.safe_load resolves anchors/aliases automatically — no extra step
@@ -217,6 +244,7 @@ def _action_hint_for_axis(axis: str) -> str:
 
 # Mark these helpers as part of the public surface for testability.
 __all__ = [
+    "MappingFileTooLargeError",
     "MappingKindError",
     "MappingVersionError",
     "load_mapping",
