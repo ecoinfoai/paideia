@@ -1,0 +1,92 @@
+# needs-map US1 fixture mapping — all 6 standard axes mapped.
+# Matches the synthetic Silver in tests/fixtures/silver_minimal/.
+# partition_axis: true on prior_knowledge + life_context multiselect items.
+
+metadata:
+  semester: "2026-1"
+  course_slug: anatomy
+  course_name_kr: "인체구조와기능"
+  mapping_version: 1
+
+axes:
+  required:
+    - motivation
+    - anxiety
+    - prior_knowledge
+  optional:
+    - self_efficacy
+    - interest
+    - life_context
+
+columns:
+  - source: "학번"
+    kind: identity
+
+  # motivation — 3 likert items, mean
+  - source: Q01_motivation_1
+    axis: motivation
+    kind: likert
+    aggregate: mean
+  - source: Q01_motivation_2
+    axis: motivation
+    kind: likert
+    aggregate: mean
+  - source: Q01_motivation_3
+    axis: motivation
+    kind: likert
+    aggregate: mean
+
+  # anxiety — 4 likert items, mean
+  - source: Q05_anxiety_1
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_2
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_3
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_4
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+
+  # self_efficacy — 2 likert items, mean
+  - source: Q07_self_efficacy_1
+    axis: self_efficacy
+    kind: likert
+    aggregate: mean
+  - source: Q07_self_efficacy_2
+    axis: self_efficacy
+    kind: likert
+    aggregate: mean
+
+  # interest — freetext (Phase D classifier consumes raw text; aggregate=None)
+  - source: Q11_interest_freetext
+    axis: interest
+    kind: freetext
+
+  # prior_knowledge — multiselect, sum, partition_axis=True
+  - source: Q03_prior_knowledge
+    axis: prior_knowledge
+    kind: multiselect
+    aggregate: sum
+    partition_axis: true
+
+  # life_context — multiselect, sum, partition_axis=True
+  - source: Q04_life_context
+    axis: life_context
+    kind: multiselect
+    aggregate: sum
+    partition_axis: true
+
+  # additional freetext attached to existing axes (V4 freetext-exempt)
+  - source: Q62_anxiety_freetext
+    axis: anxiety
+    kind: freetext
+  - source: Q63_life_context_freetext
+    axis: life_context
+    kind: freetext

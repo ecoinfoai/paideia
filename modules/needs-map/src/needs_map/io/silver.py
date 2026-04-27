@@ -30,6 +30,23 @@ def _read_parquet(path: Path) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
+def _row_to_dict(row: pd.Series) -> dict:
+    """Convert a DataFrame row to a dict with pandas NaN/NaT mapped to None.
+
+    Parquet reads bring nullable string/Literal columns back as float-NaN when
+    the column is sparsely populated; Pydantic Literal/str validators choke on
+    NaN. Mapping NaN/NaT → None at the row boundary keeps the loader contract
+    clean without polluting downstream code.
+    """
+    out: dict = {}
+    for key, value in row.to_dict().items():
+        if (isinstance(value, float) and pd.isna(value)) or value is pd.NaT:
+            out[key] = None
+        else:
+            out[key] = value
+    return out
+
+
 def _validate_sample(
     df: pd.DataFrame, model: type, *, label: str, path: Path
 ) -> None:
@@ -40,10 +57,10 @@ def _validate_sample(
     """
     if df.empty:
         return
-    sample = df.head(_SAMPLE_SIZE).to_dict(orient="records")
-    for index, row in enumerate(sample):
+    sample = df.head(_SAMPLE_SIZE)
+    for index, (_, row) in enumerate(sample.iterrows()):
         try:
-            model.model_validate(row)
+            model.model_validate(_row_to_dict(row))
         except Exception as exc:
             raise ValueError(
                 f"{label} contract violation at {path} row {index}: {exc}"

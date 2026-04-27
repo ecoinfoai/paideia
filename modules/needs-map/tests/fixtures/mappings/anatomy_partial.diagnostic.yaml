@@ -1,0 +1,57 @@
+# needs-map US1 fixture mapping — only 3 of 6 standard axes mapped.
+# Used by test_phase_ab_partial_axes.py (T042) to verify that
+# standard_axes_skipped lists exactly {self_efficacy, interest, prior_knowledge}
+# in the manifest and that those score columns come out None for all rows.
+
+metadata:
+  semester: "2026-1"
+  course_slug: anatomy
+  course_name_kr: "인체구조와기능"
+  mapping_version: 1
+
+axes:
+  required:
+    - motivation
+    - anxiety
+  optional:
+    - life_context
+
+columns:
+  - source: "학번"
+    kind: identity
+
+  - source: Q01_motivation_1
+    axis: motivation
+    kind: likert
+    aggregate: mean
+  - source: Q01_motivation_2
+    axis: motivation
+    kind: likert
+    aggregate: mean
+  - source: Q01_motivation_3
+    axis: motivation
+    kind: likert
+    aggregate: mean
+
+  - source: Q05_anxiety_1
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_2
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_3
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+  - source: Q05_anxiety_4
+    axis: anxiety
+    kind: likert
+    aggregate: mean
+
+  - source: Q04_life_context
+    axis: life_context
+    kind: multiselect
+    aggregate: sum
+    partition_axis: true
