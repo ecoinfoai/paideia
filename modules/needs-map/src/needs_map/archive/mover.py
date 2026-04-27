@@ -24,8 +24,13 @@ _ARCHIVE_NAME = "_archive"
 
 
 def _archive_timestamp() -> str:
-    """ISO8601 UTC compact form usable as a directory name (no colons)."""
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+    """ISO8601 UTC compact form usable as a directory name (no colons).
+
+    Microseconds are appended (``%fZ``) to avoid collisions on rapid back-to-back
+    re-runs (e.g. integration tests that call the pipeline twice in one second).
+    The wall-clock second is still recoverable from the leading 19 characters.
+    """
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
 
 
 def archive_previous_run(direct_path: Path) -> str | None:
