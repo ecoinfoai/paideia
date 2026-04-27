@@ -24,6 +24,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from ..archive.mover import ArchivalError
+from ..io.mapping import MappingKindError, MappingVersionError
 from ..pipeline import NeedsMapArgs, run_needs_map
 
 _ALLOWED_PHASE_RANGES = {
@@ -197,6 +198,14 @@ def main(argv: list[str] | None = None) -> int:
     except ArchivalError as exc:
         sys.stderr.write(f"ERROR [needs-map] archival failed: {exc}\n")
         return 4
+    except (MappingVersionError, MappingKindError) as exc:
+        # v0.1.1 mapping loader (T018) raises these as ValueError subclasses
+        # carrying an operator-actionable multi-line block in ``args[0]``
+        # (per contracts/cli.md "매핑 YAML kind 검증 실패 메시지 형식" and
+        # the v2 upgrade hint). Route to exit 1 (input validation failed)
+        # so the CLI does not hide them behind the generic exit-99 path.
+        sys.stderr.write(f"{exc}\n")
+        return 1
     except ValidationError as exc:
         sys.stderr.write(f"ERROR [needs-map] contract violation: {exc}\n")
         # T056-validated input contract failures hit this path; the wiring
