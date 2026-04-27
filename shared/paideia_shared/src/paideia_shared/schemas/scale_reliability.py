@@ -17,8 +17,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ._common import CourseSlug, SemesterCode, StandardAxisKey
 
 
+ReliabilityLabel = Literal["high", "medium", "low", "N/A — single/double item"]
+"""v0.1.1 threshold-based reliability tag (data-model.md §5).
+
+Mapping (T012, FR-005 + spec §SC-002):
+- α ≥ 0.80 → 'high'
+- 0.70 ≤ α < 0.80 → 'medium'
+- α < 0.70 → 'low' (operational_warning=True)
+- n_items in {1, 2} or α not computable → 'N/A — single/double item'
+"""
+
+
 class ScaleReliabilityRow(BaseModel):
-    """Per-axis α + label + operational-warning flag."""
+    """Per-axis α + label + operational-warning flag.
+
+    v0.1.1 retains the v0.1.0 ``label`` discriminator (computed / single_item /
+    no_items / not_applicable) for state machine validation, and adds a new
+    threshold-based ``reliability_label`` consumed by the v0.1.1 axis_summary
+    export and the per-card reliability annotation.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -27,6 +44,7 @@ class ScaleReliabilityRow(BaseModel):
     cronbach_alpha: float | None
     label: Literal["computed", "single_item", "no_items", "not_applicable"]
     operational_warning: bool
+    reliability_label: ReliabilityLabel | None = None
 
     @model_validator(mode="after")
     def v1_label_matches_n_items_and_alpha(self) -> Self:
