@@ -1,4 +1,18 @@
-"""DiagnosticMappingConfig: Pydantic shape of the mapping YAML."""
+"""DiagnosticMappingConfig: Pydantic shape of the mapping YAML.
+
+v0.1.1 deltas (constitution v1.1.0 + spec 003 FR-011/013):
+- ``MappingColumn.kind`` Literal expands from 4 → 5 values (adds
+  ``single_select``).
+- ``MappingColumn.aggregate='mean'`` is now reserved for ``kind='likert'``;
+  scoring on ``single_select`` / ``multiselect`` raises validation error.
+- ``MappingColumn.ordinal_map: Optional[dict[str, int]]`` allows shared
+  option-text→score tables to be reused via YAML anchor/alias.
+- ``DiagnosticMappingConfig.v6_axes_are_standard_paideia_vocabulary`` now
+  enforces the 8-key v1.1.0 ``StandardAxisKey`` vocabulary, with
+  ``axes.required`` MUST equal the full 8-key set exactly (FR-013 strict).
+- ``axes.optional`` MUST be a subset of
+  ``AuxiliaryGroupKey ∪ FreetextAreaKey``.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +20,13 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._common import CourseSlug, SemesterCode
+from ._common import (
+    STANDARD_AXIS_KEYS,
+    AuxiliaryGroupKey,
+    CourseSlug,
+    FreetextAreaKey,
+    SemesterCode,
+)
 
 
 class MappingMetadata(BaseModel):
@@ -21,15 +41,23 @@ class MappingMetadata(BaseModel):
 
 
 class MappingColumn(BaseModel):
-    """One column-to-axis mapping entry."""
+    """One column-to-axis mapping entry.
+
+    v0.1.1: ``kind`` Literal expands to 5 values (adds ``single_select``);
+    ``aggregate='mean'`` is reserved for ``kind='likert'`` only;
+    optional ``ordinal_map`` carries the option-text → 1..7 conversion table
+    used by Phase B scoring (allows YAML anchor/alias reuse for the three
+    shared 7-point variants).
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source: Annotated[str, Field(min_length=1)]
-    kind: Literal["identity", "likert", "multiselect", "freetext"]
+    kind: Literal["identity", "likert", "single_select", "multiselect", "freetext"]
     axis: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
     aggregate: Literal["mean", "sum"] | None = None
     partition_axis: bool = False
+    ordinal_map: dict[str, int] | None = None
 
     @model_validator(mode="after")
     def v1_identity_no_axis(self) -> Self:
@@ -61,6 +89,43 @@ class MappingColumn(BaseModel):
             raise ValueError(
                 f"MappingColumn V5: partition_axis=True is incompatible with "
                 f"kind='freetext' (source={self.source!r})."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def v7_aggregate_mean_only_for_likert(self) -> Self:
+        """v0.1.1 FR-011: ``aggregate='mean'`` is reserved for ``kind='likert'``.
+
+        Single-select / multiselect columns are auxiliary categorical groups —
+        averaging them produces nonsensical scores. Identity columns reject
+        aggregate at V1. Freetext columns may legitimately have aggregate=None
+        (no scoring path), so this validator only triggers when aggregate IS
+        ``'mean'`` AND kind is not ``'likert'``.
+        """
+        if self.aggregate == "mean" and self.kind != "likert":
+            raise ValueError(
+                f"MappingColumn V7: aggregate='mean' is only allowed on "
+                f"kind='likert', got kind={self.kind!r} "
+                f"(source={self.source!r}). Move the column to a non-scoring "
+                f"auxiliary axis or change kind to 'likert' if it carries a "
+                f"7-point ordinal scale."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def v8_ordinal_map_only_for_likert(self) -> Self:
+        """``ordinal_map`` is meaningful only on ``kind='likert'`` (data-model §2).
+
+        Defining an ordinal_map on non-likert columns is operator error —
+        single_select uses raw option labels, multiselect carries lists,
+        freetext is unstructured. Reject at validation so misconfigured YAMLs
+        do not silently lose the conversion table.
+        """
+        if self.ordinal_map is not None and self.kind != "likert":
+            raise ValueError(
+                f"MappingColumn V8: ordinal_map is only meaningful on "
+                f"kind='likert', got kind={self.kind!r} "
+                f"(source={self.source!r})."
             )
         return self
 
@@ -147,29 +212,52 @@ class DiagnosticMappingConfig(BaseModel):
 
     @model_validator(mode="after")
     def v6_axes_are_standard_paideia_vocabulary(self) -> Self:
-        """All declared axes must belong to the paideia v0.1.0 standard vocabulary.
+        """All declared axes must belong to the paideia v0.1.1 vocabulary.
 
-        Spec FR-AXIS-001 / Clarifications §2 fix the vocabulary at six keys:
-        ``motivation``, ``anxiety``, ``self_efficacy``, ``interest``,
-        ``prior_knowledge``, ``life_context``. Adding a new axis is a paideia
-        minor-version bump and is rejected here so misconfigured mapping YAMLs
-        cannot leak non-standard keys into downstream Silver outputs.
+        Constitution v1.1.0 fixes the quantitative axis vocabulary at 8 keys
+        (``StandardAxisKey``); auxiliary group keys (``AuxiliaryGroupKey``)
+        and freetext area keys (``FreetextAreaKey``) extend it for non-scoring
+        uses. ``axes.required`` MUST equal the full 8-key set exactly
+        (FR-013 strict — neither superset nor subset is allowed); auxiliary
+        and freetext keys belong on ``axes.optional`` only.
+
+        Adding a new quantitative axis is a paideia minor-version bump per
+        FR-AXIS-001.
         """
-        standard = {
-            "motivation",
-            "anxiety",
-            "self_efficacy",
-            "interest",
-            "prior_knowledge",
-            "life_context",
-        }
-        declared = set(self.axes.required) | set(self.axes.optional)
-        non_standard = sorted(declared - standard)
-        if non_standard:
+        required_set = set(self.axes.required)
+        canonical = set(STANDARD_AXIS_KEYS)
+        if required_set != canonical:
+            missing = sorted(canonical - required_set)
+            extra = sorted(required_set - canonical)
+            parts: list[str] = []
+            if missing:
+                parts.append(f"missing={missing}")
+            if extra:
+                parts.append(f"extra={extra}")
             raise ValueError(
-                f"DiagnosticMappingConfig V6: declared axes are outside paideia "
-                f"standard vocabulary: {non_standard}. "
-                f"Allowed: {sorted(standard)}. "
-                f"Adding a new axis requires paideia minor version bump."
+                f"DiagnosticMappingConfig V6: axes.required must equal the "
+                f"8-key paideia v1.1.0 vocabulary exactly "
+                f"({sorted(canonical)}). Diff: {', '.join(parts)}. "
+                f"Adding a new quantitative axis requires a paideia "
+                f"minor-version bump per FR-013/FR-AXIS-001."
+            )
+
+        # axes.optional MUST live in AuxiliaryGroupKey ∪ FreetextAreaKey only.
+        optional_set = set(self.axes.optional)
+        allowed_optional = set(_args_of(AuxiliaryGroupKey)) | set(_args_of(FreetextAreaKey))
+        non_standard_optional = sorted(optional_set - allowed_optional)
+        if non_standard_optional:
+            raise ValueError(
+                f"DiagnosticMappingConfig V6: axes.optional contains keys "
+                f"outside AuxiliaryGroupKey ∪ FreetextAreaKey: "
+                f"{non_standard_optional}. "
+                f"Allowed optional keys: {sorted(allowed_optional)}."
             )
         return self
+
+
+def _args_of(literal_alias: object) -> tuple[str, ...]:
+    """Extract Literal members from a ``TypeAlias = Literal[...]``."""
+    import typing
+
+    return tuple(typing.get_args(literal_alias))
