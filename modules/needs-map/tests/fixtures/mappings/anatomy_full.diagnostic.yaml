@@ -1,28 +1,36 @@
-# needs-map US1 fixture mapping — all 6 standard axes mapped.
-# Matches the synthetic Silver in tests/fixtures/silver_minimal/.
-# partition_axis: true on prior_knowledge + life_context multiselect items.
+# needs-map US2 fixture mapping — v0.1.1 8 quantitative axes mapped.
+# Matches the synthetic Silver in tests/fixtures/silver_minimal/ after the
+# T031/T032 followup parquet refresh. partition_axis: true on the auxiliary
+# multiselect columns (interest_topics + categorical_intent).
 
 metadata:
   semester: "2026-1"
   course_slug: anatomy
   course_name_kr: "인체구조와기능"
-  mapping_version: 1
+  mapping_version: 2
 
 axes:
   required:
+    - digital_efficacy
     - motivation
-    - anxiety
-    - prior_knowledge
+    - time_availability
+    - material_preference
+    - study_strategy
+    - study_environment
+    - social_learning
+    - feedback_seeking
   optional:
-    - self_efficacy
-    - interest
-    - life_context
+    - interest_topics
+    - categorical_intent
+    - anxiety_freetext
+    - experience_freetext
 
 columns:
   - source: "학번"
     kind: identity
 
-  # motivation — 3 likert items, mean
+  # motivation — 3 likert items (existing v0.1.0 fixture rows already use
+  # these source_column names; no parquet rewrite needed for this axis).
   - source: Q01_motivation_1
     axis: motivation
     kind: likert
@@ -36,57 +44,84 @@ columns:
     kind: likert
     aggregate: mean
 
-  # anxiety — 4 likert items, mean
-  - source: Q05_anxiety_1
-    axis: anxiety
+  # study_strategy — 4 likert items (rebadged from the v0.1.0 anxiety
+  # column slot Q05_anxiety_{1..4}; the silver fixture rewrite carries
+  # the axis-key rename through).
+  - source: Q05_study_strategy_1
+    axis: study_strategy
     kind: likert
     aggregate: mean
-  - source: Q05_anxiety_2
-    axis: anxiety
+  - source: Q05_study_strategy_2
+    axis: study_strategy
     kind: likert
     aggregate: mean
-  - source: Q05_anxiety_3
-    axis: anxiety
+  - source: Q05_study_strategy_3
+    axis: study_strategy
     kind: likert
     aggregate: mean
-  - source: Q05_anxiety_4
-    axis: anxiety
-    kind: likert
-    aggregate: mean
-
-  # self_efficacy — 2 likert items, mean
-  - source: Q07_self_efficacy_1
-    axis: self_efficacy
-    kind: likert
-    aggregate: mean
-  - source: Q07_self_efficacy_2
-    axis: self_efficacy
+  - source: Q05_study_strategy_4
+    axis: study_strategy
     kind: likert
     aggregate: mean
 
-  # interest — freetext (Phase D classifier consumes raw text; aggregate=None)
-  - source: Q11_interest_freetext
-    axis: interest
+  # study_environment — 2 likert items (rebadged from v0.1.0 self_efficacy slots).
+  - source: Q07_study_environment_1
+    axis: study_environment
+    kind: likert
+    aggregate: mean
+  - source: Q07_study_environment_2
+    axis: study_environment
+    kind: likert
+    aggregate: mean
+
+  # The remaining 5 quantitative axes get one likert item each (minimum-
+  # viable; alpha will fall to 'single_item' on those axes per the
+  # ScaleReliabilityRow V1 invariant).
+  - source: Q_digital_efficacy
+    axis: digital_efficacy
+    kind: likert
+    aggregate: mean
+  - source: Q_time_availability
+    axis: time_availability
+    kind: likert
+    aggregate: mean
+  - source: Q_material_preference
+    axis: material_preference
+    kind: likert
+    aggregate: mean
+  - source: Q_social_learning
+    axis: social_learning
+    kind: likert
+    aggregate: mean
+  - source: Q_feedback_seeking
+    axis: feedback_seeking
+    kind: likert
+    aggregate: mean
+
+  # interest_topics — multiselect aux (rebadged from v0.1.0 prior_knowledge
+  # slot). partition_axis kept for the Phase E group-distribution report.
+  - source: Q03_interest_topics
+    axis: interest_topics
+    kind: multiselect
+    aggregate: sum
+    partition_axis: true
+
+  # categorical_intent — multiselect aux (rebadged from v0.1.0 life_context
+  # multiselect slot).
+  - source: Q04_categorical_intent
+    axis: categorical_intent
+    kind: multiselect
+    aggregate: sum
+    partition_axis: true
+
+  # freetext areas (rebadged from v0.1.0 interest / anxiety / life_context
+  # freetext slots; axes use FreetextAreaKey now).
+  - source: Q11_experience_freetext
+    axis: experience_freetext
     kind: freetext
-
-  # prior_knowledge — multiselect, sum, partition_axis=True
-  - source: Q03_prior_knowledge
-    axis: prior_knowledge
-    kind: multiselect
-    aggregate: sum
-    partition_axis: true
-
-  # life_context — multiselect, sum, partition_axis=True
-  - source: Q04_life_context
-    axis: life_context
-    kind: multiselect
-    aggregate: sum
-    partition_axis: true
-
-  # additional freetext attached to existing axes (V4 freetext-exempt)
   - source: Q62_anxiety_freetext
-    axis: anxiety
+    axis: anxiety_freetext
     kind: freetext
-  - source: Q63_life_context_freetext
-    axis: life_context
+  - source: Q63_experience_freetext_extra
+    axis: experience_freetext
     kind: freetext
