@@ -12,7 +12,7 @@ new outputs land — no silent partial state (adversary H-7).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -25,7 +25,7 @@ _ARCHIVE_NAME = "_archive"
 
 def _archive_timestamp() -> str:
     """ISO8601 UTC compact form usable as a directory name (no colons)."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
 
 
 def archive_previous_run(direct_path: Path) -> str | None:
