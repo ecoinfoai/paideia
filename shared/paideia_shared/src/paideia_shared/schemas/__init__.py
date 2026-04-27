@@ -23,6 +23,7 @@ from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
 from .factor_scores import FactorScoreRow
+from .free_text_categorization import FreeTextRow
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .needs_map_manifest import (
     LLMCallStat,
@@ -61,4 +62,5 @@ __all__ = [
     "ClusterAssignmentRow",
     "ClusterCandidate",
     "ClusterReport",
+    "FreeTextRow",
 ]
