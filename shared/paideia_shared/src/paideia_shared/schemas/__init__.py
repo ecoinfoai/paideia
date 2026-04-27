@@ -22,11 +22,14 @@ from .diagnostic_mapping import (
     MappingColumn,
     MappingMetadata,
 )
+from .axis_summary import AxisSummaryRow
 from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
 from .factor_scores import FactorScoreRow
+from .factor_scores_long import FactorScoresLongRow
 from .free_text_categorization import FreeTextRow
+from .freetext_audit import FreetextAuditRow
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .needs_map_manifest import (
     LLMCallStat,
@@ -34,7 +37,7 @@ from .needs_map_manifest import (
     NeedsMapManifest,
     NeedsMapPhaseRowCount,
 )
-from .scale_reliability import ScaleReliabilityReport, ScaleReliabilityRow
+from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
 from .student_master import StudentMaster
 
 __all__ = [
@@ -64,7 +67,11 @@ __all__ = [
     "NeedsMapManifest",
     "ScaleReliabilityRow",
     "ScaleReliabilityReport",
+    "ReliabilityLabel",
     "FactorScoreRow",
+    "FactorScoresLongRow",
+    "AxisSummaryRow",
+    "FreetextAuditRow",
     "ClusterAssignmentRow",
     "ClusterCandidate",
     "ClusterReport",
