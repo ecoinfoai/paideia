@@ -30,7 +30,6 @@ from typing import Any
 
 import pytest
 
-
 _AXES = (
     "digital_efficacy",
     "motivation",
@@ -138,9 +137,8 @@ def _make_axis_summary_freetext_row(axis_key: str) -> dict[str, Any]:
 
 def test_factor_scores_long_csv_has_utf8_bom_and_lf(tmp_path: Path) -> None:
     """CSV MUST start with the UTF-8 BOM (0xEF 0xBB 0xBF) and use LF newlines."""
-    from paideia_shared.schemas import FactorScoresLongRow
-
     from needs_map.report.exports import write_factor_scores_long
+    from paideia_shared.schemas import FactorScoresLongRow
 
     rows = [
         FactorScoresLongRow(**_make_long_row("2026194001")),
@@ -154,9 +152,8 @@ def test_factor_scores_long_csv_has_utf8_bom_and_lf(tmp_path: Path) -> None:
 
 def test_factor_scores_long_csv_sorted_by_student_id(tmp_path: Path) -> None:
     """CSV body rows MUST be sorted by ``student_id`` ascending."""
-    from paideia_shared.schemas import FactorScoresLongRow
-
     from needs_map.report.exports import write_factor_scores_long
+    from paideia_shared.schemas import FactorScoresLongRow
 
     rows = [
         FactorScoresLongRow(**_make_long_row("2026194042")),
@@ -178,9 +175,8 @@ def test_factor_scores_long_csv_sorted_by_student_id(tmp_path: Path) -> None:
 def test_factor_scores_long_yaml_round_trip(tmp_path: Path) -> None:
     """YAML round-trips via yaml.safe_load with the same student count."""
     import yaml
-    from paideia_shared.schemas import FactorScoresLongRow
-
     from needs_map.report.exports import write_factor_scores_long
+    from paideia_shared.schemas import FactorScoresLongRow
 
     rows = [
         FactorScoresLongRow(**_make_long_row(sid))
@@ -199,9 +195,8 @@ def test_factor_scores_long_yaml_round_trip(tmp_path: Path) -> None:
 
 def test_factor_scores_long_byte_identical_two_writes(tmp_path: Path) -> None:
     """Two writes against the same input MUST produce byte-equal CSV + YAML (FR-035)."""
-    from paideia_shared.schemas import FactorScoresLongRow
-
     from needs_map.report.exports import write_factor_scores_long
+    from paideia_shared.schemas import FactorScoresLongRow
 
     rows = [FactorScoresLongRow(**_make_long_row(sid)) for sid in ("2026194000", "2026194001")]
 
@@ -217,9 +212,8 @@ def test_factor_scores_long_byte_identical_two_writes(tmp_path: Path) -> None:
 
 def test_factor_scores_long_missing_axis_renders_empty_cell(tmp_path: Path) -> None:
     """Missing axis (raw=None) MUST render as an empty CSV cell, not 'None'."""
-    from paideia_shared.schemas import FactorScoresLongRow
-
     from needs_map.report.exports import write_factor_scores_long
+    from paideia_shared.schemas import FactorScoresLongRow
 
     rows = [
         FactorScoresLongRow(
@@ -242,9 +236,8 @@ def test_factor_scores_long_missing_axis_renders_empty_cell(tmp_path: Path) -> N
 def test_axis_summary_csv_contains_three_row_kinds(tmp_path: Path) -> None:
     """axis_summary.csv MUST carry the 3 discriminator values (quantitative,
     auxiliary_distribution, freetext_summary)."""
-    from paideia_shared.schemas import AxisSummaryRow
-
     from needs_map.report.exports import write_axis_summary
+    from paideia_shared.schemas import AxisSummaryRow
 
     rows = [AxisSummaryRow(**_make_axis_summary_quant_row(axis)) for axis in _AXES]
     rows.extend(
@@ -270,9 +263,8 @@ def test_axis_summary_csv_contains_three_row_kinds(tmp_path: Path) -> None:
 
 def test_axis_summary_aux_row_carries_response_rate_base(tmp_path: Path) -> None:
     """Every auxiliary_distribution row MUST expose n_responded + n_cohort."""
-    from paideia_shared.schemas import AxisSummaryRow
-
     from needs_map.report.exports import write_axis_summary
+    from paideia_shared.schemas import AxisSummaryRow
 
     rows = [
         AxisSummaryRow(**_make_axis_summary_quant_row("motivation")),
@@ -286,20 +278,25 @@ def test_axis_summary_aux_row_carries_response_rate_base(tmp_path: Path) -> None
     assert "n_responded" in header
     assert "n_cohort" in header
     # Find the auxiliary line and verify both columns are populated.
+    # pandas.to_csv promotes int columns mixed with NaN to float, so "180"
+    # may render as "180.0"; accept both representations.
     for line in text.splitlines()[1:]:
         if "auxiliary_distribution" in line:
             cells = line.split(",")
-            assert "180" in cells, f"expected n_responded=180 in row: {cells}"
-            assert "194" in cells, f"expected n_cohort=194 in row: {cells}"
+            assert "180" in cells or "180.0" in cells, (
+                f"expected n_responded=180 in row: {cells}"
+            )
+            assert "194" in cells or "194.0" in cells, (
+                f"expected n_cohort=194 in row: {cells}"
+            )
 
 
 def test_axis_summary_yaml_groups_by_row_kind(tmp_path: Path) -> None:
     """YAML MUST re-fold rows under quantitative_axes / auxiliary_distributions /
     freetext_summaries top-level keys."""
     import yaml
-    from paideia_shared.schemas import AxisSummaryRow
-
     from needs_map.report.exports import write_axis_summary
+    from paideia_shared.schemas import AxisSummaryRow
 
     rows = [
         AxisSummaryRow(**_make_axis_summary_quant_row("motivation")),
@@ -320,9 +317,8 @@ def test_axis_summary_yaml_groups_by_row_kind(tmp_path: Path) -> None:
 
 def test_axis_summary_byte_identical_two_writes(tmp_path: Path) -> None:
     """axis_summary.{csv,yaml} MUST be byte-equal across two writes (FR-035)."""
-    from paideia_shared.schemas import AxisSummaryRow
-
     from needs_map.report.exports import write_axis_summary
+    from paideia_shared.schemas import AxisSummaryRow
 
     rows = [
         AxisSummaryRow(**_make_axis_summary_quant_row(axis))
