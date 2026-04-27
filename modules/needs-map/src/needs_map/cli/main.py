@@ -222,6 +222,15 @@ def main(argv: list[str] | None = None) -> int:
         # so the CLI does not hide them behind the generic exit-99 path.
         sys.stderr.write(f"{exc}\n")
         return 1
+    except KoreanFontUnavailableError as exc:
+        # T026 reruns ``resolve_korean_font_paths`` mid-pipeline to populate
+        # the manifest's font_resolution field. If the font goes missing
+        # *between* the T023 pre-flight check and that call (e.g. operator
+        # unset PAIDEIA_KR_FONT_PATH or removed the font), surface the same
+        # exit 6 contract instead of falling through to the generic
+        # exit-99 path — contracts/cli.md L42 "exit 6은 폰트 전용".
+        sys.stderr.write(f"{exc}\n")
+        return 6
     except ValidationError as exc:
         sys.stderr.write(f"ERROR [needs-map] contract violation: {exc}\n")
         # T056-validated input contract failures hit this path; the wiring
