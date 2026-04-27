@@ -98,12 +98,20 @@ class DiagnosticMappingConfig(BaseModel):
 
     @model_validator(mode="after")
     def v4_aggregate_consistent_per_axis(self) -> Self:
-        """Same axis across multiple columns requires identical non-null aggregate."""
+        """Same axis across multiple *scoring* columns requires identical non-null aggregate.
+
+        ``freetext`` columns have ``aggregate=None`` by design (no score aggregation
+        — the column carries raw text consumed by Phase D dictionary/LLM
+        classification). They are exempt from this validator so that the
+        spec-intended pattern of likert + freetext sharing one axis (e.g.
+        anxiety likert items + Q62 freetext both ``axis="anxiety"``, per
+        contracts/diagnostic_mapping_extension.md) does not raise spuriously.
+        """
         from collections import defaultdict
 
         axis_aggregates: dict[str, list[str | None]] = defaultdict(list)
         for column in self.columns:
-            if column.kind == "identity" or column.axis is None:
+            if column.kind in ("identity", "freetext") or column.axis is None:
                 continue
             axis_aggregates[column.axis].append(column.aggregate)
         for axis_key, aggregates in axis_aggregates.items():
