@@ -108,8 +108,8 @@ def test_cli_module_invocation_phase_ab_green(tmp_path: Path) -> None:
     assert "phase=B rows_written=9" in proc.stdout
 
 
-def test_cli_phase_d_still_red(tmp_path: Path) -> None:
-    """Phase D is not yet wired (T105 pending) — pipeline raises NotImplementedError → exit 99."""
+def test_cli_phase_full_now_green(tmp_path: Path) -> None:
+    """All phases wired (T056 A+B, T074 C, T105 D-F) — --phases all → exit 0."""
     staged_in = _stage(tmp_path / "in")
     proc = subprocess.run(  # noqa: S603
         [
@@ -122,7 +122,7 @@ def test_cli_phase_d_still_red(tmp_path: Path) -> None:
             "--course",
             "anatomy",
             "--phases",
-            "A-D",
+            "all",
             "--no-llm",
             "--input-root",
             str(staged_in),
@@ -133,8 +133,24 @@ def test_cli_phase_d_still_red(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    assert proc.returncode == 99
-    assert "Phase D not wired" in proc.stderr
+    assert proc.returncode == 0, f"expected exit 0, got {proc.returncode}. stderr={proc.stderr}"
+    # All 6 phase summary lines present
+    for phase in ("A", "B", "C", "D", "E", "F"):
+        assert f"phase={phase}" in proc.stdout
+    # Outputs landed
+    silver = tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy"
+    gold = tmp_path / "out" / "gold" / "needs-map" / "2026-1-anatomy"
+    for name in (
+        "scale_reliability.parquet",
+        "factor_scores.parquet",
+        "cluster_assignment.parquet",
+        "free_text_categorization.parquet",
+        "manifest.json",
+    ):
+        assert (silver / name).is_file()
+    assert (gold / "group_distribution.pdf").is_file()
+    assert (gold / "cluster_summary.xlsx").is_file()
+    assert (gold / "cards").is_dir()
 
 
 def test_cli_phase_c_now_green(tmp_path: Path) -> None:

@@ -186,7 +186,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         manifest = run_needs_map(args)
     except NotImplementedError as exc:
-        # T105 (Phase D-F) still raises this; T056 wired A+B and T074 wired C.
+        # All 6 phases are wired (T056 A+B, T074 C, T105 D-F). This branch
+        # only triggers if a future phase is added without a corresponding
+        # implementation — kept defensive.
         sys.stderr.write(f"ERROR [needs-map] not yet implemented: {exc}\n")
         return 99
     except FileNotFoundError as exc:
@@ -221,6 +223,20 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(
                 "[needs-map] WARNING: cluster structure weak (silhouette < 0.2)\n"
             )
+    if manifest.free_text_dictionary_match_rate is not None:
+        sys.stdout.write(
+            f"[needs-map] free_text dictionary_match_rate="
+            f"{manifest.free_text_dictionary_match_rate:.3f}\n"
+        )
+        if manifest.dictionary_language_mismatch_warning:
+            sys.stdout.write(
+                "[needs-map] WARNING: dictionary language mismatch suspected (rate < 0.3)\n"
+            )
+    for stat in manifest.llm_calls:
+        sys.stdout.write(
+            f"[needs-map] llm site={stat.site} attempted={stat.attempted} "
+            f"succeeded={stat.succeeded} fallback={stat.fallback}\n"
+        )
     if manifest.previous_run_archive_path:
         sys.stdout.write(
             f"[needs-map] previous_run_archive: {manifest.previous_run_archive_path}\n"
