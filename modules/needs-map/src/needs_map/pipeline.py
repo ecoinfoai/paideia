@@ -28,12 +28,15 @@ from typing import Annotated, Literal
 
 import numpy as np
 import pandas as pd
+
+# FreeTextRow imported lazily where needed
 from paideia_shared.schemas import (
     ClusterAssignmentRow,
     ClusterReport,
     CourseSlug,
     DiagnosticMappingConfig,
     FactorScoreRow,
+    FreeTextRow,  # noqa: E402
     NeedsMapInput,
     NeedsMapManifest,
     NeedsMapPhaseRowCount,
@@ -43,17 +46,25 @@ from paideia_shared.schemas import (
 from pydantic import BaseModel, ConfigDict, Field
 
 from .archive.mover import archive_previous_run
+from .cards.batch import generate_all_cards
 from .clustering.kmeans import cluster_students
 from .clustering.naming import name_clusters
 from .clustering.silhouette import recommend_k
 from .factor_scores.aggregate import aggregate_axis
 from .factor_scores.missing import apply_missing_policy
 from .factor_scores.zscore import zscore
+from .free_text.dictionary import classify_dictionary
+from .free_text.llm_fallback import classify_with_llm_fallback
+from .io.keywords import compute_match_rate, load_keywords
 from .io.mapping import load_mapping
 from .io.silver import load_diagnostic_response, load_student_master
 from .llm.client import make_client
 from .llm.fallback import LLMCallTracker
 from .reliability.cronbach import compute_reliability
+from .report.cluster_summary import write_cluster_summary_xlsx
+from .report.distribution import compute_axis_distributions
+from .report.partitions import compute_partition_for_axis
+from .report.pdf_writer import render_group_distribution_pdf
 
 PhaseSet = frozenset[Literal["A", "B", "C", "D", "E", "F"]]
 _MODULE_VERSION = "needs-map/0.1.0"
@@ -492,13 +503,141 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         )
         phases_executed.append("C")
 
-    for phase in ("D", "E", "F"):
-        if phase in args.phases:
-            raise NotImplementedError(
-                f"Phase {phase} not wired yet — pending T105. "
-                f"args.phases={sorted(args.phases)}."
+    # ----------------------------------------------------------- Phase D
+    free_text_rows: list[FreeTextRow] = []
+    free_text_match_rate: float | None = None
+    dictionary_language_mismatch = False
+    if "D" in args.phases:
+        keyword_dict = load_keywords(args.keyword_language)
+        # Build (student_id, item_id, raw_text) triples from diagnostic_response
+        ft_subset = diag_df[diag_df["axis_kind"] == "freetext"]
+        responses = [
+            (str(row["student_id"]), str(row["source_column"]), str(row["value_text"] or ""))
+            for _, row in ft_subset.iterrows()
+        ]
+        free_text_rows = classify_dictionary(responses, dictionary=keyword_dict)
+        # LLM fallback for uncategorized rows when llm_enabled
+        if args.llm_enabled and any(r.match_source == "uncategorized" for r in free_text_rows):
+            client = _make_llm_client_or_none(args)
+            if client is not None:
+                raw_lookup = {
+                    (sid, item_id): raw for sid, item_id, raw in responses
+                }
+                allowed = [entry.category for entry in keyword_dict.entries]
+                names = [
+                    n for n in master_df["name_kr"].dropna().tolist() if n
+                ]
+                free_text_rows = classify_with_llm_fallback(
+                    free_text_rows,
+                    raw_lookup,
+                    allowed_categories=allowed,
+                    student_names=names,
+                    llm_client=client,
+                    llm_tracker=tracker,
+                    llm_model=args.llm_model,
+                    llm_retries=args.llm_retries,
+                )
+        # Match-rate + language-mismatch warning (FR-023, adversary P-7)
+        sample_texts = [raw for _, _, raw in responses]
+        if sample_texts:
+            free_text_match_rate = compute_match_rate(keyword_dict, sample_texts)
+            dictionary_language_mismatch = (
+                free_text_match_rate is not None and free_text_match_rate < 0.3
             )
+        ft_df = pd.DataFrame([row.model_dump() for row in free_text_rows])
+        if not args.dry_run:
+            _write_silver_atomic(silver, "free_text_categorization.parquet", ft_df)
+        rows_per_phase.append(
+            NeedsMapPhaseRowCount(phase="D", rows_written=len(free_text_rows))
+        )
+        phases_executed.append("D")
 
+    # Group means in z-space (always 0 by construction; pre-computed for downstream)
+    group_means_z: dict[str, float] = dict.fromkeys(_STANDARD_AXES, 0.0)
+
+    # ----------------------------------------------------------- Phase E
+    gold = _gold_dir(args)
+    if "E" in args.phases:
+        if not args.dry_run:
+            gold.mkdir(parents=True, exist_ok=True)
+        # Build distributions + partition comparisons
+        if "B" not in args.phases:
+            fs_rows = _build_factor_score_rows(
+                diag_df, master_df, mapping, standard_axes_used
+            )
+            _validate_factor_score_rows(fs_rows)
+            fs_df = _factor_score_rows_to_df(fs_rows)
+        distributions = compute_axis_distributions(fs_df)
+        # Partition comparisons: section + every column with partition_axis=True
+        merged_for_partitions = fs_df.merge(
+            master_df[["student_id", "section"]], on="student_id", how="left"
+        )
+        partition_results: list[dict] = []
+        for axis in standard_axes_used:
+            entry = compute_partition_for_axis(
+                merged_for_partitions, partition_col="section", axis=axis
+            )
+            entry["partition_col"] = "section"
+            entry["axis"] = axis
+            partition_results.append(entry)
+        # Free-text category counts for the bar chart
+        free_text_summary: dict[str, int] = {}
+        for row in free_text_rows:
+            for cat in row.matched_categories:
+                free_text_summary[cat] = free_text_summary.get(cat, 0) + 1
+
+        if not args.dry_run:
+            render_group_distribution_pdf(
+                distributions=distributions,
+                cluster_report=cluster_report,
+                partition_results=partition_results,
+                free_text_summary=free_text_summary,
+                output_path=gold / "group_distribution.pdf",
+                created_at_utc=args.created_at_utc,
+                semester=args.semester,
+                course_name_kr=mapping.metadata.course_name_kr or args.course_slug,
+            )
+            if cluster_report is not None:
+                write_cluster_summary_xlsx(
+                    cluster_report=cluster_report,
+                    factor_scores_df=fs_df,
+                    output_path=gold / "cluster_summary.xlsx",
+                )
+        rows_per_phase.append(NeedsMapPhaseRowCount(phase="E", rows_written=1))
+        phases_executed.append("E")
+
+    # ----------------------------------------------------------- Phase F
+    if "F" in args.phases:
+        if not args.dry_run:
+            gold.mkdir(parents=True, exist_ok=True)
+        if "B" not in args.phases:
+            fs_rows = _build_factor_score_rows(
+                diag_df, master_df, mapping, standard_axes_used
+            )
+            _validate_factor_score_rows(fs_rows)
+            fs_df = _factor_score_rows_to_df(fs_rows)
+        client = _make_llm_client_or_none(args) if args.llm_enabled else None
+        cards_count = generate_all_cards(
+            factor_scores_df=fs_df,
+            student_master_df=master_df,
+            cluster_report=cluster_report,
+            free_text_rows=free_text_rows,
+            group_means=group_means_z,
+            semester=args.semester,
+            course_name_kr=mapping.metadata.course_name_kr or args.course_slug,
+            output_dir=gold / "cards",
+            created_at_utc=args.created_at_utc,
+            llm_client=client,
+            llm_tracker=tracker,
+            llm_model=args.llm_model,
+            llm_retries=args.llm_retries,
+        ) if not args.dry_run else 0
+        rows_per_phase.append(
+            NeedsMapPhaseRowCount(phase="F", rows_written=cards_count)
+        )
+        phases_executed.append("F")
+
+    # ------------------------------------------- assemble manifest + write
     diag_path = (
         args.input_root / "silver" / "immersio" / args.output_key / "diagnostic_response.parquet"
     )
@@ -532,8 +671,8 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         cluster_silhouette_used=(
             cluster_report.silhouette_used if cluster_report is not None else None
         ),
-        free_text_dictionary_match_rate=None,
-        dictionary_language_mismatch_warning=False,
+        free_text_dictionary_match_rate=free_text_match_rate,
+        dictionary_language_mismatch_warning=dictionary_language_mismatch,
         weak_structure_warning=(
             cluster_report.weak_structure_warning if cluster_report is not None else False
         ),
@@ -548,5 +687,10 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
 
     if not args.dry_run:
         _write_manifest_atomic(silver, manifest)
+        # Mirror the manifest into the Gold directory too (FR-023 sidecar policy:
+        # both Silver and Gold trees carry the same manifest.json).
+        if "E" in args.phases or "F" in args.phases:
+            gold.mkdir(parents=True, exist_ok=True)
+            _write_manifest_atomic(gold, manifest)
 
     return manifest
