@@ -21,7 +21,6 @@ Spec: 003-needs-map-v0-1-1/tasks.md T020.
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any

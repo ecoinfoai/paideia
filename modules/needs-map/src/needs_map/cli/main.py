@@ -23,7 +23,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from .. import fonts as _fonts_module
 from ..archive.mover import ArchivalError
+from ..fonts import KoreanFontUnavailableError
 from ..io.mapping import MappingKindError, MappingVersionError
 from ..pipeline import NeedsMapArgs, run_needs_map
 
@@ -156,6 +158,16 @@ def main(argv: list[str] | None = None) -> int:
             f"ERROR [needs-map] --k={ns.k} out of allowed range [2, 6].\n"
         )
         return 1
+
+    # v0.1.1 US1 (T023) — pre-flight Korean font check. MUST run before any
+    # output directory or file is touched so a font-missing failure is
+    # atomic (FR-005). Resolved via the module attribute so test fixtures
+    # can monkeypatch ``needs_map.fonts.resolve_korean_font_paths``.
+    try:
+        _fonts_module.resolve_korean_font_paths()
+    except KoreanFontUnavailableError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 6
 
     try:
         args = NeedsMapArgs(
