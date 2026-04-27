@@ -1,0 +1,71 @@
+metadata:
+  semester: '2026-1'
+  course_slug: anatomy
+  course_name_kr: '인체구조와기능'
+  mapping_version: 2
+
+# Top-level YAML anchor block — pyyaml.safe_load resolves *alias references
+# inline, then needs_map.io.mapping.load_mapping drops this key before
+# validation (DiagnosticMappingConfig has extra='forbid').
+ordinal_maps:
+  seven_point_agree: &seven_point_agree
+    '전혀 그렇지 않다.': 1
+    '그렇지 않다.': 2
+    '조금 그렇지 않다.': 3
+    '보통이다.': 4
+    '조금 그렇다.': 5
+    '그렇다.': 6
+    '매우 그렇다.': 7
+
+columns:
+  - source: '학번'
+    kind: identity
+
+  # 8 quantitative axes — minimum-viable. motivation + study_strategy
+  # share the seven_point_agree anchor; the remaining axes inline a
+  # single-entry map to keep the fixture compact.
+  - source: 'Q_digital_efficacy'
+    kind: likert
+    axis: digital_efficacy
+    aggregate: mean
+  - source: 'Q01_motivation'
+    kind: likert
+    axis: motivation
+    aggregate: mean
+    ordinal_map: *seven_point_agree   # ← anchor reference #1
+  - source: 'Q_time_availability'
+    kind: likert
+    axis: time_availability
+    aggregate: mean
+  - source: 'Q_material_preference'
+    kind: likert
+    axis: material_preference
+    aggregate: mean
+  - source: 'Q_study_strategy'
+    kind: likert
+    axis: study_strategy
+    aggregate: mean
+    ordinal_map: *seven_point_agree   # ← anchor reference #2
+  - source: 'Q_study_environment'
+    kind: likert
+    axis: study_environment
+    aggregate: mean
+  - source: 'Q_social_learning'
+    kind: likert
+    axis: social_learning
+    aggregate: mean
+  - source: 'Q_feedback_seeking'
+    kind: likert
+    axis: feedback_seeking
+    aggregate: mean
+
+axes:
+  required:
+    - digital_efficacy
+    - motivation
+    - time_availability
+    - material_preference
+    - study_strategy
+    - study_environment
+    - social_learning
+    - feedback_seeking
