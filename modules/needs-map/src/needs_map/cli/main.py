@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         manifest = run_needs_map(args)
     except NotImplementedError as exc:
-        # T074 (Phase C) and T105 (Phase D-F) still raise this; T056 wired A+B.
+        # T105 (Phase D-F) still raises this; T056 wired A+B and T074 wired C.
         sys.stderr.write(f"ERROR [needs-map] not yet implemented: {exc}\n")
         return 99
     except FileNotFoundError as exc:
@@ -208,6 +208,19 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(
             f"[needs-map] phase={entry.phase} rows_written={entry.rows_written}\n"
         )
+    if manifest.cluster_k_used is not None:
+        sil = (
+            f"{manifest.cluster_silhouette_used:.3f}"
+            if manifest.cluster_silhouette_used is not None
+            else "n/a"
+        )
+        sys.stdout.write(
+            f"[needs-map] cluster k_used={manifest.cluster_k_used} silhouette={sil}\n"
+        )
+        if manifest.weak_structure_warning:
+            sys.stdout.write(
+                "[needs-map] WARNING: cluster structure weak (silhouette < 0.2)\n"
+            )
     if manifest.previous_run_archive_path:
         sys.stdout.write(
             f"[needs-map] previous_run_archive: {manifest.previous_run_archive_path}\n"
