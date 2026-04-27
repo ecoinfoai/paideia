@@ -125,18 +125,18 @@ columns:
     axis: anxiety
     kind: likert
   - source: "Q11"
-    axis: interest_chapters
+    axis: interest
     kind: multiselect
   - source: "Q62"
-    axis: anxiety_freetext
+    axis: anxiety
     kind: freetext
 axes:
   required:
     - motivation
     - anxiety
-    - interest_chapters
+    - interest
   optional:
-    - anxiety_freetext
+    - anxiety
 """.lstrip(),
         encoding="utf-8",
     )

@@ -22,17 +22,15 @@ columns:
     kind: likert
 
   - source: "Q11_관심있는_챕터"
-    axis: interest_chapters
+    axis: interest
     kind: multiselect
 
   - source: "Q62_시험에_대한_불안"
-    axis: anxiety_freetext
+    axis: anxiety
     kind: freetext
 
 axes:
   required:
     - motivation
     - anxiety
-    - interest_chapters
-  optional:
-    - anxiety_freetext
+    - interest

@@ -134,7 +134,7 @@ def test_dr_v2_multiselect_positive() -> None:
         student_id="2026194999",
         semester="2026-1",
         course_slug="anatomy",
-        axis="interest_chapters",
+        axis="interest",
         axis_kind="multiselect_onehot",
         option_key="신경계",
         value_bool=True,
@@ -147,7 +147,7 @@ def test_dr_v2_multiselect_negative_missing_option() -> None:
         "student_id": "2026194999",
         "semester": "2026-1",
         "course_slug": "anatomy",
-        "axis": "interest_chapters",
+        "axis": "interest",
         "axis_kind": "multiselect_onehot",
         "value_bool": True,
         "source_column": "Q11_관심있는_챕터",
@@ -161,7 +161,7 @@ def test_dr_v3_freetext_positive() -> None:
         student_id="2026194999",
         semester="2026-1",
         course_slug="anatomy",
-        axis="anxiety_freetext",
+        axis="anxiety",
         axis_kind="freetext",
         value_text="시험에 대한 불안이 큽니다.",
         source_column="Q62_시험에_대한_불안",
@@ -173,7 +173,7 @@ def test_dr_v3_freetext_negative_missing_text() -> None:
         "student_id": "2026194999",
         "semester": "2026-1",
         "course_slug": "anatomy",
-        "axis": "anxiety_freetext",
+        "axis": "anxiety",
         "axis_kind": "freetext",
         "source_column": "Q62_시험에_대한_불안",
     }
@@ -329,9 +329,9 @@ def _base_mapping_kwargs() -> dict:
             MappingColumn(source="학번", kind="identity"),
             MappingColumn(source="Q01", kind="likert", axis="motivation"),
             MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-            MappingColumn(source="Q11", kind="multiselect", axis="interest_chapters"),
+            MappingColumn(source="Q11", kind="multiselect", axis="interest"),
         ],
-        "axes": MappingAxes(required=["motivation", "anxiety", "interest_chapters"]),
+        "axes": MappingAxes(required=["motivation", "anxiety", "interest"]),
     }
 
 
@@ -384,7 +384,7 @@ def test_mapping_v4_negative_inconsistent_aggregate() -> None:
         MappingColumn(source="Q01", kind="likert", axis="motivation", aggregate="mean"),
         MappingColumn(source="Q02", kind="likert", axis="motivation"),  # missing aggregate
         MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-        MappingColumn(source="Q11", kind="multiselect", axis="interest_chapters"),
+        MappingColumn(source="Q11", kind="multiselect", axis="interest"),
     ]
     with pytest.raises(ValidationError, match="V4"):
         DiagnosticMappingConfig(**kwargs)
@@ -397,6 +397,6 @@ def test_mapping_v4_positive_consistent_aggregate() -> None:
         MappingColumn(source="Q01", kind="likert", axis="motivation", aggregate="mean"),
         MappingColumn(source="Q02", kind="likert", axis="motivation", aggregate="mean"),
         MappingColumn(source="Q05", kind="likert", axis="anxiety"),
-        MappingColumn(source="Q11", kind="multiselect", axis="interest_chapters"),
+        MappingColumn(source="Q11", kind="multiselect", axis="interest"),
     ]
     DiagnosticMappingConfig(**kwargs)

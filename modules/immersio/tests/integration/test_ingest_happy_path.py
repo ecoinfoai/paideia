@@ -56,7 +56,7 @@ def test_run_ingest_happy_path(tmp_path: Path) -> None:
     assert any("_unused_backup.txt" in path for path in manifest_payload["unrecognized_files"])
     # multiselect_new_options is dict[str, list[str]] (T025 C2)
     assert isinstance(manifest_payload["multiselect_new_options"], dict)
-    assert "interest_chapters" in manifest_payload["multiselect_new_options"]
+    assert "interest" in manifest_payload["multiselect_new_options"]
 
     # mirror returned manifest
     assert manifest.row_counts.student_master == len(masters)

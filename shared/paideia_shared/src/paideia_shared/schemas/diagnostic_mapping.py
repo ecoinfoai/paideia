@@ -29,6 +29,7 @@ class MappingColumn(BaseModel):
     kind: Literal["identity", "likert", "multiselect", "freetext"]
     axis: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
     aggregate: Literal["mean", "sum"] | None = None
+    partition_axis: bool = False
 
     @model_validator(mode="after")
     def v1_identity_no_axis(self) -> Self:
@@ -43,6 +44,23 @@ class MappingColumn(BaseModel):
             raise ValueError(
                 f"MappingColumn V1: kind={self.kind!r} requires axis "
                 f"(source={self.source!r})."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def v5_partition_axis_only_for_classifying_kinds(self) -> Self:
+        """``partition_axis=True`` is incompatible with ``kind='freetext'``.
+
+        Free-text responses are unsuitable as partition variables for the Phase E
+        group-distribution report (Clarifications §4, FR-017). Likert and
+        multiselect items remain valid partition sources; identity columns are
+        excluded by V1 (no axis/aggregate, partition_axis=True is harmless but
+        meaningless on identity rows).
+        """
+        if self.partition_axis and self.kind == "freetext":
+            raise ValueError(
+                f"MappingColumn V5: partition_axis=True is incompatible with "
+                f"kind='freetext' (source={self.source!r})."
             )
         return self
 
@@ -125,4 +143,33 @@ class DiagnosticMappingConfig(BaseModel):
                     f"values {aggregates}; supply identical 'aggregate: mean|sum' "
                     f"on every column for the axis."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def v6_axes_are_standard_paideia_vocabulary(self) -> Self:
+        """All declared axes must belong to the paideia v0.1.0 standard vocabulary.
+
+        Spec FR-AXIS-001 / Clarifications §2 fix the vocabulary at six keys:
+        ``motivation``, ``anxiety``, ``self_efficacy``, ``interest``,
+        ``prior_knowledge``, ``life_context``. Adding a new axis is a paideia
+        minor-version bump and is rejected here so misconfigured mapping YAMLs
+        cannot leak non-standard keys into downstream Silver outputs.
+        """
+        standard = {
+            "motivation",
+            "anxiety",
+            "self_efficacy",
+            "interest",
+            "prior_knowledge",
+            "life_context",
+        }
+        declared = set(self.axes.required) | set(self.axes.optional)
+        non_standard = sorted(declared - standard)
+        if non_standard:
+            raise ValueError(
+                f"DiagnosticMappingConfig V6: declared axes are outside paideia "
+                f"standard vocabulary: {non_standard}. "
+                f"Allowed: {sorted(standard)}. "
+                f"Adding a new axis requires paideia minor version bump."
+            )
         return self

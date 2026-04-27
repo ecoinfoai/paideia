@@ -26,13 +26,13 @@ columns:
     axis: anxiety
     kind: likert
   - source: "Q11_관심있는_챕터"
-    axis: interest_chapters
+    axis: interest
     kind: multiselect
 axes:
   required:
     - motivation
     - anxiety
-    - interest_chapters
+    - interest
 """
 
 
@@ -50,7 +50,7 @@ def test_loader_positive(tmp_path: Path) -> None:
     assert {c.axis for c in config.columns if c.axis} == {
         "motivation",
         "anxiety",
-        "interest_chapters",
+        "interest",
     }
 
 
@@ -77,7 +77,7 @@ def test_loader_two_identity_columns(tmp_path: Path) -> None:
 
 def test_loader_required_axis_unmapped(tmp_path: Path) -> None:
     payload = _VALID_MAPPING_YAML.replace(
-        "    - interest_chapters\n", "    - interest_chapters\n    - missing_axis\n"
+        "    - interest\n", "    - interest\n    - missing_axis\n"
     )
     target = _write_yaml(tmp_path, payload)
     with pytest.raises(ValidationError, match="V3"):

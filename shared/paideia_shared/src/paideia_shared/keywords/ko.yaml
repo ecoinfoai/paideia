@@ -1,0 +1,17 @@
+# paideia v0.1.0 default Korean keyword dictionary.
+# Shared with immersio Phase 5 (FR-026). Bumping content = paideia minor break.
+# See contracts/keyword_dictionary.schema.yaml for the schema.
+
+language: ko
+version: 1
+entries:
+  - category: 암기 부담
+    patterns: [외우, 암기, 기억, 용어]
+  - category: 시간 부족
+    patterns: [시간, 바쁘, 아르바이트, 병행]
+  - category: 따라가기 어려움
+    patterns: [따라, 뒤처, 못 따라, 진도]
+  - category: 불안/심리
+    patterns: [불안, 두렵, 걱정, 자신감]
+  - category: 기초 부족
+    patterns: [기초, 처음, 생물, 용어가 어려]

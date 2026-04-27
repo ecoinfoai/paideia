@@ -28,8 +28,8 @@ def test_multiselect_new_options_recorded(tmp_path: Path) -> None:
 
     manifest = json.loads((silver_dir / "manifest.json").read_text(encoding="utf-8"))
     new_options = manifest["multiselect_new_options"]
-    assert "interest_chapters" in new_options
-    discovered = set(new_options["interest_chapters"])
+    assert "interest" in new_options
+    discovered = set(new_options["interest"])
     # The fixture diag CSV exposes 신경계, 근육계, 소화계, 순환계.
     assert {"신경계", "근육계", "소화계", "순환계"}.issubset(discovered)
 

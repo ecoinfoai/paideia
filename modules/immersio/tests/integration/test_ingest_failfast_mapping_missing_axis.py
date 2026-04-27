@@ -11,8 +11,8 @@ from immersio.ingest import IngestValidationError, run_ingest
 def test_required_axis_unmapped(corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path) -> None:
     text = corrupt_mapping.read_text(encoding="utf-8")
     bad = text.replace(
-        "    - interest_chapters\n",
-        "    - interest_chapters\n    - missing_axis\n",
+        "    - interest\n",
+        "    - interest\n    - missing_axis\n",
     )
     corrupt_mapping.write_text(bad, encoding="utf-8")
 

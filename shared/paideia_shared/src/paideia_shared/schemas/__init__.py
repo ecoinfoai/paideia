@@ -6,6 +6,7 @@ from ._common import (
     OutputKey,
     SectionLabel,
     SemesterCode,
+    StandardAxisKey,
 )
 from .diagnostic_mapping import (
     DiagnosticMappingConfig,
@@ -17,6 +18,12 @@ from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
 from .manifest import IngestInput, IngestManifest, IngestRowCount
+from .needs_map_manifest import (
+    LLMCallStat,
+    NeedsMapInput,
+    NeedsMapManifest,
+    NeedsMapPhaseRowCount,
+)
 from .student_master import StudentMaster
 
 __all__ = [
@@ -25,6 +32,7 @@ __all__ = [
     "CourseSlug",
     "OutputKey",
     "SectionLabel",
+    "StandardAxisKey",
     "StudentMaster",
     "DiagnosticResponse",
     "ExamResult",
@@ -36,4 +44,8 @@ __all__ = [
     "MappingColumn",
     "MappingAxes",
     "DiagnosticMappingConfig",
+    "NeedsMapInput",
+    "LLMCallStat",
+    "NeedsMapPhaseRowCount",
+    "NeedsMapManifest",
 ]

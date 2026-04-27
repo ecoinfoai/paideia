@@ -47,3 +47,18 @@ OutputKey: TypeAlias = Annotated[
 
 SectionLabel: TypeAlias = Literal["A", "B", "C", "D"]
 """Class section label assigned by the department's OMR template."""
+
+StandardAxisKey: TypeAlias = Literal[
+    "motivation",
+    "anxiety",
+    "self_efficacy",
+    "interest",
+    "prior_knowledge",
+    "life_context",
+]
+"""paideia v0.1.0 standard semantic-axis vocabulary (6 keys, Clarifications §2).
+
+Adding a new axis is a paideia minor-version bump per spec FR-AXIS-001. The same
+literal set backs the v6 validator on ``DiagnosticMappingConfig`` and the per-axis
+fields of ``FactorScoreRow`` / ``ScaleReliabilityRow``.
+"""
