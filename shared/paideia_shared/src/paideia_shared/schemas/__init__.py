@@ -1,8 +1,11 @@
 """Cross-module data contracts (Pydantic v2). Bronze/Silver/Gold layer schema."""
 
 from ._common import (
+    STANDARD_AXIS_KEYS,
+    AuxiliaryGroupKey,
     CanonicalStudentId,
     CourseSlug,
+    FreetextAreaKey,
     OutputKey,
     SectionLabel,
     SemesterCode,
@@ -41,6 +44,9 @@ __all__ = [
     "OutputKey",
     "SectionLabel",
     "StandardAxisKey",
+    "STANDARD_AXIS_KEYS",
+    "AuxiliaryGroupKey",
+    "FreetextAreaKey",
     "StudentMaster",
     "DiagnosticResponse",
     "ExamResult",

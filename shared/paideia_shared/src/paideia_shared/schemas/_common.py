@@ -49,16 +49,67 @@ SectionLabel: TypeAlias = Literal["A", "B", "C", "D"]
 """Class section label assigned by the department's OMR template."""
 
 StandardAxisKey: TypeAlias = Literal[
+    "digital_efficacy",
     "motivation",
-    "anxiety",
-    "self_efficacy",
-    "interest",
-    "prior_knowledge",
-    "life_context",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 ]
-"""paideia v0.1.0 standard semantic-axis vocabulary (6 keys, Clarifications §2).
+"""paideia v0.1.1 standard quantitative-axis vocabulary (8 keys, constitution v1.1.0).
 
-Adding a new axis is a paideia minor-version bump per spec FR-AXIS-001. The same
-literal set backs the v6 validator on ``DiagnosticMappingConfig`` and the per-axis
-fields of ``FactorScoreRow`` / ``ScaleReliabilityRow``.
+The 8 keys are fixed cross-module. Adding a new quantitative axis is a paideia
+minor-version bump per spec FR-AXIS-001 + FR-013. The same literal set backs
+the V6 validator on ``DiagnosticMappingConfig`` and the per-axis fields of
+``FactorScoreRow`` / ``ScaleReliabilityRow``.
+
+v0.1.0 → v0.1.1 axis migration: motivation (kept), anxiety (dropped — moved to
+freetext + sentiment area), self_efficacy / interest / prior_knowledge /
+life_context (dropped — replaced by the 7 new keys covering digital efficacy,
+study time availability, material/strategy/environment preferences, social
+learning, feedback seeking).
+"""
+
+STANDARD_AXIS_KEYS: tuple[str, ...] = (
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
+)
+"""Tuple form of ``StandardAxisKey`` for deterministic iteration.
+
+Used by per-axis ``model_validator`` loops in ``FactorScoreRow`` /
+``FactorScoresLongRow`` and by services that need to iterate over the
+canonical axis set in declaration order. Always mirrors ``StandardAxisKey``;
+contract tests enforce parity (T008 in spec 003).
+"""
+
+AuxiliaryGroupKey: TypeAlias = Literal[
+    "prior_readiness",
+    "interest_topics",
+    "categorical_intent",
+]
+"""Optional non-quantitative axis groups used in needs-map v0.1.1.
+
+These keys are *not* scored — they emit category distribution rows on the
+v0.1.1 axis_summary export and live alongside the 8 quantitative axes.
+Constitution v1.1.0 explicitly allows modules to extend this set; the literal
+here pins the keys actually used by the 2026-1 anatomy mapping.
+"""
+
+FreetextAreaKey: TypeAlias = Literal[
+    "anxiety_freetext",
+    "experience_freetext",
+]
+"""Free-text response areas processed by the v0.1.1 sentiment pipeline.
+
+Each area carries its own dictionary categories + RoBERTa sentiment + token
+audit. The two values mirror Q61 (anxiety) and Q62 (experience) on the
+2026-1 anatomy diagnostic.
 """
