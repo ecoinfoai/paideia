@@ -26,8 +26,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
+import numpy as np
 import pandas as pd
 from paideia_shared.schemas import (
+    ClusterAssignmentRow,
+    ClusterReport,
     CourseSlug,
     DiagnosticMappingConfig,
     FactorScoreRow,
@@ -40,11 +43,15 @@ from paideia_shared.schemas import (
 from pydantic import BaseModel, ConfigDict, Field
 
 from .archive.mover import archive_previous_run
+from .clustering.kmeans import cluster_students
+from .clustering.naming import name_clusters
+from .clustering.silhouette import recommend_k
 from .factor_scores.aggregate import aggregate_axis
 from .factor_scores.missing import apply_missing_policy
 from .factor_scores.zscore import zscore
 from .io.mapping import load_mapping
 from .io.silver import load_diagnostic_response, load_student_master
+from .llm.client import make_client
 from .llm.fallback import LLMCallTracker
 from .reliability.cronbach import compute_reliability
 
@@ -59,6 +66,17 @@ _STANDARD_AXES: tuple[str, ...] = (
     "prior_knowledge",
     "life_context",
 )
+_AXIS_LABELS_KR: dict[str, str] = {
+    "motivation": "동기",
+    "anxiety": "불안",
+    "self_efficacy": "자기효능",
+    "interest": "흥미",
+    "prior_knowledge": "사전지식",
+    "life_context": "생활맥락",
+}
+_WEAK_STRUCTURE_THRESHOLD = 0.2
+_SAMPLE_RATIO_THRESHOLD = 10  # sample/k must be ≥ this for k to be a valid candidate
+_CANDIDATE_K_RANGE = range(2, 7)
 
 
 def _now_utc_iso() -> str:
@@ -232,6 +250,145 @@ def _factor_score_rows_to_df(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _make_llm_client_or_none(args: NeedsMapArgs) -> object | None:
+    """Materialize an instructor client if and only if llm_enabled (FR-LLM-001).
+
+    ``llm_enabled`` already incorporates the ``--no-llm`` > env priority decided
+    at CLI dispatch time (Phase 2 §3.2).
+    """
+    if not args.llm_enabled:
+        return None
+    return make_client(
+        provider=args.llm_provider,
+        model=args.llm_model,
+        timeout=args.llm_timeout_seconds,
+    )
+
+
+def _run_phase_c(
+    *,
+    fs_df: pd.DataFrame,
+    args: NeedsMapArgs,
+    tracker: LLMCallTracker,
+) -> ClusterReport:
+    """Phase C orchestration: recommend k → cluster → name → assemble report.
+
+    FR-010: ``--k`` override forces a specific k unless the per-candidate sample
+    threshold (sample/k < 10) auto-degrades to k=1. ``--k=1`` is rejected at the
+    CLI layer and never reaches this function.
+
+    FR-013: rule-based naming by default; LLM client (when llm_enabled) attempts
+    polish; any failure routes to "llm_fallback" with manifest accounting via
+    LLMCallTracker.
+
+    Adversary H-3 mitigation: weak_structure_warning + sample_too_small_warning
+    are explicit booleans on the report — never silent.
+    """
+    n_substantive = int(fs_df.dropna(how="all", subset=list(_STANDARD_AXES)).shape[0])
+
+    candidates_in_range = [
+        k for k in _CANDIDATE_K_RANGE if n_substantive // k >= _SAMPLE_RATIO_THRESHOLD
+    ]
+    sample_too_small = len(candidates_in_range) == 0
+
+    k_override_reason: str | None = None
+    if args.k_override is not None:
+        k_used = args.k_override
+        if not sample_too_small and k_used in candidates_in_range:
+            chosen, candidate_table = recommend_k(
+                fs_df, candidate_k=candidates_in_range, seed=args.seed
+            )
+            k_override_reason = (
+                f"user --k {k_used} explicit override; auto-recommend would have been {chosen}"
+            )
+        else:
+            # ClusterReport V1 still requires k_used to appear in candidates when
+            # k_used > 1, so compute silhouette specifically for the override k.
+            try:
+                _, candidate_table = recommend_k(
+                    fs_df, candidate_k=[k_used], seed=args.seed
+                )
+            except ValueError:
+                candidate_table = []
+            k_override_reason = (
+                f"user --k {k_used} explicit override; sample_too_small={sample_too_small}"
+            )
+    elif sample_too_small:
+        k_used = 1
+        candidate_table = []
+    else:
+        k_used, candidate_table = recommend_k(
+            fs_df, candidate_k=candidates_in_range, seed=args.seed
+        )
+
+    labels, info = cluster_students(fs_df, k=k_used, seed=args.seed)
+    substantive_ids = info["substantive_student_ids"]
+
+    # Distance to centroid for each labelled student.
+    centroids = info["centroids"]
+    matrix_imputed = info.get("_imputed_matrix")
+    distances: list[float | None] = []
+    if matrix_imputed is not None and len(centroids) > 0:
+        for i, label in enumerate(labels):
+            d = float(np.linalg.norm(matrix_imputed[i] - centroids[label]))
+            distances.append(d)
+    else:
+        # k=1 path or empty axis set — no distance to report
+        distances = [None] * len(labels)
+
+    rows = [
+        ClusterAssignmentRow(
+            student_id=sid,
+            cluster_id=int(label),
+            distance_to_centroid=dist,
+        )
+        for sid, label, dist in zip(substantive_ids, labels, distances, strict=True)
+    ]
+
+    silhouette_used = next(
+        (cand.silhouette_score for cand in candidate_table if cand.k == k_used),
+        None,
+    )
+    weak_structure = (
+        silhouette_used is not None and silhouette_used < _WEAK_STRUCTURE_THRESHOLD
+    )
+
+    centroid_df = pd.DataFrame(centroids, columns=info["axes_used"])
+
+    llm_client = _make_llm_client_or_none(args)
+    if not centroid_df.empty:
+        cluster_names, naming_source = name_clusters(
+            centroid_df,
+            axis_labels_kr=_AXIS_LABELS_KR,
+            llm_client=llm_client,
+            llm_tracker=tracker,
+            llm_model=args.llm_model,
+            llm_retries=args.llm_retries,
+        )
+    else:
+        cluster_names = {0: "단일 군집 (산출 불가)"}
+        naming_source = "rule"
+
+    # Restrict to actually used cluster_ids — V2 requires exact equality.
+    used_cluster_ids = sorted({row.cluster_id for row in rows})
+    cluster_names = {cid: cluster_names.get(cid, f"cluster_{cid}") for cid in used_cluster_ids}
+
+    return ClusterReport(
+        rows=rows,
+        k_used=k_used,
+        silhouette_used=silhouette_used,
+        candidates=candidate_table,
+        cluster_names=cluster_names,
+        naming_source=naming_source,
+        weak_structure_warning=weak_structure,
+        sample_too_small_warning=sample_too_small,
+        k_override_reason=k_override_reason,
+        semester=args.semester,
+        course_slug=args.course_slug,
+        module_version=_MODULE_VERSION,
+    )
+
+
 def _scale_reliability_rows_to_df(rows: list[ScaleReliabilityRow]) -> pd.DataFrame:
     return pd.DataFrame([r.model_dump() for r in rows])
 
@@ -311,10 +468,34 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         )
         phases_executed.append("B")
 
-    for phase in ("C", "D", "E", "F"):
+    cluster_report: ClusterReport | None = None
+    if "C" in args.phases:
+        # Phase C requires Phase B output. fs_df is in scope from above when B was
+        # requested; if B was skipped (degenerate caller) we synthesize on the fly.
+        if "B" not in args.phases:
+            fs_rows = _build_factor_score_rows(
+                diag_df, master_df, mapping, standard_axes_used
+            )
+            _validate_factor_score_rows(fs_rows)
+            fs_df = _factor_score_rows_to_df(fs_rows)
+
+        cluster_report = _run_phase_c(
+            fs_df=fs_df,
+            args=args,
+            tracker=tracker,
+        )
+        ca_df = pd.DataFrame([row.model_dump() for row in cluster_report.rows])
+        if not args.dry_run:
+            _write_silver_atomic(silver, "cluster_assignment.parquet", ca_df)
+        rows_per_phase.append(
+            NeedsMapPhaseRowCount(phase="C", rows_written=len(cluster_report.rows))
+        )
+        phases_executed.append("C")
+
+    for phase in ("D", "E", "F"):
         if phase in args.phases:
             raise NotImplementedError(
-                f"Phase {phase} not wired yet — pending T074 (C) / T105 (D-F). "
+                f"Phase {phase} not wired yet — pending T105. "
                 f"args.phases={sorted(args.phases)}."
             )
 
@@ -347,11 +528,15 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         standard_axes_skipped=list(standard_axes_skipped),  # type: ignore[arg-type]
         phases_executed=phases_executed,
         rows_per_phase=rows_per_phase,
-        cluster_k_used=None,
-        cluster_silhouette_used=None,
+        cluster_k_used=cluster_report.k_used if cluster_report is not None else None,
+        cluster_silhouette_used=(
+            cluster_report.silhouette_used if cluster_report is not None else None
+        ),
         free_text_dictionary_match_rate=None,
         dictionary_language_mismatch_warning=False,
-        weak_structure_warning=False,
+        weak_structure_warning=(
+            cluster_report.weak_structure_warning if cluster_report is not None else False
+        ),
         llm_provider=args.llm_provider if args.llm_enabled else None,
         llm_model=args.llm_model if args.llm_enabled else None,
         llm_calls=tracker.to_stats(),

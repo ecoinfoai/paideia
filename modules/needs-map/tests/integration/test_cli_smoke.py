@@ -108,8 +108,37 @@ def test_cli_module_invocation_phase_ab_green(tmp_path: Path) -> None:
     assert "phase=B rows_written=9" in proc.stdout
 
 
-def test_cli_phase_c_still_red(tmp_path: Path) -> None:
-    """Phase C is not yet wired — pipeline raises NotImplementedError → exit 99."""
+def test_cli_phase_d_still_red(tmp_path: Path) -> None:
+    """Phase D is not yet wired (T105 pending) — pipeline raises NotImplementedError → exit 99."""
+    staged_in = _stage(tmp_path / "in")
+    proc = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "needs_map.cli.main",
+            "run",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-D",
+            "--no-llm",
+            "--input-root",
+            str(staged_in),
+            "--output-root",
+            str(tmp_path / "out"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 99
+    assert "Phase D not wired" in proc.stderr
+
+
+def test_cli_phase_c_now_green(tmp_path: Path) -> None:
+    """Phase C is wired (T074) — exit 0 + cluster_assignment.parquet written."""
     staged_in = _stage(tmp_path / "in")
     proc = subprocess.run(  # noqa: S603
         [
@@ -133,8 +162,11 @@ def test_cli_phase_c_still_red(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    assert proc.returncode == 99
-    assert "Phase C not wired" in proc.stderr
+    assert proc.returncode == 0
+    assert "phase=C" in proc.stdout
+    assert (
+        tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy" / "cluster_assignment.parquet"
+    ).is_file()
 
 
 def test_cli_missing_input_exit_2(tmp_path: Path) -> None:
