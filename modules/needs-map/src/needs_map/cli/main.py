@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from ..archive.mover import ArchivalError
 from ..pipeline import NeedsMapArgs, run_needs_map
 
 _ALLOWED_PHASE_RANGES = {
@@ -183,24 +184,34 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        run_needs_map(args)
+        manifest = run_needs_map(args)
     except NotImplementedError as exc:
-        # T031 skeleton signal — Phase 3 entry. Surfaced as exit 99 so the
-        # cli_smoke test (T034) RED is unambiguous.
+        # T074 (Phase C) and T105 (Phase D-F) still raise this; T056 wired A+B.
         sys.stderr.write(f"ERROR [needs-map] not yet implemented: {exc}\n")
         return 99
     except FileNotFoundError as exc:
         sys.stderr.write(f"ERROR [needs-map] input missing: {exc}\n")
         return 2
+    except ArchivalError as exc:
+        sys.stderr.write(f"ERROR [needs-map] archival failed: {exc}\n")
+        return 4
     except ValidationError as exc:
         sys.stderr.write(f"ERROR [needs-map] contract violation: {exc}\n")
-        # Wiring tasks (T056/T074/T105) will route input vs output validation
-        # errors to 2 vs 3 explicitly. Skeleton uses 2 by default.
+        # T056-validated input contract failures hit this path; the wiring
+        # tasks T074/T105 will refine output-validation routing to exit 3.
         return 2
     except Exception as exc:  # noqa: BLE001
         sys.stderr.write(f"ERROR [needs-map] internal error: {exc}\n")
         return 99
 
+    for entry in manifest.rows_per_phase:
+        sys.stdout.write(
+            f"[needs-map] phase={entry.phase} rows_written={entry.rows_written}\n"
+        )
+    if manifest.previous_run_archive_path:
+        sys.stdout.write(
+            f"[needs-map] previous_run_archive: {manifest.previous_run_archive_path}\n"
+        )
     sys.stdout.write("[needs-map] DONE\n")
     return 0
 

@@ -1,9 +1,12 @@
-"""CLI smoke test (T034).
+"""CLI smoke tests (T034 reworked at T057).
 
-DELIBERATELY RED at T034: pipeline.py phase bodies are NotImplementedError stubs
-so any --phases value triggers exit 99. This RED is the Phase 3 entry signal.
-T056/T074/T105 wire each phase progressively; the test will then need to be
-relaxed (e.g. accept exit 0 once Phase A+B fixtures land at T037-T040).
+Phase A+B is wired (T056 + T057), so the previous skeleton-RED expectation
+flips: the happy-path subprocess invocation now produces exit 0 and writes
+the two parquet outputs. The Phase C/D/E/F NotImplementedError stub still
+surfaces as exit 99 — covered by the dedicated phase_c_red test below.
+
+Argument validation tests (--k=1, --k=7, missing input) are unchanged from
+T032 since they trip before reaching the (now-implemented) pipeline.
 """
 
 from __future__ import annotations
@@ -15,6 +18,23 @@ from pathlib import Path
 
 import pytest
 
+_FIXTURE_ROOT = Path("modules/needs-map/tests/fixtures/silver_minimal")
+_FULL_MAPPING = Path("modules/needs-map/tests/fixtures/mappings/anatomy_full.diagnostic.yaml")
+
+
+def _stage(tmp_path: Path) -> Path:
+    silver_dir = tmp_path / "silver" / "immersio" / "2026-1-anatomy"
+    silver_dir.mkdir(parents=True)
+    for name in ("student_master.parquet", "diagnostic_response.parquet"):
+        shutil.copy(
+            _FIXTURE_ROOT / "silver" / "immersio" / "2026-1-anatomy" / name,
+            silver_dir / name,
+        )
+    mapping_dir = tmp_path / "bronze" / "매핑"
+    mapping_dir.mkdir(parents=True)
+    shutil.copy(_FULL_MAPPING, mapping_dir / "anatomy.diagnostic.yaml")
+    return tmp_path
+
 
 def _have_paideia_needs_map() -> bool:
     return shutil.which("paideia-needs-map") is not None
@@ -24,14 +44,11 @@ def _have_paideia_needs_map() -> bool:
     not _have_paideia_needs_map(),
     reason="paideia-needs-map console_script not installed in this venv.",
 )
-def test_cli_smoke_red(tmp_path: Path) -> None:
-    """Skeleton CLI should reach run_needs_map and surface NotImplementedError as exit 99.
-
-    This is the deliberate RED signal for Phase 3.2 entry — the test will be
-    rewritten once T056 wires Phase A+B with real fixture data.
-    """
+def test_cli_smoke_phase_ab_green(tmp_path: Path) -> None:
+    """Phase A+B subprocess invocation now exits 0 and writes both parquets."""
     executable = shutil.which("paideia-needs-map")
-    assert executable is not None  # guarded by the skipif above
+    assert executable is not None
+    staged_in = _stage(tmp_path / "in")
     proc = subprocess.run(  # noqa: S603 — absolute path resolved via shutil.which
         [
             executable,
@@ -44,24 +61,27 @@ def test_cli_smoke_red(tmp_path: Path) -> None:
             "A-B",
             "--no-llm",
             "--input-root",
-            str(tmp_path),
+            str(staged_in),
             "--output-root",
-            str(tmp_path),
+            str(tmp_path / "out"),
         ],
         capture_output=True,
         text=True,
         check=False,
     )
-    assert proc.returncode == 99, (
-        f"Expected exit 99 (NotImplementedError stub), got {proc.returncode}. "
-        f"stderr={proc.stderr}"
-    )
+    assert proc.returncode == 0, f"expected exit 0, got {proc.returncode}. stderr={proc.stderr}"
     assert "[needs-map 0.1.0]" in proc.stdout
-    assert "not yet implemented" in proc.stderr or "Phase A" in proc.stderr
+    assert "phase=A rows_written=6" in proc.stdout
+    assert "phase=B rows_written=9" in proc.stdout
+    silver = tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy"
+    assert (silver / "scale_reliability.parquet").is_file()
+    assert (silver / "factor_scores.parquet").is_file()
+    assert (silver / "manifest.json").is_file()
 
 
-def test_cli_module_invocation_smoke(tmp_path: Path) -> None:
-    """python -m needs_map.cli.main as fallback invocation (cli.md §Module Invocation)."""
+def test_cli_module_invocation_phase_ab_green(tmp_path: Path) -> None:
+    """`python -m needs_map.cli.main` fallback (cli.md §Module Invocation)."""
+    staged_in = _stage(tmp_path / "in")
     proc = subprocess.run(  # noqa: S603 — sys.executable trusted
         [
             sys.executable,
@@ -76,16 +96,73 @@ def test_cli_module_invocation_smoke(tmp_path: Path) -> None:
             "A-B",
             "--no-llm",
             "--input-root",
-            str(tmp_path),
+            str(staged_in),
             "--output-root",
-            str(tmp_path),
+            str(tmp_path / "out"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"expected exit 0, got {proc.returncode}. stderr={proc.stderr}"
+    assert "phase=B rows_written=9" in proc.stdout
+
+
+def test_cli_phase_c_still_red(tmp_path: Path) -> None:
+    """Phase C is not yet wired — pipeline raises NotImplementedError → exit 99."""
+    staged_in = _stage(tmp_path / "in")
+    proc = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "needs_map.cli.main",
+            "run",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-C",
+            "--no-llm",
+            "--input-root",
+            str(staged_in),
+            "--output-root",
+            str(tmp_path / "out"),
         ],
         capture_output=True,
         text=True,
         check=False,
     )
     assert proc.returncode == 99
-    assert "not yet implemented" in proc.stderr
+    assert "Phase C not wired" in proc.stderr
+
+
+def test_cli_missing_input_exit_2(tmp_path: Path) -> None:
+    """Missing diagnostic_response.parquet → exit 2 (cli.md input contract)."""
+    proc = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "needs_map.cli.main",
+            "run",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-B",
+            "--no-llm",
+            "--input-root",
+            str(tmp_path / "empty"),
+            "--output-root",
+            str(tmp_path / "out"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "input missing" in proc.stderr
 
 
 def test_cli_rejects_k_one(tmp_path: Path) -> None:
