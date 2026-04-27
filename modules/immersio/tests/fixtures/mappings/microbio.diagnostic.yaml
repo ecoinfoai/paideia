@@ -2,30 +2,66 @@ metadata:
   semester: "2026-1"
   course_slug: microbiology
   course_name_kr: "미생물학"
-  mapping_version: 1
+  mapping_version: 2
 
 columns:
   - source: "학번"
     kind: identity
 
+  # 8 quantitative axes (minimum-viable dummy — same scheme as anatomy)
+  - source: "M_digital_efficacy"
+    axis: digital_efficacy
+    kind: likert
+    aggregate: mean
   - source: "M01_미생물에_관심"
     axis: motivation
     kind: likert
-
-  - source: "M02_세균에_대한_불안"
-    axis: anxiety
+    aggregate: mean
+  - source: "M_time_availability"
+    axis: time_availability
     kind: likert
+    aggregate: mean
+  - source: "M_material_preference"
+    axis: material_preference
+    kind: likert
+    aggregate: mean
+  - source: "M_study_strategy"
+    axis: study_strategy
+    kind: likert
+    aggregate: mean
+  - source: "M_study_environment"
+    axis: study_environment
+    kind: likert
+    aggregate: mean
+  - source: "M_social_learning"
+    axis: social_learning
+    kind: likert
+    aggregate: mean
+  - source: "M_feedback_seeking"
+    axis: feedback_seeking
+    kind: likert
+    aggregate: mean
 
+  # Auxiliary group (interest topics) — non-scoring
   - source: "M03_관심있는_분야"
-    axis: interest
+    axis: interest_topics
     kind: multiselect
 
+  # Freetext (anxiety area)
   - source: "M04_불안_자유서술"
-    axis: anxiety
+    axis: anxiety_freetext
     kind: freetext
 
 axes:
   required:
+    - digital_efficacy
     - motivation
-    - anxiety
-    - interest
+    - time_availability
+    - material_preference
+    - study_strategy
+    - study_environment
+    - social_learning
+    - feedback_seeking
+  optional:
+    - interest_topics
+    - anxiety_freetext

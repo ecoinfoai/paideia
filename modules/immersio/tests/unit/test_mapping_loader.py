@@ -15,24 +15,49 @@ metadata:
   semester: "2026-1"
   course_slug: anatomy
   course_name_kr: "인체구조와기능"
-  mapping_version: 1
+  mapping_version: 2
 columns:
   - source: "학번"
     kind: identity
+  - source: "Q_digital_efficacy"
+    axis: digital_efficacy
+    kind: likert
   - source: "Q01_나는_의학에_관심이_많다"
     axis: motivation
     kind: likert
-  - source: "Q05_시험이_두렵다"
-    axis: anxiety
+  - source: "Q_time_availability"
+    axis: time_availability
+    kind: likert
+  - source: "Q_material_preference"
+    axis: material_preference
+    kind: likert
+  - source: "Q_study_strategy"
+    axis: study_strategy
+    kind: likert
+  - source: "Q_study_environment"
+    axis: study_environment
+    kind: likert
+  - source: "Q_social_learning"
+    axis: social_learning
+    kind: likert
+  - source: "Q_feedback_seeking"
+    axis: feedback_seeking
     kind: likert
   - source: "Q11_관심있는_챕터"
-    axis: interest
+    axis: interest_topics
     kind: multiselect
 axes:
   required:
+    - digital_efficacy
     - motivation
-    - anxiety
-    - interest
+    - time_availability
+    - material_preference
+    - study_strategy
+    - study_environment
+    - social_learning
+    - feedback_seeking
+  optional:
+    - interest_topics
 """
 
 
@@ -48,9 +73,15 @@ def test_loader_positive(tmp_path: Path) -> None:
     assert isinstance(config, DiagnosticMappingConfig)
     assert config.metadata.course_slug == "anatomy"
     assert {c.axis for c in config.columns if c.axis} == {
+        "digital_efficacy",
         "motivation",
-        "anxiety",
-        "interest",
+        "time_availability",
+        "material_preference",
+        "study_strategy",
+        "study_environment",
+        "social_learning",
+        "feedback_seeking",
+        "interest_topics",
     }
 
 
@@ -76,8 +107,17 @@ def test_loader_two_identity_columns(tmp_path: Path) -> None:
 
 
 def test_loader_required_axis_unmapped(tmp_path: Path) -> None:
+    """V3 fires when a declared required axis has no backing column.
+
+    Replace the feedback_seeking column with an unmapped one to keep
+    axes.required at 8 (V6 strict) but break V3.
+    """
     payload = _VALID_MAPPING_YAML.replace(
-        "    - interest\n", "    - interest\n    - missing_axis\n"
+        "    - feedback_seeking\n",
+        "    - missing_axis\n",
+    ).replace(
+        '  - source: "Q_feedback_seeking"\n    axis: feedback_seeking\n    kind: likert\n',
+        "",
     )
     target = _write_yaml(tmp_path, payload)
     with pytest.raises(ValidationError, match="V3"):
