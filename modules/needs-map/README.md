@@ -1,10 +1,26 @@
-# needs-map (paideia v0.1.0)
+# needs-map (paideia v0.1.1)
 
-사전진단 분석 모듈 — 척도 신뢰도 / 의미축 점수 / 군집화 / 자유서술 분류 /
-집단 분포 보고서 / 1인 1장 needs-map 카드를 결정론적으로 생산한다.
+사전진단 분석 모듈 — 척도 신뢰도 / 8 정량 의미축 점수 / 군집화 / 자유서술
+분류 + 한국어 RoBERTa 감성 / 집단 분포 보고서 / 운영자 매뉴얼 PDF /
+1인 1장 needs-map 카드를 결정론적으로 생산한다.
 ingest(`001-ingest-phase0`)가 만든 진단 응답 Silver를 입력으로 받아
 immersio Phase 3·4 결합 분석 + 학기 첫 면담 자료 + 차년도 출제 회고에
 즉시 투입 가능한 산출을 만든다.
+
+> **v0.1.1 deltas (2026-04-27)**
+> - 표준 의미축 6 → 8축 (헌장 v1.1.0): `digital_efficacy`, `motivation`,
+>   `time_availability`, `material_preference`, `study_strategy`,
+>   `study_environment`, `social_learning`, `feedback_seeking`.
+> - 매핑 컬럼 종류 5종 (`identity` / `likert` / `single_select` /
+>   `multiselect` / `freetext`).
+> - 한글 폰트 동적 탐지 — NanumGothic Regular + Bold 필수, 폴백 금지
+>   (미해상 시 exit code 6, 디스크 산출 0건).
+> - 학생별 long CSV/YAML + 축별 summary CSV/YAML 신규 export.
+> - 8각 라다 + 집단 평균 오버레이 (raw 1–7 척도).
+> - 운영자 매뉴얼 PDF 신규 산출.
+> - 자유서술 한국어 RoBERTa(`searle-j/kote_for_easygoing_people`) 감성
+>   분석(부정 강도 + 우세 감정 + 토큰 분해 audit). `--no-roberta`로 폴백.
+> 상세: `specs/003-needs-map-v0-1-1/{spec,plan,research}.md`.
 
 ## 입력
 
@@ -27,15 +43,21 @@ data/silver/needs-map/{semester}-{course}/
     ├── factor_scores.parquet                # Phase B (immersio Phase 3 입력)
     ├── cluster_assignment.parquet           # Phase C (immersio Phase 4 입력)
     ├── free_text_categorization.parquet     # Phase D
+    ├── freetext_audit.parquet               # Phase D, US6 (per-token, v0.1.1 신규)
     ├── manifest.json
-    └── _archive/{ISO8601_UTC}/...
+    └── _archive/{ISO8601_UTC}__v1.0.0/...   # v0.1.1 archival suffix per research §R-09
 
 data/gold/needs-map/{semester}-{course}/
     ├── group_distribution.pdf               # Phase E
     ├── cluster_summary.xlsx                 # Phase E
-    ├── cards/{student_id}.pdf               # Phase F (184장+α)
-    ├── manifest.json
-    └── _archive/{ISO8601_UTC}/...
+    ├── factor_scores_long.csv               # Phase E, US3 (utf-8-sig BOM)
+    ├── factor_scores_long.yaml              # Phase E, US3
+    ├── axis_summary.csv                     # Phase E, US3
+    ├── axis_summary.yaml                    # Phase E, US3
+    ├── manual.pdf                           # Phase E, US5 (10–15p A4)
+    ├── cards/{student_id}.pdf               # Phase F
+    ├── manifest.json                        # schema_version 1.1.0
+    └── _archive/{ISO8601_UTC}__v1.0.0/...   # archival suffix per research §R-09
 ```
 
 ## 6 Phase
@@ -52,20 +74,23 @@ data/gold/needs-map/{semester}-{course}/
 ## 빠른 사용
 
 ```bash
-# 전체 Phase, --no-llm 모드 (LLM 비활성)
-uv run paideia-needs-map run \
-    --semester 2026-1 \
-    --course anatomy \
-    --no-llm
+# 전체 Phase, RoBERTa + LLM 모두 활성 (운영 기본)
+uv run paideia-needs-map run --semester 2026-1 --course anatomy
 
-# Phase A·B만 (immersio Phase 3 차단 해소용 빠른 실행, 30초 이내)
+# RoBERTa 비활성 (키워드 사전 단독 폴백, ~10분 안에 완주)
+uv run paideia-needs-map run --semester 2026-1 --course anatomy --no-roberta
+
+# LLM 비활성 (사전 + 룰 템플릿)
+uv run paideia-needs-map run --semester 2026-1 --course anatomy --no-llm
+
+# Phase A·B만 (immersio Phase 3 차단 해소용 빠른 실행)
 uv run paideia-needs-map run --semester 2026-1 --course anatomy --phases A-B --no-llm
 
-# 군집 수 강제 (FR-010)
+# 군집 수 강제
 uv run paideia-needs-map run --semester 2026-1 --course anatomy --k 4 --no-llm
 ```
 
-상세 사용법은 `specs/002-needs-map-v0-1-0/quickstart.md`.
+상세 사용법은 `specs/003-needs-map-v0-1-1/quickstart.md`.
 
 ## 의존성
 
@@ -74,11 +99,72 @@ uv run paideia-needs-map run --semester 2026-1 --course anatomy --k 4 --no-llm
 | 핵심 | pydantic ≥2.6, pandas ≥2.0, pyarrow ≥15, scikit-learn ≥1.4, scipy ≥1.11, numpy ≥1.26 |
 | PDF/시각화 | matplotlib ≥3.8, reportlab ≥4, openpyxl ≥3.1 |
 | LLM (옵션) | instructor ≥1, anthropic ≥0.40 |
+| RoBERTa (옵션, `[roberta]` extra) | torch ≥2.2, transformers ≥4.40, tokenizers ≥0.19 |
 | 기타 | pyyaml ≥6, python-dotenv ≥1, paideia-shared (workspace) |
-| 시스템 | NixOS `noto-fonts-cjk-sans` (한국어 PDF 렌더링), Python 3.11 |
+| 시스템 | **NanumGothic Regular + Bold (필수, fail-fast)**, `noto-fonts-cjk-sans` 권장, Python 3.11 |
+
+설치:
+
+```bash
+# 베이스 (RoBERTa 미설치, ~150 MB)
+uv sync
+
+# RoBERTa 활성 (US6 sentiment, +~3 GB cuda 휠 포함)
+uv sync --extra roberta --package needs-map
+```
+
+NanumGothic 설치 매트릭스:
+
+| OS | 설치 |
+|---|---|
+| NixOS | `home.packages = [ pkgs.nanum ];` (또는 본 repo `flake.nix`의 devShell) |
+| Ubuntu/Debian | `sudo apt install fonts-nanum` |
+| macOS | `brew install --cask font-nanum-gothic` |
 
 LLM 환경변수가 부재하면 모든 LLM 옵션은 자동 비활성되고 룰/사전/템플릿
-폴백으로 정상 완주한다(SC-005).
+폴백으로 정상 완주한다(SC-005). RoBERTa 미설치도 동일 — `--no-roberta`
+또는 `torch` 미존재 시 키워드 사전 단독 폴백으로 정상 완주, manifest에
+폴백 사유 기록(FR-026, SC-006).
+
+### CLI 옵션 / 환경변수 / 종료 코드 (v0.1.1 delta)
+
+| 플래그 | 의미 |
+|---|---|
+| `--no-roberta` (alias `--no-sentiment`) | RoBERTa 감성 분석 비활성 |
+| `--no-llm` | LLM 호출 비활성 (v0.1.0 inherit) |
+| `--phases <names>` | 부분 실행 (`reliability,factor,cluster,freetext,report,cards`) |
+| `--k <int>` | 군집 수 강제 |
+
+| 환경변수 | 의미 | 우선순위 |
+|---|---|---|
+| `PAIDEIA_KR_FONT_PATH` | NanumGothic Regular 절대경로 | fc-match보다 선행 |
+| `PAIDEIA_KR_FONT_BOLD_PATH` | NanumGothic Bold 절대경로 | fc-match보다 선행 |
+| `PAIDEIA_ROBERTA_CACHE_DIR` | RoBERTa 가중치 캐시 디렉터리 | transformers 기본보다 선행 |
+| `PAIDEIA_RANDOM_SEED`, `ANTHROPIC_API_KEY` 등 | v0.1.0 inherit |
+
+| exit | 의미 |
+|---|---|
+| 0 | 성공 |
+| 1 | 입력 검증 실패 (매핑 YAML 등) |
+| 2 | 입력 누락 |
+| 3 | archival 실패 |
+| 4 | 산출 작성 실패 |
+| 5 | LLM 폴백 실패 (이론상 X) |
+| **6** | **NanumGothic Regular/Bold 미해상 (v0.1.1 신규, 디스크 산출 0건)** |
+| 99 | 내부 어설션 실패 |
+
+### pytest mark
+
+```bash
+# 베이스 테스트만
+uv run pytest --package needs-map -m "not roberta"
+
+# RoBERTa 마크 — kote 모델 캐시가 있을 때만 실행
+uv run pytest --package needs-map -m roberta
+```
+
+`roberta` 마크는 `searle-j/kote_for_easygoing_people` 가중치 캐시가
+존재할 때만 실행됨. CI 부재 시 자동 skip.
 
 ## 헌장 5 원칙 준수
 
@@ -103,7 +189,8 @@ LLM 환경변수가 부재하면 모든 LLM 옵션은 자동 비활성되고 룰
 
 ## 레퍼런스
 
-- spec: `specs/002-needs-map-v0-1-0/spec.md`
-- plan: `specs/002-needs-map-v0-1-0/plan.md`
-- contracts: `specs/002-needs-map-v0-1-0/contracts/{cli,keyword_dictionary.schema.yaml,needs_map_card.layout,diagnostic_mapping_extension}.md`
-- 헌장: `.specify/memory/constitution.md` v1.0.0
+- spec (v0.1.1, current): `specs/003-needs-map-v0-1-1/spec.md`
+- plan (v0.1.1): `specs/003-needs-map-v0-1-1/plan.md`
+- contracts (v0.1.1): `specs/003-needs-map-v0-1-1/contracts/{cli,mapping_yaml_v2,exports,manifest}.md`
+- spec (v0.1.0, baseline): `specs/002-needs-map-v0-1-0/spec.md`
+- 헌장: `.specify/memory/constitution.md` v1.1.0 (8축 + 5 mapping kinds)
