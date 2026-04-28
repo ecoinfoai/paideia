@@ -212,12 +212,13 @@ def generate_all_cards(
         radar_png = render_radar_png(
             student_raw_scores=student_raw,
             cohort_means_raw=cohort_means_raw,
-            student_id_short=_mask_student_id(sid),
+            student_id_short=sid,
             cohort_n=cohort_n,
         )
 
         pdf_bytes = render_card_pdf(
             student_id=sid,
+            student_name=str(name_kr) if name_kr else None,
             section=section if isinstance(section, str) else None,
             semester=semester,
             course_name_kr=course_name_kr,

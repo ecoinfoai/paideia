@@ -111,14 +111,14 @@ def render_radar_png(
     ax.set_yticklabels([str(t) for t in _LIKERT_TICKS], fontsize=6)
     ax.set_ylim(0.0, 7.0)
 
-    # Cohort polygon first (dashed grey) so student line sits on top.
+    # Cohort polygon first (solid blue) so student line sits on top.
     cohort_label = f"전체 평균 n={cohort_n}"
     ax.plot(
         angles_closed,
         cohort_closed,
-        linestyle="--",
-        linewidth=1.0,
-        color="grey",
+        linestyle="-",
+        linewidth=1.2,
+        color="#1f77b4",
         label=cohort_label,
     )
     ax.plot(
@@ -126,12 +126,19 @@ def render_radar_png(
         student_closed,
         linestyle="-",
         linewidth=1.5,
-        color="black",
+        color="#d62728",
         label=student_id_short,
     )
-    ax.fill(angles_closed, student_closed, alpha=0.1, color="black")
+    ax.fill(angles_closed, student_closed, alpha=0.1, color="#d62728")
 
-    ax.legend(loc="lower right", fontsize=6, frameon=False)
+    # Place legend OUTSIDE the polar chart (right side) so it never overlaps
+    # the polygon/labels — anchor at the right edge of the axes.
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.18, 1.05),
+        fontsize=6,
+        frameon=False,
+    )
 
     buf = io.BytesIO()
     fig.savefig(

@@ -39,9 +39,22 @@ def _register_korean_font() -> str:
     return regular_name
 
 
+def _format_semester_kr(semester: str) -> str:
+    """Format ``YYYY-N`` semester code as ``YYYY학년도 N학기``.
+
+    Falls back to the raw input if the pattern does not match.
+    """
+    if "-" in semester:
+        year, term = semester.split("-", 1)
+        if year.isdigit() and term.isdigit():
+            return f"{year}학년도 {term}학기"
+    return semester
+
+
 def render_card_pdf(
     *,
     student_id: str,
+    student_name: str | None = None,
     section: str | None,
     semester: str,
     course_name_kr: str,
@@ -83,9 +96,15 @@ def render_card_pdf(
     # A. Header
     y = page_h - 18 * mm
     c.setFont(font, 14)
-    c.drawString(left, y, f"학번 {student_id}    분반 {section or '명단외'}")
+    name_display = (student_name or "").strip() or "(미상)"
+    c.drawString(left, y, f"학번 {student_id}    이름 {name_display}")
     c.setFont(font, 10)
-    c.drawString(left, y - 6 * mm, f"{course_name_kr} ({semester})    발행: {created_at_utc[:10]}")
+    semester_kr = _format_semester_kr(semester)
+    c.drawString(
+        left, y - 6 * mm,
+        f"{course_name_kr} ({semester_kr})    발행: {created_at_utc[:10]}",
+    )
+    _ = section  # 분반은 운영자 검토용 — silver/student_master에서 별도 조회
 
     # B. Radar
     radar_top = y - 12 * mm
@@ -131,13 +150,7 @@ def render_card_pdf(
     c.setFont(font, 10)
     for i, line in enumerate(coaching_text.split("\n")[:4]):
         c.drawString(left, coach_top - 5 * mm * i, line)
-    c.setFont(font, 8)
-    c.setFillGray(0.4)
-    c.drawString(
-        left, coach_top - 30 * mm,
-        f"({'템플릿 기반' if coaching_source == 'template' else 'LLM 다듬음'})",
-    )
-    c.setFillGray(0.0)
+    _ = coaching_source  # 운영 메타데이터 — manifest.json에 별도 기록
 
     c.showPage()
     c.save()
