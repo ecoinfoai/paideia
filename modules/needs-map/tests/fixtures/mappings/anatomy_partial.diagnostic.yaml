@@ -1,25 +1,33 @@
-# needs-map US1 fixture mapping — only 3 of 6 standard axes mapped.
-# Used by test_phase_ab_partial_axes.py (T042) to verify that
-# standard_axes_skipped lists exactly {self_efficacy, interest, prior_knowledge}
-# in the manifest and that those score columns come out None for all rows.
+# needs-map US1 fixture mapping — v0.1.1 V6 strict (8 axes required) but
+# 3 axes have NO likert columns (covered by single_select instead) so the
+# pipeline reports them as "scoring-skipped" via no_items / score=None.
+# v0.1.1 V6 strict makes axes.required = full 8-key set mandatory; the old
+# v0.1.0 "drop axes from required to skip them" pattern is no longer valid.
+# Used by test_phase_ab_partial_axes.py (T042 v0.1.1 migration).
 
 metadata:
   semester: "2026-1"
   course_slug: anatomy
   course_name_kr: "인체구조와기능"
-  mapping_version: 1
+  mapping_version: 2
 
 axes:
   required:
+    - digital_efficacy
     - motivation
-    - anxiety
-  optional:
-    - life_context
+    - time_availability
+    - material_preference
+    - study_strategy
+    - study_environment
+    - social_learning
+    - feedback_seeking
+  optional: []
 
 columns:
   - source: "학번"
     kind: identity
 
+  # 5 axes with likert items (scored normally).
   - source: Q01_motivation_1
     axis: motivation
     kind: likert
@@ -33,25 +41,47 @@ columns:
     kind: likert
     aggregate: mean
 
-  - source: Q05_anxiety_1
-    axis: anxiety
+  - source: Q05_study_strategy_1
+    axis: study_strategy
     kind: likert
     aggregate: mean
-  - source: Q05_anxiety_2
-    axis: anxiety
+  - source: Q05_study_strategy_2
+    axis: study_strategy
     kind: likert
     aggregate: mean
-  - source: Q05_anxiety_3
-    axis: anxiety
-    kind: likert
-    aggregate: mean
-  - source: Q05_anxiety_4
-    axis: anxiety
+  - source: Q05_study_strategy_3
+    axis: study_strategy
     kind: likert
     aggregate: mean
 
-  - source: Q04_life_context
-    axis: life_context
-    kind: multiselect
-    aggregate: sum
-    partition_axis: true
+  - source: Q07_study_environment_1
+    axis: study_environment
+    kind: likert
+    aggregate: mean
+  - source: Q07_study_environment_2
+    axis: study_environment
+    kind: likert
+    aggregate: mean
+
+  - source: Q_time_availability
+    axis: time_availability
+    kind: likert
+    aggregate: mean
+
+  - source: Q_material_preference
+    axis: material_preference
+    kind: likert
+    aggregate: mean
+
+  # 3 axes with single_select only — required by V6 but have ZERO likert items
+  # so cronbach reports n_items=0 / label='no_items' and factor_scores leaves
+  # the score column at None (FR-008 missing-policy).
+  - source: Q_digital_efficacy
+    axis: digital_efficacy
+    kind: single_select
+  - source: Q_social_learning
+    axis: social_learning
+    kind: single_select
+  - source: Q_feedback_seeking
+    axis: feedback_seeking
+    kind: single_select

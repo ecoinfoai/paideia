@@ -11,25 +11,54 @@ import yaml
 _FIXTURE_ROOT = Path("modules/needs-map/tests/fixtures/silver_minimal")
 
 
+_REQUIRED_AXES_8 = (
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
+)
+
+
 def _single_item_mapping() -> dict:
-    """Fixture mapping where motivation has only 1 likert item (single_item label)."""
+    """v0.1.1 v2 mapping (V6 strict 8-axis required) where motivation carries
+    only 1 likert item — every other axis has a single likert column too,
+    so the test scopes its assertion to the motivation single_item branch.
+    """
+    columns: list[dict] = [{"source": "학번", "kind": "identity"}]
+    # Source columns chosen to match silver_minimal so substantive scores
+    # land for every responder.
+    source_for: dict[str, str] = {
+        "digital_efficacy": "Q_digital_efficacy",
+        "motivation": "Q01_motivation_1",
+        "time_availability": "Q_time_availability",
+        "material_preference": "Q_material_preference",
+        "study_strategy": "Q05_study_strategy_1",
+        "study_environment": "Q07_study_environment_1",
+        "social_learning": "Q_social_learning",
+        "feedback_seeking": "Q_feedback_seeking",
+    }
+    for axis in _REQUIRED_AXES_8:
+        columns.append(
+            {
+                "source": source_for[axis],
+                "kind": "likert",
+                "axis": axis,
+                "aggregate": "mean",
+            }
+        )
     return {
         "metadata": {
             "semester": "2026-1",
             "course_slug": "anatomy",
             "course_name_kr": "인체구조와기능",
-            "mapping_version": 1,
+            "mapping_version": 2,
         },
-        "axes": {"required": ["motivation"], "optional": []},
-        "columns": [
-            {"source": "학번", "kind": "identity"},
-            {
-                "source": "Q01_motivation_1",
-                "kind": "likert",
-                "axis": "motivation",
-                "aggregate": "mean",
-            },
-        ],
+        "axes": {"required": list(_REQUIRED_AXES_8), "optional": []},
+        "columns": columns,
     }
 
 

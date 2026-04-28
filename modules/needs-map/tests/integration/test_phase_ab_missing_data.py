@@ -25,8 +25,13 @@ def _stage(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_drop_policy_marks_missing_for_anxiety_all_missing_student(tmp_path: Path) -> None:
-    """Student 2026194003 has no anxiety likert items → anxiety=None, anxiety_missing=True."""
+def test_drop_policy_marks_missing_for_study_strategy_all_missing_student(
+    tmp_path: Path,
+) -> None:
+    """Student 2026194003 lacks study_strategy likert items in silver_minimal
+    after the v0.1.1 8-axis migration → study_strategy=None /
+    study_strategy_missing=True under the default drop policy.
+    """
     from needs_map.pipeline import NeedsMapArgs, run_needs_map
 
     args = NeedsMapArgs(
@@ -45,9 +50,9 @@ def test_drop_policy_marks_missing_for_anxiety_all_missing_student(tmp_path: Pat
         tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy" / "factor_scores.parquet"
     )
     student = fs[fs["student_id"] == "2026194003"].iloc[0]
-    assert pd.isna(student["anxiety"])
-    assert pd.isna(student["anxiety_z"])
-    assert bool(student["anxiety_missing"]) is True
+    assert pd.isna(student["study_strategy"])
+    assert pd.isna(student["study_strategy_z"])
+    assert bool(student["study_strategy_missing"]) is True
 
 
 def test_drop_policy_marks_missing_for_motivation_partial_missing_student(tmp_path: Path) -> None:

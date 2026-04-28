@@ -6,9 +6,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
+_AXES_3 = ("motivation", "study_strategy", "feedback_seeking")
+
 
 def _make_scores(n: int = 30, n_axes: int = 3, seed: int = 7) -> pd.DataFrame:
-    """3-axis substantive scores for n students; simple Gaussian blobs."""
+    """3-axis substantive scores for n students; simple Gaussian blobs.
+
+    Axis names use the v0.1.1 8-axis vocabulary subset
+    (motivation / study_strategy / feedback_seeking) so the kmeans
+    helper's ``_present_axis_columns`` recognises them.
+    """
     rng = np.random.default_rng(seed)
     centers = rng.uniform(-2, 2, size=(3, n_axes))
     rows: list[dict] = []
@@ -16,7 +23,7 @@ def _make_scores(n: int = 30, n_axes: int = 3, seed: int = 7) -> pd.DataFrame:
         center = centers[i % 3]
         values = center + rng.normal(0, 0.5, size=n_axes)
         row = {"student_id": f"20261940{i:02d}"}
-        for j, axis in enumerate(["motivation", "anxiety", "self_efficacy"]):
+        for j, axis in enumerate(_AXES_3):
             row[axis] = float(values[j])
         rows.append(row)
     return pd.DataFrame(rows)
@@ -53,12 +60,10 @@ def test_cluster_students_excludes_all_nan_rows() -> None:
             df,
             pd.DataFrame(
                 [
-                    {
-                        "student_id": "9999999999",
-                        "motivation": float("nan"),
-                        "anxiety": float("nan"),
-                        "self_efficacy": float("nan"),
-                    }
+                    dict(
+                        {"student_id": "9999999999"},
+                        **{axis: float("nan") for axis in _AXES_3},
+                    )
                 ]
             ),
         ],

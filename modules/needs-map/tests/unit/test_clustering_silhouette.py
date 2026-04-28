@@ -6,8 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+_AXES_3 = ("motivation", "study_strategy", "feedback_seeking")
+
 
 def _make_blobs(n_per_cluster: int = 12, n_clusters: int = 3, n_axes: int = 3, seed: int = 7) -> pd.DataFrame:
+    """3-axis blobs using v0.1.1 vocabulary (motivation/study_strategy/feedback_seeking)."""
     rng = np.random.default_rng(seed)
     centers = rng.uniform(-3, 3, size=(n_clusters, n_axes))
     rows: list[dict] = []
@@ -17,7 +20,7 @@ def _make_blobs(n_per_cluster: int = 12, n_clusters: int = 3, n_axes: int = 3, s
         for _ in range(n_per_cluster):
             values = center + rng.normal(0, 0.3, size=n_axes)
             row = {"student_id": f"20261940{sid:02d}"}
-            for j, axis in enumerate(["motivation", "anxiety", "self_efficacy"]):
+            for j, axis in enumerate(_AXES_3):
                 row[axis] = float(values[j])
             rows.append(row)
             sid += 1

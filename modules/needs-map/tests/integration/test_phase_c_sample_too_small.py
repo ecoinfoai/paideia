@@ -39,22 +39,36 @@ def _tiny_silver(tmp_path: Path) -> Path:
     ]
     pq.write_table(pa.Table.from_pandas(pd.DataFrame(sm_rows)), silver_dir / "student_master.parquet")
 
+    # v0.1.1 V6 strict requires axes.required = full 8-key set. Each
+    # responder contributes one likert response per axis so factor_scores
+    # has substantive cluster input for the sample-too-small branch.
+    axes_8 = (
+        "digital_efficacy",
+        "motivation",
+        "time_availability",
+        "material_preference",
+        "study_strategy",
+        "study_environment",
+        "social_learning",
+        "feedback_seeking",
+    )
+    source_for = {axis: f"Q_{axis}_1" for axis in axes_8}
     dr_rows: list[dict] = []
     for i in range(5):
         sid = f"20261940{i:02d}"
-        for col in ("Q01_motivation_1", "Q01_motivation_2", "Q01_motivation_3"):
+        for axis in axes_8:
             dr_rows.append(
                 {
                     "student_id": sid,
                     "semester": "2026-1",
                     "course_slug": "anatomy",
-                    "axis": "motivation",
+                    "axis": axis,
                     "axis_kind": "likert",
                     "value_int": (i + 3) % 7 + 1,
                     "value_bool": None,
                     "value_text": None,
                     "option_key": None,
-                    "source_column": col,
+                    "source_column": source_for[axis],
                 }
             )
     pq.write_table(pa.Table.from_pandas(pd.DataFrame(dr_rows)), silver_dir / "diagnostic_response.parquet")
@@ -64,14 +78,20 @@ def _tiny_silver(tmp_path: Path) -> Path:
             "semester": "2026-1",
             "course_slug": "anatomy",
             "course_name_kr": "인체구조와기능",
-            "mapping_version": 1,
+            "mapping_version": 2,
         },
-        "axes": {"required": ["motivation"], "optional": []},
+        "axes": {"required": list(axes_8), "optional": []},
         "columns": [
             {"source": "학번", "kind": "identity"},
-            {"source": "Q01_motivation_1", "kind": "likert", "axis": "motivation", "aggregate": "mean"},
-            {"source": "Q01_motivation_2", "kind": "likert", "axis": "motivation", "aggregate": "mean"},
-            {"source": "Q01_motivation_3", "kind": "likert", "axis": "motivation", "aggregate": "mean"},
+            *[
+                {
+                    "source": source_for[axis],
+                    "kind": "likert",
+                    "axis": axis,
+                    "aggregate": "mean",
+                }
+                for axis in axes_8
+            ],
         ],
     }
     mapping_dir = tmp_path / "bronze" / "매핑"

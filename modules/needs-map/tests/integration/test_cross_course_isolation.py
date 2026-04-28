@@ -54,34 +54,49 @@ def _stage_microbiology(tmp_path: Path) -> None:
             df["course_slug"] = "microbiology"
         pq.write_table(pa.Table.from_pandas(df), dst_silver / name)
 
+    # v0.1.1 V6 strict mapping: required = full 8-axis vocabulary. Source
+    # columns picked to match silver_minimal so substantive scores land for
+    # every responder under both course slugs (the test only checks output
+    # directory isolation, not score values).
+    axes_8 = (
+        "digital_efficacy",
+        "motivation",
+        "time_availability",
+        "material_preference",
+        "study_strategy",
+        "study_environment",
+        "social_learning",
+        "feedback_seeking",
+    )
+    source_for = {
+        "digital_efficacy": "Q_digital_efficacy",
+        "motivation": "Q01_motivation_1",
+        "time_availability": "Q_time_availability",
+        "material_preference": "Q_material_preference",
+        "study_strategy": "Q05_study_strategy_1",
+        "study_environment": "Q07_study_environment_1",
+        "social_learning": "Q_social_learning",
+        "feedback_seeking": "Q_feedback_seeking",
+    }
     mapping = {
         "metadata": {
             "semester": "2026-1",
             "course_slug": "microbiology",
             "course_name_kr": "미생물학",
-            "mapping_version": 1,
+            "mapping_version": 2,
         },
-        "axes": {"required": ["motivation"], "optional": []},
+        "axes": {"required": list(axes_8), "optional": []},
         "columns": [
             {"source": "학번", "kind": "identity"},
-            {
-                "source": "Q01_motivation_1",
-                "kind": "likert",
-                "axis": "motivation",
-                "aggregate": "mean",
-            },
-            {
-                "source": "Q01_motivation_2",
-                "kind": "likert",
-                "axis": "motivation",
-                "aggregate": "mean",
-            },
-            {
-                "source": "Q01_motivation_3",
-                "kind": "likert",
-                "axis": "motivation",
-                "aggregate": "mean",
-            },
+            *[
+                {
+                    "source": source_for[axis],
+                    "kind": "likert",
+                    "axis": axis,
+                    "aggregate": "mean",
+                }
+                for axis in axes_8
+            ],
         ],
     }
     mapping_dir = tmp_path / "bronze" / "매핑"

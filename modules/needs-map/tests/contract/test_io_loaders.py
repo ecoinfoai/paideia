@@ -53,24 +53,39 @@ def _good_diagnostic_response_row() -> dict:
     }
 
 
+_REQUIRED_AXES_8 = (
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
+)
+
+
 def _good_mapping_yaml() -> dict:
+    """v0.1.1 v2 mapping (V6 strict: axes.required = full 8-key set)."""
+    columns: list[dict] = [{"source": "학번", "kind": "identity"}]
+    for axis in _REQUIRED_AXES_8:
+        columns.append(
+            {
+                "source": f"Q_{axis}_a",
+                "kind": "likert",
+                "axis": axis,
+                "aggregate": "mean",
+            }
+        )
     return {
         "metadata": {
             "semester": "2026-1",
             "course_slug": "anatomy",
             "course_name_kr": "인체구조와기능",
-            "mapping_version": 1,
+            "mapping_version": 2,
         },
-        "columns": [
-            {"source": "학번", "kind": "identity"},
-            {
-                "source": "Q01_motivation_a",
-                "kind": "likert",
-                "axis": "motivation",
-                "aggregate": "mean",
-            },
-        ],
-        "axes": {"required": ["motivation"], "optional": []},
+        "columns": columns,
+        "axes": {"required": list(_REQUIRED_AXES_8), "optional": []},
     }
 
 
@@ -127,7 +142,7 @@ def test_mapping_loader_happy(tmp_path: Path) -> None:
     p.write_text(yaml.safe_dump(_good_mapping_yaml()), encoding="utf-8")
     cfg = load_mapping(p)
     assert cfg.metadata.course_slug == "anatomy"
-    assert cfg.axes.required == ["motivation"]
+    assert set(cfg.axes.required) == set(_REQUIRED_AXES_8)
 
 
 def test_mapping_loader_missing_file_raises(tmp_path: Path) -> None:
@@ -143,9 +158,11 @@ def test_mapping_loader_top_level_must_be_mapping(tmp_path: Path) -> None:
 
 
 def test_mapping_loader_v6_violation_surfaced(tmp_path: Path) -> None:
-    """Non-standard axis key must raise ValidationError mentioning V6."""
+    """Non-standard axis key on axes.required must raise ValidationError mentioning V6."""
     bad = _good_mapping_yaml()
-    bad["axes"]["required"] = ["self_regulation"]
+    # Replace one canonical axis with a non-standard key. V6 strict rejects any
+    # required-axis set that does not equal the 8-key paideia v1.1.0 vocabulary.
+    bad["axes"]["required"][0] = "self_regulation"
     bad["columns"][1]["axis"] = "self_regulation"
     p = tmp_path / "bad.yaml"
     p.write_text(yaml.safe_dump(bad), encoding="utf-8")
@@ -156,17 +173,22 @@ def test_mapping_loader_v6_violation_surfaced(tmp_path: Path) -> None:
 
 
 def test_mapping_loader_v5_violation_surfaced(tmp_path: Path) -> None:
-    """partition_axis=True on freetext must raise ValidationError mentioning V5."""
+    """partition_axis=True on freetext must raise ValidationError mentioning V5.
+
+    The freetext column targets ``anxiety_freetext`` (a FreetextAreaKey, valid
+    on axes.optional under v0.1.1 V6). V5 still rejects partition_axis=True
+    on any freetext column.
+    """
     bad = _good_mapping_yaml()
     bad["columns"].append(
         {
             "source": "Q62_anxiety_freetext",
             "kind": "freetext",
-            "axis": "anxiety",
+            "axis": "anxiety_freetext",
             "partition_axis": True,
         }
     )
-    bad["axes"]["required"] = ["motivation", "anxiety"]
+    bad["axes"]["optional"] = ["anxiety_freetext"]
     p = tmp_path / "bad.yaml"
     p.write_text(yaml.safe_dump(bad), encoding="utf-8")
     with pytest.raises(ValidationError) as exc:

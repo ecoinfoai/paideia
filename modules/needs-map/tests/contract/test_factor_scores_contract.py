@@ -8,12 +8,14 @@ import pandas as pd
 from paideia_shared.schemas import FactorScoreRow
 
 _AXES = (
+    "digital_efficacy",
     "motivation",
-    "anxiety",
-    "self_efficacy",
-    "interest",
-    "prior_knowledge",
-    "life_context",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 )
 
 

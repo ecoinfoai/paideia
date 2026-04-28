@@ -28,6 +28,12 @@ def _stage(tmp_path: Path) -> Path:
 
 
 def test_partial_mapping_skips_three_axes(tmp_path: Path) -> None:
+    """v0.1.1 V6 strict: axes.required = all 8 axes always, but 3 of them
+    can have ZERO likert items (single_select-only). Those axes are reported
+    as scoring-skipped (no_items label + factor None) without dropping them
+    from manifest.standard_axes_used (V6 strict supersedes the v0.1.0 drop
+    pattern).
+    """
     from needs_map.pipeline import NeedsMapArgs, run_needs_map
 
     args = NeedsMapArgs(
@@ -43,17 +49,34 @@ def test_partial_mapping_skips_three_axes(tmp_path: Path) -> None:
     )
     manifest = run_needs_map(args)
 
-    assert sorted(manifest.standard_axes_used) == ["anxiety", "life_context", "motivation"]
-    assert sorted(manifest.standard_axes_skipped) == [
-        "interest",
-        "prior_knowledge",
-        "self_efficacy",
-    ]
+    # V6 strict — axes.required is always the full 8, so standard_axes_used
+    # carries all 8 and standard_axes_skipped is empty.
+    assert sorted(manifest.standard_axes_used) == sorted(
+        [
+            "digital_efficacy",
+            "motivation",
+            "time_availability",
+            "material_preference",
+            "study_strategy",
+            "study_environment",
+            "social_learning",
+            "feedback_seeking",
+        ]
+    )
+    assert manifest.standard_axes_skipped == []
 
+    sr = pd.read_parquet(
+        tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy" / "scale_reliability.parquet"
+    )
     fs = pd.read_parquet(
         tmp_path / "out" / "silver" / "needs-map" / "2026-1-anatomy" / "factor_scores.parquet"
     )
-    for axis in ("self_efficacy", "interest", "prior_knowledge"):
+    # The 3 axes mapped via single_select-only carry n_items=0 + label='no_items'
+    # and their factor score columns are None for every responder.
+    for axis in ("digital_efficacy", "social_learning", "feedback_seeking"):
+        sr_row = sr[sr["axis_key"] == axis].iloc[0]
+        assert sr_row["n_items"] == 0
+        assert sr_row["label"] == "no_items"
         assert fs[axis].isna().all()
         assert fs[f"{axis}_z"].isna().all()
         assert fs[f"{axis}_missing"].all()

@@ -57,18 +57,27 @@ def test_phase_ab_happy_path(staged_input: Path, tmp_path: Path) -> None:
     sr = pd.read_parquet(silver / "scale_reliability.parquet")
     fs = pd.read_parquet(silver / "factor_scores.parquet")
 
-    assert len(sr) == 6  # all 6 standard axes appear (full mapping)
+    assert len(sr) == 8  # all 8 standard axes appear (full mapping, V6 strict)
     # 9 responders → 9 rows in factor_scores
     assert len(fs) == 9
 
     assert sorted(manifest.standard_axes_used) == sorted(
-        ["motivation", "anxiety", "self_efficacy", "interest", "prior_knowledge", "life_context"]
+        [
+            "digital_efficacy",
+            "motivation",
+            "time_availability",
+            "material_preference",
+            "study_strategy",
+            "study_environment",
+            "social_learning",
+            "feedback_seeking",
+        ]
     )
     assert manifest.standard_axes_skipped == []
     assert manifest.phases_executed == ["A", "B"]
 
     rows_per_phase = {entry.phase: entry.rows_written for entry in manifest.rows_per_phase}
-    assert rows_per_phase["A"] == 6
+    assert rows_per_phase["A"] == 8
     assert rows_per_phase["B"] == 9
 
     # manifest matches what was written
