@@ -28,6 +28,48 @@ from ..ingest import DataIntegrityError, IngestValidationError, run_ingest
 
 _OUTPUT_KEY_PATTERN = re.compile(r"^\d{4}-[12SW]-[a-z][a-z0-9-]{1,39}$")
 
+_MAX_GLOB_PATTERN_LEN = 1024
+
+
+def _validate_glob_pattern(label: str, value: str | None) -> None:
+    """Reject CLI glob-pattern flags that could escape ``bronze_dir`` or DoS.
+
+    Closure of adversary AV-A1 (``..`` segment escape), AV-A3 (NUL/control
+    bytes), AV-A6 (absolute path), AV-A8 (oversized). Called from
+    ``_validate_paths`` for ``--exam-result-pattern`` / ``--exam-absent-pattern``.
+
+    Args:
+        label: Human-readable flag name (e.g. ``"--exam-result-pattern"``)
+            included in every error message so operators know which input
+            to fix.
+        value: The flag value or ``None``.
+
+    Raises:
+        ValueError: For any structural rejection. Caller maps to exit 2.
+    """
+    if value is None:
+        return
+    if value == "":
+        raise ValueError(f"{label} is empty (provide a glob or omit the flag)")
+    if "\x00" in value:
+        raise ValueError(f"{label} contains NUL byte")
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError(f"{label} contains control bytes")
+    if len(value) > _MAX_GLOB_PATTERN_LEN:
+        raise ValueError(
+            f"{label} exceeds max length ({len(value)} > {_MAX_GLOB_PATTERN_LEN})"
+        )
+    if value.startswith("/") or value.startswith("\\"):
+        raise ValueError(
+            f"{label} must not be an absolute path "
+            f"(use a relative glob anchored under bronze_dir/시험성적)"
+        )
+    parts = re.split(r"[\\/]", value)
+    if any(part == ".." for part in parts):
+        raise ValueError(
+            f"{label} must not contain '..' parent-segment (escape blocked)"
+        )
+
 
 def _validate_paths(
     *,
@@ -36,6 +78,8 @@ def _validate_paths(
     exam_yaml: Path | None,
     output_dir: Path | None,
     output_key: str | None,
+    exam_result_pattern: str | None = None,
+    exam_absent_pattern: str | None = None,
 ) -> None:
     """Reject path traversal, symlink escape, NUL/control bytes, and ancestor coupling.
 
@@ -64,6 +108,9 @@ def _validate_paths(
                 f"output_key '{output_key}' does not match required pattern "
                 f"'{{YYYY}}-[12SW]-{{course-slug}}'"
             )
+
+    _validate_glob_pattern("--exam-result-pattern", exam_result_pattern)
+    _validate_glob_pattern("--exam-absent-pattern", exam_absent_pattern)
 
     bronze_real = bronze_dir.resolve(strict=True)
     if not bronze_real.is_dir():
@@ -155,6 +202,8 @@ def app(argv: list[str] | None = None) -> int:
                 exam_yaml=args.exam_yaml,
                 output_dir=args.output_dir,
                 output_key=args.output_key,
+                exam_result_pattern=args.exam_result_pattern,
+                exam_absent_pattern=args.exam_absent_pattern,
             )
         except FileNotFoundError as exc:
             print(f"ERROR: missing input — {exc}", file=sys.stderr)

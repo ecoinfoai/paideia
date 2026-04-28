@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -98,12 +99,16 @@ def discover_section_files(
 
     Raises:
         FileNotFoundError: When ``on_empty='raise'`` and no file matched.
-        ValueError: When ``section`` is empty or ``dir_path`` is not a directory.
+        ValueError: When ``section`` is empty, ``dir_path`` is not a directory,
+            or any candidate match resolves outside ``dir_path`` (symlink
+            escape blocked — adversary AV-A2).
     """
     if not section:
         raise ValueError("discover_section_files: section must not be empty")
     if not dir_path.is_dir():
         raise ValueError(f"discover_section_files: not a directory: {dir_path}")
+
+    base_real = dir_path.resolve(strict=True)
 
     if exclude_tokens is None:
         exclude_tokens = (
@@ -120,7 +125,28 @@ def discover_section_files(
         for match in dir_path.glob(pattern):
             if not match.is_file():
                 continue
-            if any(token in match.name for token in exclude_tokens):
+            # Symlink escape guard (adversary AV-A2): if any segment of the
+            # match (including a symlinked parent dir) resolves outside
+            # ``dir_path``, the operator's bronze tree is being used to read
+            # foreign content. Refuse loudly so silver outputs cannot be
+            # silently forged.
+            try:
+                match_real = match.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(
+                    f"discover_section_files: cannot resolve {match} ({exc})"
+                ) from exc
+            if not match_real.is_relative_to(base_real):
+                raise ValueError(
+                    f"discover_section_files: {match} resolves to {match_real}, "
+                    f"which escapes the search base {base_real} "
+                    f"(symlink escape blocked)"
+                )
+            # NFC-normalize the filename before exclude-token matching so
+            # macOS NFD-decomposed Korean (e.g. ``(문항분석)``) hits the same
+            # default tokens (adversary AV-A4).
+            normalized_name = unicodedata.normalize("NFC", match.name)
+            if any(token in normalized_name for token in exclude_tokens):
                 continue
             if match not in seen:
                 seen.append(match)
