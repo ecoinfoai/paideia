@@ -18,7 +18,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-
 _AXES = (
     "digital_efficacy",
     "motivation",
@@ -33,12 +32,12 @@ _AXES = (
 
 def _student_full() -> dict[str, float | None]:
     """Student raw 1-7 scores covering all 8 axes."""
-    return {axis: 4.5 for axis in _AXES}
+    return dict.fromkeys(_AXES, 4.5)
 
 
 def _cohort_full() -> dict[str, float | None]:
     """Cohort mean raw 1-7 score per axis."""
-    return {axis: 4.0 for axis in _AXES}
+    return dict.fromkeys(_AXES, 4.0)
 
 
 def _capture_axes_state(png_bytes: bytes) -> dict[str, Any]:
@@ -78,7 +77,6 @@ def test_radar_uses_eight_angular_positions_and_raw_yticks() -> None:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-
     from needs_map.cards.radar import render_radar_png
 
     # Render to invoke the side effect of axis configuration; then introspect

@@ -59,6 +59,49 @@ def _categories_for_student(
     return cats
 
 
+def _compute_cohort_means_raw(
+    factor_scores_df: pd.DataFrame,
+) -> dict[str, float | None]:
+    """Per-axis cohort mean on the raw 1-7 scale (FR-021).
+
+    Computes ``np.nanmean`` axis-by-axis so missing data on one axis does
+    not contaminate the others. Returns ``None`` when an axis is fully
+    NaN across the cohort (rendered as a gap on the radar's dotted ring
+    instead of a misleading zero).
+    """
+    import numpy as np
+
+    means: dict[str, float | None] = {}
+    for axis in _AXES:
+        if axis not in factor_scores_df.columns:
+            means[axis] = None
+            continue
+        col = factor_scores_df[axis]
+        if col.dropna().empty:
+            means[axis] = None
+            continue
+        means[axis] = float(np.nanmean(col.to_numpy(dtype=float)))
+    return means
+
+
+def _count_responders(factor_scores_df: pd.DataFrame) -> int:
+    """Cohort size for the radar legend.
+
+    Uses ``responded`` boolean column when present (Phase B builds this);
+    falls back to row count for safety.
+    """
+    if "responded" in factor_scores_df.columns:
+        return int(factor_scores_df["responded"].astype(bool).sum())
+    return int(len(factor_scores_df))
+
+
+def _mask_student_id(student_id: str) -> str:
+    """Mask a 10-digit student id for the radar legend (e.g. ``2026****01``)."""
+    if len(student_id) >= 6:
+        return f"{student_id[:4]}****{student_id[-2:]}"
+    return student_id
+
+
 def generate_all_cards(
     *,
     factor_scores_df: pd.DataFrame,
@@ -80,8 +123,19 @@ def generate_all_cards(
     Iterates the union of student_master.student_id and factor_scores.student_id
     sorted ascending. Off-roster respondents get a normal card; roster
     non-responders get the "진단 미응답" card (FR-021).
+
+    v0.1.1 (T042): the radar receives ``student_raw_scores`` (raw 1-7
+    likert values directly from FactorScoreRow) and a per-axis cohort
+    mean ``cohort_means_raw`` computed once via ``np.nanmean`` so each
+    card render reads from the same cohort baseline. The legacy
+    ``group_means`` argument (z-space) is kept for back-compat but no
+    longer feeds the radar.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    _ = group_means  # legacy z-space param retained for caller compatibility
+
+    cohort_means_raw = _compute_cohort_means_raw(factor_scores_df)
+    cohort_n = _count_responders(factor_scores_df)
 
     sm_lookup = student_master_df.set_index("student_id").to_dict(orient="index")
     fs_lookup = factor_scores_df.set_index("student_id").to_dict(orient="index")
@@ -113,13 +167,12 @@ def generate_all_cards(
             name_kr = ""
 
         if responded:
-            student_z = {axis: fs_row.get(f"{axis}_z") for axis in _AXES}  # type: ignore[union-attr]
-            cleaned_z: dict[str, float | None] = {}
-            for axis, val in student_z.items():
-                cleaned_z[axis] = (
+            student_raw: dict[str, float | None] = {}
+            for axis in _AXES:
+                val = fs_row.get(axis)  # type: ignore[union-attr]
+                student_raw[axis] = (
                     None if val is None or (isinstance(val, float) and pd.isna(val)) else float(val)
                 )
-            axes_present = [a for a, v in cleaned_z.items() if v is not None]
             weak_axis = _resolve_weak_axis(pd.Series(fs_row))  # type: ignore[arg-type]
             cluster_id = cluster_by_student.get(sid)
             cluster_label = (
@@ -136,8 +189,7 @@ def generate_all_cards(
                         break
             categories = _categories_for_student(free_text_rows, sid)
         else:
-            cleaned_z = dict.fromkeys(_AXES)
-            axes_present = []
+            student_raw = dict.fromkeys(_AXES)
             weak_axis = None
             cluster_label = None
             cluster_size = None
@@ -158,7 +210,10 @@ def generate_all_cards(
         )
 
         radar_png = render_radar_png(
-            cleaned_z, group_means, axes_present=axes_present
+            student_raw_scores=student_raw,
+            cohort_means_raw=cohort_means_raw,
+            student_id_short=_mask_student_id(sid),
+            cohort_n=cohort_n,
         )
 
         pdf_bytes = render_card_pdf(
