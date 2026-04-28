@@ -916,6 +916,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
+    { name = "pypdf" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -938,6 +939,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6.100" },
+    { name = "pypdf", specifier = ">=5.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
 ]
