@@ -40,6 +40,98 @@ def _engine_for(path: Path) -> str:
 
 _SECTION_TOKENS: tuple[str, ...] = ("A반", "B반", "C반", "D반")
 
+DEFAULT_RESULT_EXCLUDE_TOKENS: frozenset[str] = frozenset({"(OX)", "(문항분석)", "결시"})
+"""Default exclude tokens for the per-section main-result discovery (FR-029).
+
+A file is treated as a *main result* (eligible for analysis) when its name
+matches the section pattern AND contains none of these substrings. Operators
+can override via ``--exam-result-pattern`` for review or QA workflows.
+"""
+
+DEFAULT_ABSENT_PATTERN_TEMPLATE: str = "*{section}반*결시.xls"
+"""Default glob template for the absent-list workbook per section (FR-029)."""
+
+
+def _section_glob_patterns(section: str) -> list[str]:
+    """Return the sequence of glob patterns expanded for ``parse_exam_omr_xls``.
+
+    Covers underscore/space/no-separator variants for both ``.xls`` and
+    ``.xlsx`` (research §R-08b). Order is deterministic so subsequent
+    deduplication preserves insertion order across runs.
+    """
+    token = f"{section}반"
+    suffixes = ("xls", "xlsx")
+    separators = (f"_{token}_", f"_{token} ", f" {token} ", f"_{token}", f" {token}")
+    patterns: list[str] = []
+    for sep in separators:
+        for suffix in suffixes:
+            patterns.append(f"*{sep}*.{suffix}")
+    # Last resort fallback: section token anywhere in the filename.
+    for suffix in suffixes:
+        patterns.append(f"*{token}*.{suffix}")
+    return patterns
+
+
+def discover_section_files(
+    dir_path: Path,
+    section: str,
+    *,
+    result_pattern_override: str | None = None,
+    exclude_tokens: frozenset[str] | None = None,
+    on_empty: Literal["raise", "empty"] = "empty",
+) -> list[Path]:
+    """Discover the per-section main-result workbooks under ``dir_path``.
+
+    Args:
+        dir_path: Directory holding department OMR exports.
+        section: Single-letter section label ("A".."D").
+        result_pattern_override: When set, only this glob is matched and
+            ``exclude_tokens`` defaults to empty (operator opted in).
+        exclude_tokens: Substrings; any matching file is dropped. ``None`` →
+            ``DEFAULT_RESULT_EXCLUDE_TOKENS`` for default discovery; empty
+            frozenset for override mode (operator selected explicit pattern).
+        on_empty: ``"raise"`` raises ``FileNotFoundError`` when no match; the
+            default ``"empty"`` returns ``[]`` (caller decides).
+
+    Returns:
+        Sorted (by stable Path order) list of unique matched files.
+
+    Raises:
+        FileNotFoundError: When ``on_empty='raise'`` and no file matched.
+        ValueError: When ``section`` is empty or ``dir_path`` is not a directory.
+    """
+    if not section:
+        raise ValueError("discover_section_files: section must not be empty")
+    if not dir_path.is_dir():
+        raise ValueError(f"discover_section_files: not a directory: {dir_path}")
+
+    if exclude_tokens is None:
+        exclude_tokens = (
+            frozenset() if result_pattern_override is not None else DEFAULT_RESULT_EXCLUDE_TOKENS
+        )
+
+    if result_pattern_override is not None:
+        patterns: list[str] = [result_pattern_override]
+    else:
+        patterns = _section_glob_patterns(section)
+
+    seen: list[Path] = []
+    for pattern in patterns:
+        for match in dir_path.glob(pattern):
+            if not match.is_file():
+                continue
+            if any(token in match.name for token in exclude_tokens):
+                continue
+            if match not in seen:
+                seen.append(match)
+
+    if not seen and on_empty == "raise":
+        raise FileNotFoundError(
+            f"discover_section_files: no per-section file under {dir_path} for "
+            f"section {section!r} with patterns {patterns}."
+        )
+    return sorted(seen)
+
 
 def _detect_section(path: Path) -> SectionLabel:
     name = path.name
@@ -189,11 +281,24 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
 
 def parse_exam_omr_xls(
     dir_path: Path,
+    *,
+    exam_result_pattern: str | None = None,
+    exam_absent_pattern: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Parse all per-section OMR workbooks in a directory.
 
     Args:
         dir_path: Directory holding ``인체구조와기능_*반_결과.xls`` (or .xlsx) files.
+        exam_result_pattern: Optional override glob for the per-section main
+            result workbook (FR-029). When set, ``DEFAULT_RESULT_EXCLUDE_TOKENS``
+            no longer applies — operator is responsible for the glob being
+            specific enough. When ``None`` (default) the underscore/space/no-
+            separator variants are tried in order and ``(OX)``/``(문항분석)``/
+            ``결시`` files are excluded automatically.
+        exam_absent_pattern: Reserved for symmetry with ``exam_result_pattern``;
+            currently unused because absent rows live inside each main result
+            workbook's ``결시`` sheet (see ``_parse_one_section``). Kept here
+            so the CLI can pass it through without diverging signatures.
 
     Returns:
         Tuple of three DataFrames:
@@ -204,28 +309,32 @@ def parse_exam_omr_xls(
 
     Raises:
         TypeError: If dir_path is not a pathlib.Path.
-        FileNotFoundError: If dir_path does not exist.
+        FileNotFoundError: If dir_path does not exist or no per-section file
+            matched any glob variant.
         ValueError: For schema, sheet, or duplicate-student violations.
     """
+    _ = exam_absent_pattern  # accepted for CLI passthrough; behaviour reserved
     if not isinstance(dir_path, Path):
         raise TypeError(f"parse_exam_omr_xls: expected Path, got {type(dir_path).__name__}.")
     if not dir_path.is_dir():
         raise FileNotFoundError(f"parse_exam_omr_xls: directory missing: {dir_path}.")
 
-    section_files = sorted(
-        list(dir_path.glob("*_A반_*.xls"))
-        + list(dir_path.glob("*_A반_*.xlsx"))
-        + list(dir_path.glob("*_B반_*.xls"))
-        + list(dir_path.glob("*_B반_*.xlsx"))
-        + list(dir_path.glob("*_C반_*.xls"))
-        + list(dir_path.glob("*_C반_*.xlsx"))
-        + list(dir_path.glob("*_D반_*.xls"))
-        + list(dir_path.glob("*_D반_*.xlsx"))
-    )
+    section_files: list[Path] = []
+    for section_letter in ("A", "B", "C", "D"):
+        section_files.extend(
+            discover_section_files(
+                dir_path,
+                section=section_letter,
+                result_pattern_override=exam_result_pattern,
+                on_empty="empty",
+            )
+        )
+    section_files = sorted(set(section_files))
     if not section_files:
         raise FileNotFoundError(
-            f"parse_exam_omr_xls: no per-section files matched 인체구조와기능_*반_*.xls(x) "
-            f"under {dir_path}."
+            f"parse_exam_omr_xls: no per-section files matched under {dir_path}; "
+            f"tried underscore/space/no-separator glob variants for A/B/C/D반 "
+            f"with default exclude tokens {sorted(DEFAULT_RESULT_EXCLUDE_TOKENS)}."
         )
 
     parsed = [_parse_one_section(path) for path in section_files]
