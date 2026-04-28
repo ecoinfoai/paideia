@@ -436,14 +436,27 @@ def _write_manifest_atomic(silver_dir: Path, manifest: NeedsMapManifest) -> None
 
 
 def _factor_score_dict_to_long_row(
-    fs_dict: dict, semester: str, course_slug: str
+    fs_dict: dict,
+    semester: str,
+    course_slug: str,
+    *,
+    dictionary_lookup: dict[tuple[str, str], list[str]] | None = None,
+    sentiment_lookup: dict[tuple[str, str], object] | None = None,
 ) -> FactorScoresLongRow:
     """Bridge a Phase B FactorScoreRow dict into a v0.1.1 long-form row.
 
     The Phase B dict carries 8 axis × {raw, z, missing} fields plus
-    student_id / on_roster / responded / section. Auxiliary group, cluster,
-    and freetext fields are not yet wired (Phase 6/8 will hydrate them).
-    They are left at their schema defaults (``None`` / ``False``).
+    student_id / on_roster / responded / section. Auxiliary group + cluster
+    fields are still left at their schema defaults (None / False); they
+    require a downstream hydrate pass that v0.1.1 does not ship.
+
+    The freetext fields (categories + negativity + top_emotion for q61
+    anxiety + q62 experience) ARE hydrated when the caller threads in
+    ``dictionary_lookup`` (Phase D dict matches) and ``sentiment_lookup``
+    (Phase D sentiment results) — keys ``(student_id, freetext_source)``
+    where ``freetext_source ∈ {'q61_anxiety', 'q62_experience'}``. Both
+    lookups are optional so the helper is still usable from tests that
+    only exercise the score-side fields.
     """
     payload: dict = {
         "student_id": fs_dict["student_id"],
@@ -460,6 +473,22 @@ def _factor_score_dict_to_long_row(
         payload[f"{axis}_raw"] = raw
         payload[f"{axis}_z"] = z
         payload[f"{axis}_missing"] = bool(missing)
+
+    sid = fs_dict["student_id"]
+    for area, prefix in (("q61_anxiety", "freetext_q61"), ("q62_experience", "freetext_q62")):
+        if dictionary_lookup is not None:
+            categories = dictionary_lookup.get((sid, area))
+            if categories:
+                payload[f"{prefix}_categories"] = ";".join(categories)
+        if sentiment_lookup is not None:
+            sentiment = sentiment_lookup.get((sid, area))
+            if sentiment is not None:
+                negativity = getattr(sentiment, "negativity", None)
+                top_emotion = getattr(sentiment, "top_emotion", None)
+                if negativity is not None:
+                    payload[f"{prefix}_negativity"] = float(negativity)
+                if top_emotion is not None:
+                    payload[f"{prefix}_top_emotion"] = str(top_emotion)
     return FactorScoresLongRow(**payload)
 
 
@@ -471,6 +500,7 @@ def _emit_v011_exports(
     free_text_rows: list,  # noqa: ANN401  # FreeTextRow imported lazily
     cluster_report: ClusterReport | None,
     cohort_size: int,
+    freetext_sentiment: dict[tuple[str, str], object] | None = None,
 ) -> NewOutputsInfo:
     """Run the v0.1.1 long CSV/YAML + axis_summary CSV/YAML writers (T038).
 
@@ -478,8 +508,25 @@ def _emit_v011_exports(
     paths set; ``manual_pdf`` and ``freetext_audit_parquet`` carry the
     canonical sibling paths even though Phase 7 / Phase 8 own their
     creation.
+
+    ``freetext_sentiment`` (T067-hydrate) is the lookup produced by
+    :func:`_run_sentiment_phase` keyed by ``(student_id, freetext_source)``
+    where ``freetext_source`` is ``'q61_anxiety'`` or ``'q62_experience'``.
+    When threaded in, the long export's per-student freetext fields
+    (negativity / top_emotion) are populated; ``free_text_rows`` similarly
+    feeds the categories field. Both lookups are optional so partial
+    pipeline runs (Phase A-B only) still produce a valid long export.
     """
-    _ = cluster_report, free_text_rows  # not yet hydrated into long rows
+    _ = cluster_report  # cluster fields not yet hydrated into long rows
+
+    dictionary_lookup: dict[tuple[str, str], list[str]] = {}
+    for ft_row in free_text_rows:
+        area = _freetext_source_for_column(getattr(ft_row, "item_id", ""))
+        if area is None:
+            continue
+        cats = list(getattr(ft_row, "matched_categories", ()) or ())
+        if cats:
+            dictionary_lookup[(ft_row.student_id, area)] = cats
 
     semester_str = next(
         iter({r.get("semester") for r in fs_rows if r.get("semester")}), ""
@@ -490,7 +537,11 @@ def _emit_v011_exports(
     )
     long_rows = [
         _factor_score_dict_to_long_row(
-            r, semester_str or _placeholder_semester(), course_slug_str or "anatomy"
+            r,
+            semester_str or _placeholder_semester(),
+            course_slug_str or "anatomy",
+            dictionary_lookup=dictionary_lookup,
+            sentiment_lookup=freetext_sentiment,
         )
         for r in fs_rows
     ]
@@ -913,6 +964,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
                 free_text_rows=free_text_rows,
                 cluster_report=cluster_report,
                 cohort_size=len(fs_rows),
+                freetext_sentiment=freetext_sentiment,
             )
             # T048: render the operator manual PDF after the four exports
             # land. The renderer is purely asset-driven (manual_text.ko.yaml
