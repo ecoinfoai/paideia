@@ -4,6 +4,7 @@ Usage:
     immersio ingest --bronze-dir PATH --mapping PATH [--exam-yaml PATH]
                     [--output-key STRING] [--output-dir PATH]
                     [--no-git-commit] [--quiet | --verbose]
+                    [--exam-result-pattern GLOB] [--exam-absent-pattern GLOB]
 
 Exit codes (per contracts/cli.md):
     0 — Success
@@ -101,6 +102,26 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--output-key", type=str, default=None)
     ingest.add_argument("--output-dir", type=Path, default=None)
     ingest.add_argument("--no-git-commit", action="store_true")
+    ingest.add_argument(
+        "--exam-result-pattern",
+        type=str,
+        default=None,
+        help=(
+            "Override glob for the per-section main result workbook (FR-029). "
+            "Passed to parse_exam_omr_xls. When set, the default exclude tokens "
+            "((OX), (문항분석), 결시) no longer apply."
+        ),
+    )
+    ingest.add_argument(
+        "--exam-absent-pattern",
+        type=str,
+        default=None,
+        help=(
+            "Override glob for the per-section absent workbook (FR-029). "
+            "Reserved passthrough — currently absent rows are read from the "
+            "결시 sheet inside the main result workbook."
+        ),
+    )
     verbosity = ingest.add_mutually_exclusive_group()
     verbosity.add_argument("--quiet", action="store_true")
     verbosity.add_argument("--verbose", action="store_true")
@@ -151,6 +172,8 @@ def app(argv: list[str] | None = None) -> int:
                 output_dir=args.output_dir,
                 no_git_commit=args.no_git_commit,
                 verbose_stream=_resolve_stream(args),
+                exam_result_pattern=args.exam_result_pattern,
+                exam_absent_pattern=args.exam_absent_pattern,
             )
         except DataIntegrityError as exc:
             # contracts/cli.md exit code 4: post-normalization data integrity.

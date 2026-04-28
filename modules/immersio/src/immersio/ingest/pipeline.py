@@ -137,6 +137,8 @@ def run_ingest(
     *,
     no_git_commit: bool = False,
     verbose_stream: IO[str] | None = None,
+    exam_result_pattern: str | None = None,
+    exam_absent_pattern: str | None = None,
 ) -> IngestManifest:
     """Run the Phase 0 Bronze→Silver ingest pipeline end-to-end.
 
@@ -152,6 +154,12 @@ def run_ingest(
         no_git_commit: If True, leaves manifest.git_commit as None.
         verbose_stream: Optional text stream that receives the seven-stage
             progress messages (typically sys.stdout).
+        exam_result_pattern: Optional override glob for the per-section main
+            result OMR workbook (FR-029). Forwarded to ``parse_exam_omr_xls``.
+            When set, default exclude tokens stop applying.
+        exam_absent_pattern: Reserved passthrough for symmetry with
+            ``exam_result_pattern``. Currently unused (absent rows live in
+            the 결시 sheet of each main result workbook).
 
     Returns:
         Validated IngestManifest describing the run.
@@ -296,7 +304,11 @@ def run_ingest(
     exam_responses_df: pd.DataFrame = pd.DataFrame()
     exam_summary_df: pd.DataFrame = pd.DataFrame()
     try:
-        exam_responses_df, exam_summary_df, _items_df = parse_exam_omr_xls(exam_dir)
+        exam_responses_df, exam_summary_df, _items_df = parse_exam_omr_xls(
+            exam_dir,
+            exam_result_pattern=exam_result_pattern,
+            exam_absent_pattern=exam_absent_pattern,
+        )
         _print(
             verbose_stream,
             f"      responses={len(exam_responses_df)}, "
