@@ -22,3 +22,6 @@ select = ["E", "F", "I", "B", "UP", "N", "ANN", "S", "C4", "SIM"]
 [tool.pytest.ini_options]
 addopts = "-ra -q"
 testpaths = ["modules", "shared"]
+markers = [
+    "roberta: needs-map v0.1.1 sentiment tests requiring searle-j/kote_for_easygoing_people cache + torch + transformers (skipped automatically when the cache is absent or the optional `roberta` extra is not installed)",
+]

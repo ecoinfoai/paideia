@@ -85,6 +85,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="LLM 옵션 일체 비활성. 모든 LLM 호출 부위는 룰/사전/템플릿 폴백.",
     )
     run.add_argument(
+        "--no-roberta",
+        "--no-sentiment",
+        dest="no_roberta",
+        action="store_true",
+        help=(
+            "RoBERTa 감성 분석 비활성. 자유서술은 키워드 사전 단독 폴백으로 처리하고 "
+            "manifest.sentiment.fallback_reason=\"cli-disabled\" 기록 (FR-026)."
+        ),
+    )
+    run.add_argument(
         "--llm-provider",
         choices=("anthropic", "openai"),
         default=os.environ.get("PAIDEIA_LLM_PROVIDER", "anthropic"),
@@ -188,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             keyword_language=ns.keyword_language,
             dry_run=ns.dry_run,
             verbose=ns.verbose,
+            roberta_enabled=not ns.no_roberta,
         )
     except ValidationError as exc:
         sys.stderr.write(

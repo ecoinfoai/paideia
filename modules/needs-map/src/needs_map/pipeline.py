@@ -39,6 +39,7 @@ from paideia_shared.schemas import (
     FactorScoreRow,
     FactorScoresLongRow,
     FontResolutionInfo,
+    FreetextAuditRow,
     FreeTextRow,  # noqa: E402
     NeedsMapInput,
     NeedsMapManifest,
@@ -46,6 +47,7 @@ from paideia_shared.schemas import (
     NewOutputsInfo,
     ScaleReliabilityRow,
     SemesterCode,
+    SentimentRunInfo,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -58,8 +60,12 @@ from .factor_scores.aggregate import aggregate_axis
 from .factor_scores.missing import apply_missing_policy
 from .factor_scores.zscore import zscore
 from .fonts import resolve_korean_font_paths
+from .free_text.audit import write_freetext_audit
 from .free_text.dictionary import classify_dictionary
 from .free_text.llm_fallback import classify_with_llm_fallback
+from .free_text.redaction import redact_pii
+from .free_text.roberta_fallback import analyze_with_fallback
+from .free_text.sentiment import negative_label_subset_sha256
 from .io.keywords import compute_match_rate, load_keywords
 from .io.mapping import load_mapping
 from .io.silver import load_diagnostic_response, load_student_master
@@ -128,6 +134,7 @@ class NeedsMapArgs(BaseModel):
     keyword_language: Annotated[str, Field(pattern=r"^[a-z]{2}$")] = "ko"
     dry_run: bool = False
     verbose: bool = False
+    roberta_enabled: bool = True
 
     @property
     def output_key(self) -> str:
@@ -526,6 +533,136 @@ def _placeholder_semester() -> str:
     return "1900-1"
 
 
+def _freetext_source_for_column(source_column: str) -> str | None:
+    """Map a diag_response source_column to the v0.1.1 FreetextAreaKey domain.
+
+    The 2026-1 anatomy diagnostic uses Q61 (anxiety) + Q62 (experience).
+    Returns ``None`` for sources that should not flow into sentiment
+    (defensive — only known freetext columns are analysed).
+    """
+    if "Q61" in source_column or "anxiety" in source_column.lower():
+        return "q61_anxiety"
+    if "Q62" in source_column or "experience" in source_column.lower():
+        return "q62_experience"
+    return None
+
+
+def _run_sentiment_phase(
+    *,
+    responses: list[tuple[str, str, str]],
+    silver_dir: Path,
+    student_names: list[str],
+    roberta_enabled: bool,
+    dry_run: bool,
+) -> tuple[SentimentRunInfo, dict[tuple[str, str], object]]:
+    """Run the v0.1.1 sentiment pass: redact → analyze → audit (T060/T061).
+
+    Args:
+        responses: ``(student_id, source_column, raw_text)`` triples from
+            Phase D dictionary classification.
+        silver_dir: Silver tier directory; freetext_audit.parquet lands here.
+        student_names: Roster names to redact (in addition to 10-digit IDs).
+        roberta_enabled: ``False`` short-circuits to fallback.
+        dry_run: When True, the parquet is not written but the manifest
+            information still reflects the would-be run.
+
+    Returns:
+        ``(SentimentRunInfo, freetext_sentiment_lookup)`` — the lookup
+        keys (student_id, source_column) → SentimentResult so Phase E
+        can hydrate factor_scores_long.freetext_q61/q62_* fields.
+    """
+    if not responses:
+        return _empty_sentiment_info(roberta_enabled), {}
+
+    redacted_texts: list[str] = []
+    redacted_lookup: list[tuple[str, str, str]] = []  # (sid, source, redacted)
+    for sid, source, raw in responses:
+        redacted = redact_pii(raw, names=student_names)
+        redacted_texts.append(redacted)
+        redacted_lookup.append((sid, source, redacted))
+
+    sentiment_results, fallback_report = analyze_with_fallback(
+        redacted_texts, enabled=roberta_enabled
+    )
+
+    audit_rows: list[FreetextAuditRow] = []
+    sentiment_lookup: dict[tuple[str, str], object] = {}
+    for (sid, source, redacted), result in zip(
+        redacted_lookup, sentiment_results, strict=True
+    ):
+        freetext_source = _freetext_source_for_column(source)
+        if freetext_source is None:
+            continue
+        sentiment_lookup[(sid, freetext_source)] = result
+        if (
+            fallback_report.enabled
+            and result.tokens
+            and result.model_id is not None
+            and result.model_sha256 is not None
+            and result.tokenizer_vocab_sha256 is not None
+        ):
+            redacted_sha256 = hashlib.sha256(
+                redacted.encode("utf-8")
+            ).hexdigest()
+            for token in result.tokens:
+                audit_rows.append(
+                    FreetextAuditRow(
+                        student_id=sid,
+                        semester=_placeholder_semester(),  # caller overrides
+                        course_slug="anatomy",  # caller overrides
+                        freetext_source=freetext_source,  # type: ignore[arg-type]
+                        redacted_text_sha256=redacted_sha256,
+                        redacted_text_length=len(redacted),
+                        token_index=int(token["token_index"]),
+                        token_text=str(token["token_text"]),
+                        token_id=int(token["token_id"]),
+                        char_start=int(token["char_start"]),
+                        char_end=int(token["char_end"]),
+                        model_id=result.model_id,
+                        model_sha256=result.model_sha256,
+                        tokenizer_vocab_sha256=result.tokenizer_vocab_sha256,
+                    )
+                )
+
+    if not dry_run:
+        write_freetext_audit(audit_rows, silver_dir)
+
+    info = SentimentRunInfo(
+        enabled=fallback_report.enabled,
+        model_id=fallback_report.model_id,
+        model_sha256=(
+            sentiment_results[0].model_sha256
+            if fallback_report.enabled and sentiment_results
+            else None
+        ),
+        tokenizer_vocab_sha256=(
+            sentiment_results[0].tokenizer_vocab_sha256
+            if fallback_report.enabled and sentiment_results
+            else None
+        ),
+        negative_label_subset_sha256=(
+            negative_label_subset_sha256() if fallback_report.enabled else None
+        ),
+        n_attempted=fallback_report.n_attempted,
+        n_succeeded=fallback_report.n_succeeded,
+        n_fallback=fallback_report.n_fallback,
+        fallback_reason=fallback_report.fallback_reason,
+    )
+    return info, sentiment_lookup
+
+
+def _empty_sentiment_info(roberta_enabled: bool) -> SentimentRunInfo:
+    """SentimentRunInfo for the empty-responses case (no freetext at all)."""
+    return SentimentRunInfo(
+        enabled=False,
+        model_id=None,
+        n_attempted=0,
+        n_succeeded=0,
+        n_fallback=0,
+        fallback_reason="cli-disabled" if not roberta_enabled else "model-unavailable",
+    )
+
+
 def _build_font_resolution_info() -> FontResolutionInfo:
     """Resolve NanumGothic paths + tag the source per-face for the manifest (T026).
 
@@ -648,6 +785,8 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
     free_text_rows: list[FreeTextRow] = []
     free_text_match_rate: float | None = None
     dictionary_language_mismatch = False
+    sentiment_info: SentimentRunInfo | None = None
+    freetext_sentiment: dict[tuple[str, str], object] = {}
     if "D" in args.phases:
         keyword_dict = load_keywords(args.keyword_language)
         # Build (student_id, item_id, raw_text) triples from diagnostic_response
@@ -688,6 +827,23 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         ft_df = pd.DataFrame([row.model_dump() for row in free_text_rows])
         if not args.dry_run:
             _write_silver_atomic(silver, "free_text_categorization.parquet", ft_df)
+
+        # T060 — RoBERTa sentiment + per-token audit (US6).
+        # Redact PII before inference, run analyze_with_fallback, then
+        # write the per-token audit parquet. Fallback (cli-disabled /
+        # torch-unavailable / model-unavailable) returns missing
+        # SentimentResult instances + a fallback_reason recorded in the
+        # manifest. ``sentiment_info`` populates manifest.sentiment.
+        sentiment_info, freetext_sentiment = _run_sentiment_phase(
+            responses=responses,
+            silver_dir=silver,
+            student_names=[
+                n for n in master_df["name_kr"].dropna().tolist() if n
+            ],
+            roberta_enabled=args.roberta_enabled,
+            dry_run=args.dry_run,
+        )
+
         rows_per_phase.append(
             NeedsMapPhaseRowCount(phase="D", rows_written=len(free_text_rows))
         )
@@ -864,6 +1020,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         unrecognized_inputs=[],
         font_resolution=font_resolution,
         new_outputs=new_outputs,
+        sentiment=sentiment_info,
     )
 
     if not args.dry_run:
