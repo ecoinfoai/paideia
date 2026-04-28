@@ -55,9 +55,13 @@ def analyze_with_fallback(
     """Run sentiment analysis with categorical fallback on RoBERTa errors.
 
     Args:
-        texts: Redacted Korean strings. Empty strings count toward
-            ``n_attempted=0`` (analyzer never sees them).
+        texts: Redacted Korean strings. Empty strings are excluded from
+            ``n_attempted`` (the analyzer never sees them) — only
+            non-empty texts count as a sentiment "attempt".
         enabled: ``False`` short-circuits to ``cli-disabled`` fallback.
+            Even on the disabled branch ``n_attempted`` matches the
+            non-empty input count so ``SentimentRunInfo`` V1
+            (``n_succeeded + n_fallback ≤ n_attempted``) holds.
         model_id: Hugging Face hub identifier.
 
     Returns:
@@ -73,7 +77,7 @@ def analyze_with_fallback(
             enabled=False,
             model_id=None,
             fallback_reason="cli-disabled",
-            n_attempted=0,
+            n_attempted=n_attempted,
             n_succeeded=0,
             n_fallback=n_attempted,
         )
@@ -90,7 +94,7 @@ def analyze_with_fallback(
             enabled=False,
             model_id=None,
             fallback_reason=reason,
-            n_attempted=0,
+            n_attempted=n_attempted,
             n_succeeded=0,
             n_fallback=n_attempted,
         )

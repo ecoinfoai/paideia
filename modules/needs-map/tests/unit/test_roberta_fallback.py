@@ -49,7 +49,9 @@ def test_cli_disabled_short_circuits_without_torch_import(
     assert report.enabled is False
     assert report.model_id is None
     assert report.fallback_reason == "cli-disabled"
-    assert report.n_attempted == 0
+    # Fallback paths still set n_attempted = #non-empty texts so
+    # SentimentRunInfo V1 (n_succeeded + n_fallback ≤ n_attempted) holds.
+    assert report.n_attempted == 2
     assert report.n_succeeded == 0
     assert report.n_fallback == 2
 
@@ -103,7 +105,9 @@ def test_model_unavailable_reports_fallback_reason(
     )
     assert report.fallback_reason == "model-unavailable"
     assert report.enabled is False
-    assert report.n_attempted == 0
+    # Single non-empty text → n_attempted=1; n_fallback=1 (V1 holds).
+    assert report.n_attempted == 1
+    assert report.n_fallback == 1
 
 
 def test_torch_import_error_synthesised_via_sys_modules(
