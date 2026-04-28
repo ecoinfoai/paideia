@@ -30,7 +30,12 @@ from .factor_scores import FactorScoreRow
 from .factor_scores_long import FactorScoresLongRow
 from .free_text_categorization import FreeTextRow
 from .freetext_audit import FreetextAuditRow
+from .histogram_bin import HistogramBin
+from .immersio_phase1_manifest import ImmersioPhase1Manifest
+from .item_statistics import DistractorLabel, ItemStatistics
+from .legacy_diff_entry import LegacyDiffEntry
 from .manifest import IngestInput, IngestManifest, IngestRowCount
+from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .needs_map_manifest import (
     FontResolutionInfo,
     LLMCallStat,
@@ -42,6 +47,7 @@ from .needs_map_manifest import (
     VocabularyInfo,
 )
 from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
+from .student_exam_metrics import StudentExamMetrics
 from .student_master import StudentMaster
 
 __all__ = [
@@ -84,4 +90,13 @@ __all__ = [
     "ClusterCandidate",
     "ClusterReport",
     "FreeTextRow",
+    "ItemStatistics",
+    "DistractorLabel",
+    "StudentExamMetrics",
+    "MetadataAggregate",
+    "MetadataKind",
+    "TestKind",
+    "HistogramBin",
+    "LegacyDiffEntry",
+    "ImmersioPhase1Manifest",
 ]
