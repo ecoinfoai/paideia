@@ -8,6 +8,7 @@ them atomically with the manifest sidecar.
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -31,6 +32,7 @@ from ..io import (
     parse_exam_omr_xls,
     parse_exam_yaml,
 )
+from ..io.exam_omr import DEFAULT_RESULT_EXCLUDE_TOKENS
 from ..mapping import apply_mapping, load_mapping
 from ..normalize import sha256_file
 from .combine import combine_sources
@@ -301,6 +303,16 @@ def run_ingest(
 
     # === [4/7] Exam OMR ===
     _print(verbose_stream, "[4/7] Parsing exam OMR XLS (4 sections × 4 sheets) ...")
+    if exam_result_pattern is not None:
+        # A7 audit trail: warn the operator that the default exclude-tokens
+        # safety net no longer applies. ValueError-on-bad-glob is caught
+        # earlier in the CLI; this is the *information* path.
+        print(
+            f"WARN: --exam-result-pattern override active "
+            f"({exam_result_pattern!r}); default exclude tokens "
+            f"{sorted(DEFAULT_RESULT_EXCLUDE_TOKENS)} disabled.",
+            file=sys.stderr,
+        )
     exam_responses_df: pd.DataFrame = pd.DataFrame()
     exam_summary_df: pd.DataFrame = pd.DataFrame()
     try:
@@ -453,6 +465,11 @@ def run_ingest(
         ),
     ]
 
+    if exam_result_pattern is not None:
+        exclude_tokens_applied: list[str] = []  # operator override disables defaults
+    else:
+        exclude_tokens_applied = sorted(DEFAULT_RESULT_EXCLUDE_TOKENS)
+
     manifest = IngestManifest(
         output_key=derived_output_key,
         semester=semester,
@@ -472,6 +489,8 @@ def run_ingest(
         ),
         created_at=datetime.now(tz=UTC),
         git_commit=git_commit,
+        exam_result_pattern_used=exam_result_pattern,
+        exclude_tokens_applied=exclude_tokens_applied,
     )
 
     _print(verbose_stream, f"[7/7] Writing Silver to {silver_dir} ...")

@@ -56,6 +56,13 @@ class IngestManifest(BaseModel):
     Captures input provenance (sha256), mapping version, generation time,
     row-count summary, unrecognized-file list, and any new multiselect
     options encountered during this run, fulfilling spec FR-022 / FR-026.
+
+    v1.0.x audit trail (spec 004 T018-followup, adversary AV-A9): two
+    optional fields record which OMR result-glob and exclude-token set
+    actually drove section discovery. Both default to ``None`` / ``[]``
+    so existing manifests stay valid; populated only when the operator
+    overrode the default discovery strategy or for future-proofing the
+    re-runnability story (FR-029 재현성).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -73,6 +80,22 @@ class IngestManifest(BaseModel):
     row_counts: IngestRowCount
     created_at: datetime
     git_commit: str | None = None
+    exam_result_pattern_used: str | None = Field(
+        default=None,
+        description=(
+            "Operator-supplied --exam-result-pattern glob, or None when the "
+            "default underscore/space/no-separator variants drove discovery. "
+            "Recorded for FR-029 audit trail (adversary AV-A9)."
+        ),
+    )
+    exclude_tokens_applied: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Sorted list of substrings used to filter the per-section glob "
+            "matches (e.g. ['(OX)', '(문항분석)', '결시']). Empty when an "
+            "explicit --exam-result-pattern override disables the defaults."
+        ),
+    )
 
     @model_validator(mode="after")
     def v1_output_key_consistency(self) -> Self:
