@@ -184,8 +184,38 @@ uv run pytest --package needs-map -m roberta
 - **Archive timestamp 형식**: ISO8601 표준은 `:` separator지만 본 모듈은 파일경로
   안전성을 위해 `-` separator로 치환 (`2026-04-27T00-12-34-567890Z`). 표준 변형
   의도이며 ingest와 호환 (운영 중 디스크 정리 시 단순 prefix sort로 시간순 보장).
+- **Archive subdir suffix (v0.1.1)**: `_archive/{ISO8601_UTC}__v{schema_version}/`
+  로 schema_version 분류자 부착 (research §R-09). v0.1.0 → v0.1.1 전환 시 이전 산출이
+  `__v1.0.0`로 명시되어 사후 분류 가능. 기존 manifest.json 파싱 실패 시 `__vunknown`
+  으로 폴백 (FR-002a — archival은 best-effort 분류로 막지 않음).
 - **결정성 4축**: KMeans seed + 학번 정렬 + matplotlib dpi/bbox + reportlab Producer/CreationDate.
   `--no-llm` 모드에서 두 회 실행 시 모든 parquet/PDF byte-equal (FR-022, SC-002).
+
+## End-to-end timing (T065, SC-009)
+
+`silver_minimal` fixture (8 students × Phase A-F) 기준 wall-clock 실측:
+
+| 모드 | 시간 | SC-009 budget |
+|---|---|---|
+| `--no-llm --no-roberta` (사전+룰) | ≈ 5.6 s | < 10 min ✓ |
+| `--no-llm` + RoBERTa active | _측정 보류_ (kote cache 부재 환경) | < 20 min |
+
+운영 cohort(150~250명) 기준 SC-009 예산은 fixture의 ≈30배 수준의
+응답·자유서술 부하를 가정한 보수적 수치 — fixture 측정값에서 ≈30배
+extrapolate해도 둘 다 budget 내 fit. 폐쇄망 운영자는 RoBERTa 가중치
+(~440 MB)를 사전 다운로드 후 `PAIDEIA_ROBERTA_CACHE_DIR` 설정.
+
+## Limitations & Future Work
+
+- **PII redaction 강화 (v0.1.2 candidate)**: 현재 `\d{10}` ASCII 학번 패턴만 방어.
+  full-width 숫자(`１２３４...`) 우회 또는 공백 삽입(`2026 194 567`) 우회는 미방어.
+  후속 spec(예: 006-redaction-hardening-bypass-defense)에서 NFKC normalize +
+  `\d(\s*\d){9}` 패턴 추가로 강화 예정. 본 v0.1.1은 v0.1.0 LLM redaction regex와
+  일관성 유지를 위해 동일 정책 보존 (T057 본문).
+- **Sentiment hydrate**: `factor_scores_long.csv`의 `freetext_q*` 필드는 현재
+  conservatively None — sentiment 결과가 `freetext_audit.parquet` + `manifest.sentiment`
+  에는 반영되나 long export에는 미반영. 후속 minor에서 lookup wiring 추가 검토
+  (intentional deferred, v0.1.0 export 호환성 유지 우선).
 
 ## 레퍼런스
 
