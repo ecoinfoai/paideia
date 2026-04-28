@@ -758,6 +758,28 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
                 cluster_report=cluster_report,
                 cohort_size=len(fs_rows),
             )
+            # T048: render the operator manual PDF after the four exports
+            # land. The renderer is purely asset-driven (manual_text.ko.yaml
+            # + 3 figure PNGs) so it does not depend on the run inputs;
+            # cohort_n is informational only.
+            from .report.manual import render_manual_pdf
+
+            manual_path = gold / "needs-map_manual.pdf"
+            render_manual_pdf(
+                output_path=manual_path,
+                semester=args.semester,
+                course_name_kr=mapping.metadata.course_name_kr or args.course_slug,
+                cohort_n=len(fs_rows),
+                created_at_utc=args.created_at_utc,
+            )
+            new_outputs = NewOutputsInfo(
+                factor_scores_long_csv=new_outputs.factor_scores_long_csv,
+                factor_scores_long_yaml=new_outputs.factor_scores_long_yaml,
+                axis_summary_csv=new_outputs.axis_summary_csv,
+                axis_summary_yaml=new_outputs.axis_summary_yaml,
+                manual_pdf=str(manual_path),
+                freetext_audit_parquet=new_outputs.freetext_audit_parquet,
+            )
         rows_per_phase.append(NeedsMapPhaseRowCount(phase="E", rows_written=1))
         phases_executed.append("E")
 

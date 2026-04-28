@@ -1,0 +1,155 @@
+metadata:
+  language: ko
+  schema_version: '1.0.0'
+  last_updated: '2026-04-28'
+
+sections:
+  - id: introduction
+    title: 모듈 소개
+    body_paragraphs:
+      - "needs-map은 paideia 우산 안에서 학기 첫 1-2주 사전진단 응답을 학생 다면 진단 프로파일로 환산하는 모듈입니다."
+      - "ingest 모듈이 정리한 진단 응답 Silver를 입력으로 받아 척도 신뢰도(α), 8개 정량 축 점수와 z-score, 군집 배정, 자유서술 분류 + 감성 강도, 집단 분포 보고서, 1인 1장 카드 PDF, 그리고 본 매뉴얼 PDF를 결정론적으로 산출합니다."
+      - "산출물 6 종은 학기 첫 면담, 시험 회고, immersio Phase 3·4 결합 분석, 차년도 출제 회고에 즉시 투입 가능합니다. 본 매뉴얼은 운영자(특히 신규)가 이 산출물을 읽고 해석하는 데 필요한 최소 가이드입니다."
+
+  - id: eight_axes
+    title: 8 정량 축 해석 가이드
+    body_paragraphs:
+      - "헌장 v1.1.0에 고정된 8개 정량 축은 모든 paideia 모듈이 학생 다면 진단의 정량 표면으로 사용합니다. 각 축은 7점 리커트 척도의 항목 평균(raw mean)과 코호트 기반 z-score로 산출됩니다."
+      - "α(Cronbach's alpha)는 항목 수 ≥ 3인 축에 대해 계산되며, 0.80↑ 'high', 0.70-0.80 'medium', < 0.70 'low' 라벨로 표기됩니다. 단일·이중 항목 축은 'N/A — single/double item'."
+    axis_entries:
+      - key: digital_efficacy
+        name_kr: 도구 적응성
+        meaning: 새 도구·온라인 학습 도구·디지털 학습 환경에 대한 적응 효능감.
+        example_items:
+          - "처음 보는 학습 도구를 빠르게 익혀 활용한다"
+          - "온라인 강의·LMS 환경에서 막힘 없이 학습한다"
+        operating_use: 평균 4 미만 학생은 학기 첫 주 LMS 오리엔테이션 추가 안내 우선 대상.
+      - key: motivation
+        name_kr: 학습동기·진로지향
+        meaning: 학습 의지·전문직 동기·생명과학 흥미.
+        example_items:
+          - "나는 의학·간호학에 대한 관심이 크다"
+          - "이 분야 전문가가 되고 싶다는 의지가 분명하다"
+        operating_use: 평균과 시험 점수의 cross-tab은 면담 우선순위 판단의 핵심 신호.
+      - key: time_availability
+        name_kr: 학습시간 여건
+        meaning: 일주일 학습 시간 확보 가능성과 시간 자원.
+        example_items:
+          - "수업 외에 학습에 쓸 수 있는 시간이 충분하다"
+        operating_use: 자유서술 q22 시간 패턴 보조 그룹과 함께 보면 시간 부족 vs 시간 활용 미숙을 구분.
+      - key: material_preference
+        name_kr: 학습자료 매체 선호
+        meaning: 책·영상·강의·요약 등 매체 선호 강도.
+        example_items:
+          - "나는 책으로 공부할 때 가장 잘 이해한다"
+          - "영상 강의가 책보다 효율적이다"
+        operating_use: 보조 자료 큐레이션 시 매체 선호 분포를 참고. 점수가 낮으면 다양한 매체를 함께 제시.
+      - key: study_strategy
+        name_kr: 인지학습 전략
+        meaning: 반복·정교화·메타인지 등 공부 방식의 깊이.
+        example_items:
+          - "내용을 내 말로 다시 설명하면서 공부한다"
+          - "어려운 부분에서 학습 계획을 다시 점검한다"
+        operating_use: 평균이 낮으면 학습 전략 워크숍 우선 대상. α가 낮으면 항목 간 일관성 확인 필요.
+      - key: study_environment
+        name_kr: 학습환경 선호
+        meaning: 조용함·장소·시간대 등 환경 선호.
+        example_items:
+          - "조용한 곳에서 가장 잘 집중한다"
+          - "정해진 시간대에 공부하는 편이 효율적이다"
+        operating_use: 보조 그룹 'time_pattern_q21' 시간대 분포와 함께 보면 환경 적응 vs 환경 의존을 구분.
+      - key: social_learning
+        name_kr: 협업·팀워크 성향
+        meaning: 팀학습·동료 가르치기 등 협업 의향.
+        example_items:
+          - "함께 공부할 때 더 잘 배운다"
+          - "동료에게 가르쳐주면서 내 공부도 깊어진다"
+        operating_use: 평균 4 이상 학생은 팀 학습·튜터 후보. 4 미만이면서 시험 점수 낮은 학생은 일대일 보조 우선.
+      - key: feedback_seeking
+        name_kr: 교수자 피드백 수용성
+        meaning: 피드백 활용·요청·수정 행동의 적극성.
+        example_items:
+          - "교수님 피드백을 받아 답안을 다시 검토한다"
+          - "막히면 교수·조교에게 적극적으로 질문한다"
+        operating_use: 평균이 낮으면 1차 시험 후 개별 피드백 면담의 우선 대상.
+
+  - id: aux_groups
+    title: 3 보조 카테고리 그룹 활용
+    body_paragraphs:
+      - "보조 카테고리 그룹은 점수에 산입되지 않는 카테고리형 응답입니다. 학생별 long CSV(long export)에는 학생이 선택한 옵션(또는 ;로 join된 multiselect 리스트)이 그대로 기록됩니다."
+      - "분포는 axis_summary CSV/YAML에 응답률 베이스(분모 = 그 컬럼 응답자 수)로 표기되며, 응답한 학생 수(n_responded)와 학기 전체 응답자 수(n_cohort)도 함께 노출됩니다."
+    group_entries:
+      - key: prior_readiness
+        name_kr: 사전 학습 준비도
+        meaning: 학생의 학습 출발점 (생명과학·해부학·의학기초 노출 정도)을 single_select로 보고.
+        options_or_examples:
+          - "고등학교 생명과학 II 수강함"
+          - "수강하지 않음"
+        operating_use: 응답률·옵션 분포로 학기 첫 강의 난이도·예시 깊이 조정.
+      - key: interest_topics
+        name_kr: 흥미와 회피 주제
+        meaning: 학기 동안 가장 관심 있는 주제·가장 어려울 것 같은 주제를 multiselect로 수집.
+        options_or_examples:
+          - "신경계;근육계"
+          - "내분비계"
+        operating_use: 강의 순서·실습 우선순위 결정. 어려움 응답이 많은 주제는 보조 자료 사전 배포.
+      - key: categorical_intent
+        name_kr: 자기 진단과 목표
+        meaning: 학기 목표·자기 진단 결과(시험 목표 점수, 진로 강도 등)를 single_select로 보고.
+        options_or_examples:
+          - "A 학점 목표"
+          - "전공 진학 결정"
+        operating_use: 면담 시 목표 vs 현재 학습 행동의 격차를 파악하고 환류.
+
+  - id: phase_overview
+    title: 분석 phase A-F 개요
+    body_paragraphs:
+      - "Phase A 신뢰도 — 8개 정량 축의 Cronbach α 계산. 항목 수가 적으면 'single_item' 라벨로 안전하게 무계산 처리."
+      - "Phase B 점수 — 학생당 8축 raw mean + z-score + per-axis missing flag. 결측 처리는 drop 정책을 기본으로, 매핑에서 mean_impute 명시 시 그 정책을 따름."
+      - "Phase C 군집 — k=2~6 후보에서 silhouette 기반 자동 결정 또는 운영자 --k 강제. 표본/k < 10이면 sample_too_small 폴백."
+      - "Phase D 자유서술 — 키워드 사전 매칭 + (선택) 한국어 RoBERTa 감성 분석으로 부정 강도와 우세 감정 라벨 보강."
+      - "Phase E 보고 — group_distribution.pdf, cluster_summary.xlsx, factor_scores_long.{csv,yaml}, axis_summary.{csv,yaml}, 본 매뉴얼 PDF."
+      - "Phase F 카드 — 1인 1장 PDF. 8각 라다(raw 1-7) + cohort overlay + 자유서술 카테고리 + 코칭 텍스트(룰/LLM 폴백)."
+
+  - id: outputs_reading
+    title: 산출물 읽는 법
+    body_paragraphs:
+      - "factor_scores_long.csv는 학생당 1행입니다. raw / z / missing 24 + auxiliary 10 + cluster 3 + freetext 6 = 약 50개 컬럼. 학생 ID로 외부 시험 점수 CSV와 join합니다."
+      - "axis_summary.csv는 row_kind 디스크리미네이터로 quantitative(8행)·auxiliary_distribution(가변)·freetext_summary(2행)을 통합합니다. percentage는 응답률 베이스이므로 무응답은 100% 합에서 빠집니다(n_responded와 n_cohort 차이로 별도 계산)."
+      - "group_distribution.pdf는 8축 히스토그램 + 군집 요약표 + partition 비교(분반·partition_axis 컬럼). 운영자 자기 점검 자료입니다."
+      - "cards/{student_id}.pdf는 8각 라다(본인·전체 평균 두 폴리곤) + 자유서술 인용 + 코칭 텍스트. 학생당 1장."
+
+  - id: zscore_clustering
+    title: z-score와 군집 해석
+    body_paragraphs:
+      - "z-score는 코호트 평균을 0, 표준편차를 1로 표준화한 값입니다. +1은 코호트 평균보다 1 표준편차 위, -1은 1 표준편차 아래."
+      - "군집 라벨은 LLM으로 명명(가용 시)하거나 룰 폴백으로 부여합니다. 라벨이 충돌하면 manifest의 cluster_silhouette_used와 weak_structure_warning을 함께 보고 해석에 신중을 기합니다(silhouette < 0.2 시 warning)."
+      - "라다는 raw 1-7 척도(z-score 아님)이므로 1-7 사이 값과 cohort 평균 폴리곤만으로 직관적 비교가 가능합니다."
+
+  - id: freetext_interpretation
+    title: 자유서술 결과 해석
+    body_paragraphs:
+      - "RoBERTa 감성 분석(있을 때)은 0-1 부정 강도와 44 라벨 중 우세 감정을 산출합니다. 부정 강도가 0.5↑ 면 면담 우선순위, 우세 감정이 '걱정/불안'·'막막함'·'두려움'이면 학습 동기·시간 압박 점검."
+      - "키워드 사전 미분류 응답은 부정 강도와 우세 감정만 표기됩니다. 미분류라고 해서 무시하지 마십시오 — 사전이 모든 표현을 잡지는 못합니다."
+      - "RoBERTa 환경이 없거나 --no-roberta로 비활성한 경우, 부정 강도·우세 감정 컬럼은 결측으로 표기되고 manifest.sentiment.fallback_reason에 사유가 기록됩니다."
+
+  - id: limits_pii
+    title: 한계와 PII 정책
+    body_paragraphs:
+      - "PII 정책 — 학생 ID는 운영자 내부 산출물에만 표기되며, LLM API 페이로드(LLM 기능 활성 시)에는 학번·이름이 정규식 redaction된 후 전송됩니다. RoBERTa 감성 분석에도 동일 redaction을 inference 직전에 적용합니다."
+      - "한계 — 본 분석은 '진단'이 아닌 '교육 운영 조정 지표'입니다. 라벨(특히 군집 라벨)은 학생을 평가·낙인하지 않도록 해석에 주의."
+      - "재실행 — 동일 입력 + 동일 환경에서 두 회 실행 시 모든 산출물이 byte-equal입니다. font sha256 + 모델 sha256 + 토크나이저 sha256이 manifest에 기록되어 환경 변화 검출 가능."
+
+  - id: operating_scenarios
+    title: 운영 시나리오
+    body_paragraphs:
+      - "학기 첫 주 — 사전진단 응답 184명 / 194명 응답 + 28문항 PDF + 63 컬럼 CSV. ingest → needs-map 실행 → 산출물 6종 + 본 매뉴얼이 학기·과목 디렉터리에 자동 격리."
+      - "1차 시험 회고 — factor_scores_long.csv를 시험 점수 CSV와 student_id로 join. motivation z-score < -0.5 그룹의 시험 평균이 나머지보다 5점 이상 낮으면 동기 보강 워크숍 우선 대상으로 선정. 이는 cross-tab 1건 예시입니다."
+      - "학생 면담 — cards/{student_id}.pdf 8각 라다 + 자유서술 카테고리 + 코칭 텍스트로 1인 1장 면담 자료 활용. 군집 라벨로 비슷한 패턴의 학생 그룹을 식별해 그룹 면담도 가능."
+
+  - id: rerun_archival
+    title: 재실행과 archival 정책
+    body_paragraphs:
+      - "재실행 시 직전 산출물은 _archive/{ISO8601_UTC}__v1.0.0/ (또는 v1.1.0/) 디렉터리로 무손실 이동되며, 새 산출물이 본 위치에 기록됩니다. archival suffix는 schema_version을 그대로 따라 운영자가 history를 식별할 수 있습니다."
+      - "manifest.json의 previous_run_archive_path 필드에 archival 위치가 기록됩니다. 학기 중 여러 회 재실행 시 마지막 archive를 추적하면 변화 history를 빠르게 파악 가능."
+      - "운영 권장 — 매핑 YAML 변경 / 응답 데이터 보정 시 새 run을 트리거하고, manifest의 input sha256 + mapping sha256 비교로 무엇이 바뀌었는지 검증합니다."
