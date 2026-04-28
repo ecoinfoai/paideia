@@ -43,6 +43,7 @@ from paideia_shared.schemas import (
     HistogramBin,
     ItemStatistics,
     MetadataAggregate,
+    StudentExamMetrics,
 )
 
 _PRODUCER = "paideia/immersio/0.1.0"
@@ -237,6 +238,98 @@ def _build_distractor_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> No
         _ = cell_d, cell_label  # references retained for clarity
 
 
+def _build_student_score_sheet(
+    wb: Workbook, metrics: Sequence[StudentExamMetrics]
+) -> None:
+    """Build the 7th sheet `학생성적` per contracts/xlsx_sheets.md §7."""
+    ws = wb.create_sheet("학생성적")
+    bold = Font(bold=True)
+
+    fixed_headers = [
+        "학번", "이름", "분반", "응시여부", "총점",
+        "100점환산", "분반_백분위", "전체_백분위", "z_score",
+    ]
+
+    # Collect dynamic header lists across all takers so absent students
+    # also see the columns (empty cells).
+    chapter_keys: list[str] = []
+    source_keys: list[str] = []
+    difficulty_keys: list[int] = []
+    expected_keys: list[str] = []
+    item_type_keys: list[str] = []
+    for m in metrics:
+        for k in m.chapter_correct_rates:
+            if k not in chapter_keys:
+                chapter_keys.append(k)
+        for k in m.source_correct_rates:
+            if k not in source_keys:
+                source_keys.append(k)
+        for k in m.difficulty_correct_rates:
+            if k not in difficulty_keys:
+                difficulty_keys.append(k)
+        for k in m.expected_difficulty_correct_rates:
+            if k not in expected_keys:
+                expected_keys.append(k)
+        for k in m.item_type_correct_rates:
+            if k not in item_type_keys:
+                item_type_keys.append(k)
+
+    # Sort dynamic keys so output is deterministic across runs.
+    chapter_keys.sort()
+    source_keys.sort()
+    difficulty_keys.sort()
+    expected_keys.sort()
+    item_type_keys.sort()
+
+    dynamic_headers: list[str] = []
+    dynamic_headers.extend(f"챕터_{k}" for k in chapter_keys)
+    dynamic_headers.extend(f"출처_{k}" for k in source_keys)
+    dynamic_headers.extend(f"난이도_{k}" for k in difficulty_keys)
+    dynamic_headers.extend(f"예상_{k}" for k in expected_keys)
+    dynamic_headers.extend(f"유형_{k}" for k in item_type_keys)
+    dynamic_headers.append("관심챕터_본인정답률")
+    dynamic_headers.append("비호감챕터_본인정답률")
+
+    all_headers = fixed_headers + dynamic_headers
+    for c, h in enumerate(all_headers, start=1):
+        ws.cell(1, c, h).font = bold
+
+    # Sort metrics by student_id for deterministic row order.
+    sorted_metrics = sorted(metrics, key=lambda m: m.student_id)
+    for i, m in enumerate(sorted_metrics, start=2):
+        ws.cell(i, 1, m.student_id)
+        ws.cell(i, 2, m.name_kr)
+        ws.cell(i, 3, m.section)
+        ws.cell(i, 4, "응시" if m.exam_taken else "결시")
+        if m.exam_taken:
+            ws.cell(i, 5, m.total_score)
+            ws.cell(i, 6, m.score_percent)
+            ws.cell(i, 7, m.section_percentile)
+            ws.cell(i, 8, m.cohort_percentile)
+            ws.cell(i, 9, m.z_score)
+        # else: score columns remain None (empty cells) per FR-013.
+
+        col_cursor = 10
+        for k in chapter_keys:
+            ws.cell(i, col_cursor, m.chapter_correct_rates.get(k))
+            col_cursor += 1
+        for k in source_keys:
+            ws.cell(i, col_cursor, m.source_correct_rates.get(k))
+            col_cursor += 1
+        for k in difficulty_keys:
+            ws.cell(i, col_cursor, m.difficulty_correct_rates.get(k))
+            col_cursor += 1
+        for k in expected_keys:
+            ws.cell(i, col_cursor, m.expected_difficulty_correct_rates.get(k))
+            col_cursor += 1
+        for k in item_type_keys:
+            ws.cell(i, col_cursor, m.item_type_correct_rates.get(k))
+            col_cursor += 1
+        ws.cell(i, col_cursor, m.interest_chapters_correct_rate)
+        col_cursor += 1
+        ws.cell(i, col_cursor, m.aversion_chapters_correct_rate)
+
+
 def write_analysis_xlsx(
     *,
     output_path: Path,
@@ -247,8 +340,14 @@ def write_analysis_xlsx(
     semester: str,
     course_name_kr: str,
     generated_at_utc: str,
+    student_metrics: Iterable[StudentExamMetrics] | None = None,
 ) -> None:
-    """Write the 6-sheet ``시험분석결과.xlsx`` to ``output_path``.
+    """Write ``시험분석결과.xlsx`` to ``output_path``.
+
+    Six sheets always written. When ``student_metrics`` is supplied the
+    7th sheet ``학생성적`` is appended (Phase 4 / T052 join path). Phase
+    3 callers may pass ``None`` to skip that sheet — backwards
+    compatibility for the MVP without student-level join.
 
     Args:
         output_path: Destination ``.xlsx`` path. Parent directory must
@@ -261,6 +360,9 @@ def write_analysis_xlsx(
             ``analysis.metadata_stats.compute_metadata_aggregates``.
         item_stats: Iterable of ``ItemStatistics`` from
             ``analysis.item_stats.compute_item_statistics``.
+        student_metrics: Optional iterable of ``StudentExamMetrics`` —
+            when supplied, the 7th sheet ``학생성적`` is added with
+            ExamItem metadata columns spread per FR-013/018.
         semester: e.g. ``"2026-1"`` (used in workbook title).
         course_name_kr: e.g. ``"인체구조와기능"`` (used in workbook title).
         generated_at_utc: ISO8601 UTC timestamp pinning Workbook
@@ -275,6 +377,16 @@ def write_analysis_xlsx(
     items = list(item_stats)
     if not items:
         raise ValueError("write_analysis_xlsx: item_stats is empty")
+    metrics_list: list[StudentExamMetrics] | None
+    if student_metrics is None:
+        metrics_list = None
+    else:
+        metrics_list = list(student_metrics)
+        if not metrics_list:
+            raise ValueError(
+                "write_analysis_xlsx: student_metrics is an empty iterable; "
+                "pass None to skip the 학생성적 sheet"
+            )
     output_path = Path(output_path)
     if not output_path.parent.is_dir():
         raise FileNotFoundError(
@@ -295,6 +407,8 @@ def write_analysis_xlsx(
     _build_discrimination_sheet(wb, items)
     _build_correct_rate_sheet(wb, items)
     _build_distractor_sheet(wb, items)
+    if metrics_list is not None:
+        _build_student_score_sheet(wb, metrics_list)
 
     _stamp_workbook(wb, semester, course_name_kr, when)
     with _pin_openpyxl_now(when):
