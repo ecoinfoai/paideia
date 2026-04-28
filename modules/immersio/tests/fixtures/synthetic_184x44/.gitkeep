@@ -1,0 +1,4 @@
+# synthetic_184x44 fixture 디렉터리 (T080 에서 builder 추가 예정)
+#
+# 184 students × 44 items 합성 응답 + metadata 8축 + needs-map silver 부재 시나리오용.
+# tasks.md T080: tests/fixtures/synthetic_184x44/build.py 가 본 디렉터리 안에 결정론적 입력 생성.
