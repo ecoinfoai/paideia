@@ -6,8 +6,8 @@ input/
 output/
 
 # documents for development
-idea/
-specs/
+# idea/
+# specs/
 
 # python
 __pycache__/
