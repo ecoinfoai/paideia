@@ -204,6 +204,18 @@ def _build_parser() -> argparse.ArgumentParser:
     a_verbosity.add_argument("--quiet", action="store_true")
     a_verbosity.add_argument("--verbose", action="store_true")
 
+    # T048 — Phase 3 combine subcommand (INTEGRATION RULE 4).
+    combine = sub.add_parser(
+        "combine",
+        help="Run Phase 3 needs-map × exam combined-analysis pipeline",
+    )
+    combine.add_argument("--semester", required=True, type=str)
+    combine.add_argument("--course", required=True, type=str)
+    combine.add_argument("--silver-dir", required=True, type=Path)
+    combine.add_argument("--gold-dir", required=True, type=Path)
+    combine.add_argument("--include-cluster", action="store_true")
+    combine.add_argument("--verbose", action="store_true")
+
     return parser
 
 
@@ -285,6 +297,28 @@ def app(argv: list[str] | None = None) -> int:
 
     if args.command == "analyze":
         return _run_analyze(args)
+
+    if args.command == "combine":
+        # T048 — INTEGRATION (RULE 4). Delegate to combine.cli.main with
+        # the dispatched argv slice; argparse already validated semester /
+        # course / paths, so we re-shape into the combine subparser argv.
+        from immersio.combine.cli import main as combine_main
+
+        argv = [
+            "--semester",
+            args.semester,
+            "--course",
+            args.course,
+            "--silver-dir",
+            str(args.silver_dir),
+            "--gold-dir",
+            str(args.gold_dir),
+        ]
+        if args.include_cluster:
+            argv.append("--include-cluster")
+        if args.verbose:
+            argv.append("--verbose")
+        return combine_main(argv)
 
     parser.error(f"unknown command: {args.command}")
     return 2  # pragma: no cover
