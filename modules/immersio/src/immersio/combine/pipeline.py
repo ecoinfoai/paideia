@@ -37,6 +37,7 @@ from .figures import (
     render_fig3_heatmap,
     render_fig4_beta_bar,
     render_fig5_cluster_boxplot,
+    render_fig6_subgroup_panels,
 )
 from .joiner import join_silver_phase3
 from .manifest import compute_input_sha256, write_manifest
@@ -45,6 +46,7 @@ from .regression import compute_ols_regression
 from .report_md import build_us1_report
 from .report_pdf import render_combined_analysis_pdf
 from .silver_writer import write_combined_silver
+from .subgroup_compare import compute_subgroup_score_comparison
 from .xlsx_writer import write_us1_xlsx
 
 from paideia_shared.schemas import CombinedAnalysisManifest
@@ -82,6 +84,7 @@ def run_us1_pipeline(
     silver_dir: Path,
     gold_dir: Path,
     include_cluster: bool = False,
+    include_subgroup: bool = False,
 ) -> int:
     """Run the Phase 3 pipeline (US1 partial or US1+US2 wired).
 
@@ -134,8 +137,9 @@ def run_us1_pipeline(
     fig3_path = figs_dir / "fig3_corr_heatmap.png"
     fig4_path = figs_dir / "fig4_beta_bar.png"
     fig5_path = figs_dir / "fig5_cluster_boxplot.png"
+    fig6_path = figs_dir / "fig6_subgroup_panels.png"
 
-    # 7. figures (fig3 + fig4 always; fig5 in US2 wiring)
+    # 7. figures (fig3 + fig4 always; fig5 in US2 wiring; fig6 in US4 wiring)
     render_fig3_heatmap(correlation_cells, fig3_path)
     render_fig4_beta_bar(regression_coefs, fig4_path)
 
@@ -164,6 +168,25 @@ def run_us1_pipeline(
                 cluster_names=inputs["cluster_names"],
                 path=fig5_path,
             )
+
+    # 7c. subgroup_compare (T052) — US4 wiring only.
+    subgroup_rows = None
+    subgroup_headers = None
+    if include_subgroup:
+        # diagnostic_response 의 axis="occupation" 행을 subgroup_compare 의
+        # occupation 컬럼으로 매핑 (R-10 옵션 A — fixture 합성 정합).
+        dr = inputs["diagnostic_response"]
+        if "axis" in dr.columns:
+            occ_rows = dr[dr["axis"] == "occupation"][
+                ["student_id", "value_text"]
+            ].rename(columns={"value_text": "occupation"})
+            df_for_subgroup = df.merge(occ_rows, on="student_id", how="left")
+        else:
+            df_for_subgroup = df.copy()
+        subgroup_rows, subgroup_headers = (
+            compute_subgroup_score_comparison(df_for_subgroup)
+        )
+        render_fig6_subgroup_panels(rows=subgroup_rows, path=fig6_path)
 
     # 8. manifest — partition counts + R-10 audit + 6 sha256
     n_dx = int(((df["진단응답"]) & (~df["시험응시"])).sum())
@@ -239,6 +262,13 @@ def run_us1_pipeline(
             if include_cluster
             else None
         ),
+        subgroup_rows=subgroup_rows,
+        subgroup_headers=subgroup_headers,
+        fig6_path=(
+            Path("figs/fig6_subgroup_panels.png")
+            if include_subgroup
+            else None
+        ),
     )
 
     # 10. report_pdf (uses md_text + image_base_dir=gold_target so figs/
@@ -260,6 +290,8 @@ def run_us1_pipeline(
         cluster_rows=cluster_rows,
         cluster_header=cluster_header,
         cluster_pairwise=cluster_pairwise,
+        subgroup_rows=subgroup_rows,
+        subgroup_headers=subgroup_headers,
     )
 
     return 0

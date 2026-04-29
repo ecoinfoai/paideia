@@ -246,6 +246,57 @@ def _build_cluster_sheet(
         sheet.column_dimensions[get_column_letter(i)].width = 18
 
 
+def _build_subgroup_sheet(
+    wb: Workbook,
+    rows: object,
+    headers: object,
+) -> None:
+    """T055 — sheet `부분군비교` 4-meta sub-blocks."""
+    sheet = wb.create_sheet("부분군비교")
+    headers_by_meta = {h.meta_kind: h for h in headers}
+    rows_by_meta: dict[str, list[object]] = {}
+    for r in rows:
+        rows_by_meta.setdefault(r.meta_kind, []).append(r)
+
+    meta_order = ("section", "prior_biology", "occupation", "education")
+    for meta_kind in meta_order:
+        sheet.append([f"메타: {meta_kind}"])
+        sheet.append(["meta_value", "n", "mean", "std", "excluded_reason"])
+        for r in rows_by_meta.get(meta_kind, []):
+            sheet.append([r.meta_value, r.n, r.mean, r.std, r.excluded_reason])
+        h = headers_by_meta.get(meta_kind)
+        if h is not None:
+            sheet.append([])
+            sheet.append(
+                [
+                    "test_used",
+                    "levene_p",
+                    "test_stat",
+                    "raw_p",
+                    "fdr_q",
+                    "effect_size_kind",
+                    "effect_size_value",
+                    "n_categories_compared",
+                ]
+            )
+            sheet.append(
+                [
+                    h.test_used,
+                    h.levene_p,
+                    h.test_stat,
+                    h.raw_p,
+                    h.fdr_q,
+                    h.effect_size_kind,
+                    h.effect_size_value,
+                    h.n_categories_compared,
+                ]
+            )
+        sheet.append([])
+
+    for i in range(1, 9):
+        sheet.column_dimensions[get_column_letter(i)].width = 18
+
+
 def write_us1_xlsx(
     *,
     correlation_cells: Sequence[CorrelationCell],
@@ -255,6 +306,8 @@ def write_us1_xlsx(
     cluster_rows: object | None = None,
     cluster_header: object | None = None,
     cluster_pairwise: object | None = None,
+    subgroup_rows: object | None = None,
+    subgroup_headers: object | None = None,
 ) -> None:
     """Write the combined-analysis workbook to ``out_path``.
 
@@ -295,6 +348,9 @@ def write_us1_xlsx(
         _build_cluster_sheet(
             wb, cluster_rows, cluster_header, cluster_pairwise or []
         )
+
+    if subgroup_rows is not None and subgroup_headers is not None:
+        _build_subgroup_sheet(wb, subgroup_rows, subgroup_headers)
 
     wb.save(out_path)
 

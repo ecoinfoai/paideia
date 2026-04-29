@@ -101,6 +101,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Enable US2 wiring (cluster_compare → fig5 → §4 → sheet 3).",
     )
     parser.add_argument(
+        "--include-subgroup",
+        action="store_true",
+        help="Enable US4 wiring (subgroup_compare → fig6 → §5 → sheet 4).",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Emit per-phase progress to stdout.",
@@ -182,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             silver_dir=args.silver_dir,
             gold_dir=args.gold_dir,
             include_cluster=args.include_cluster,
+            include_subgroup=args.include_subgroup,
         )
     except SchemaVersionMismatch as exc:
         _stderr("schema", "version-mismatch", str(exc))

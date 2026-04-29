@@ -214,6 +214,7 @@ def _build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--silver-dir", required=True, type=Path)
     combine.add_argument("--gold-dir", required=True, type=Path)
     combine.add_argument("--include-cluster", action="store_true")
+    combine.add_argument("--include-subgroup", action="store_true")
     combine.add_argument("--verbose", action="store_true")
 
     return parser
@@ -316,6 +317,8 @@ def app(argv: list[str] | None = None) -> int:
         ]
         if args.include_cluster:
             argv.append("--include-cluster")
+        if args.include_subgroup:
+            argv.append("--include-subgroup")
         if args.verbose:
             argv.append("--verbose")
         return combine_main(argv)

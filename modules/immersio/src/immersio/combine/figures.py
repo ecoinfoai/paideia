@@ -239,8 +239,65 @@ def render_fig5_cluster_boxplot(
     _save_png(fig, path)
 
 
+def render_fig6_subgroup_panels(
+    *,
+    rows: object,
+    path: Path,
+) -> None:
+    """Render the 4-panel subgroup mean bar chart (T053, US4).
+
+    Each panel = one meta_kind (section / prior_biology / occupation /
+    education); bars = per-category mean total_score; excluded
+    categories (n<10) shown as gray placeholder.
+
+    Raises:
+        ValueError: If ``rows`` is empty.
+    """
+    if not rows:
+        raise ValueError("render_fig6_subgroup_panels: empty rows")
+
+    _register_korean_font()
+
+    by_meta: dict[str, list[object]] = {
+        "section": [],
+        "prior_biology": [],
+        "occupation": [],
+        "education": [],
+    }
+    for r in rows:
+        if r.meta_kind in by_meta:
+            by_meta[r.meta_kind].append(r)
+
+    fig, axes = plt.subplots(2, 2, figsize=(10.0, 7.0))
+    axes = axes.flatten()
+    for idx, meta_kind in enumerate(
+        ["section", "prior_biology", "occupation", "education"]
+    ):
+        ax = axes[idx]
+        meta_rows = sorted(by_meta[meta_kind], key=lambda r: r.meta_value)
+        if not meta_rows:
+            ax.set_title(f"{meta_kind} (없음)")
+            ax.set_xticks([])
+            continue
+        labels = [r.meta_value for r in meta_rows]
+        means = [r.mean if r.mean is not None else 0.0 for r in meta_rows]
+        colors = [
+            "#1f3b73" if r.excluded_reason is None else "#cccccc"
+            for r in meta_rows
+        ]
+        ax.bar(range(len(labels)), means, color=colors)
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
+        ax.set_title(meta_kind)
+        ax.set_ylabel("평균 총점")
+    fig.suptitle("부분군별 시험 점수 (회색 = n<10 자동 제외)")
+    fig.tight_layout()
+    _save_png(fig, path)
+
+
 __all__ = [
     "render_fig3_heatmap",
     "render_fig4_beta_bar",
     "render_fig5_cluster_boxplot",
+    "render_fig6_subgroup_panels",
 ]

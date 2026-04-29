@@ -186,6 +186,67 @@ def _section_5_placeholder() -> str:
     )
 
 
+def _section_5_subgroups(
+    subgroup_rows: object,
+    subgroup_headers: object,
+    fig6_path: object,
+) -> str:
+    """T054 — §5 부분군 비교 (US4 wiring).
+
+    4 메타별 sub-block — 카테고리 표 + 검정 헤더 (test / eff size / q).
+    fig6 (4-panel bar) 인라인.
+    """
+    headers_by_meta = {h.meta_kind: h for h in subgroup_headers}
+    rows_by_meta: dict[str, list[object]] = {}
+    for r in subgroup_rows:
+        rows_by_meta.setdefault(r.meta_kind, []).append(r)
+
+    blocks: list[str] = []
+    meta_kr = {
+        "section": "분반",
+        "prior_biology": "고교생물 이수 여부",
+        "occupation": "직업",
+        "education": "학력",
+    }
+    meta_order = ["section", "prior_biology", "occupation", "education"]
+    for meta_kind in meta_order:
+        h = headers_by_meta.get(meta_kind)
+        meta_rows = rows_by_meta.get(meta_kind, [])
+        if h is None:
+            continue
+        rows_table_lines = "\n".join(
+            f"| {r.meta_value} | {r.n} | "
+            f"{'-' if r.mean is None else f'{r.mean:.2f}'} | "
+            f"{'-' if r.std is None else f'{r.std:.2f}'} | "
+            f"{r.excluded_reason or '-'} |"
+            for r in meta_rows
+        )
+        eff_str = (
+            "-" if h.effect_size_value is None else f"{h.effect_size_value:.3f}"
+        )
+        q_str = "-" if h.fdr_q is None else f"{h.fdr_q:.4f}"
+        sub_idx = meta_order.index(meta_kind) + 1
+        block = (
+            f"### 5.{sub_idx} {meta_kr[meta_kind]}\n\n"
+            f"**검정**: {h.test_used}, "
+            f"raw_p={'-' if h.raw_p is None else f'{h.raw_p:.4f}'}, "
+            f"fdr_q={q_str}, "
+            f"effect_size ({h.effect_size_kind})={eff_str}, "
+            f"n_categories_compared={h.n_categories_compared}\n\n"
+            "| 카테고리 | n | mean | std | 제외 사유 |\n"
+            "|---|---|---|---|---|\n"
+            f"{rows_table_lines}\n"
+        )
+        blocks.append(block)
+
+    fig6_md = (
+        f"\n![부분군별 시험 점수 4-panel bar chart]({fig6_path.as_posix()})\n"
+        if fig6_path is not None
+        else ""
+    )
+    return "## 5. 부분군 비교\n\n" + "\n".join(blocks) + fig6_md
+
+
 def _section_6_recommendations(
     recommendations: dict[str, object],
     manifest: CombinedAnalysisManifest,
@@ -224,6 +285,9 @@ def build_us1_report(
     cluster_header: object | None = None,
     cluster_pairwise: object | None = None,
     fig5_path: Path | None = None,
+    subgroup_rows: object | None = None,
+    subgroup_headers: object | None = None,
+    fig6_path: Path | None = None,
 ) -> None:
     """Compose the US1 partial markdown report and land it on disk.
 
@@ -264,6 +328,13 @@ def build_us1_report(
     else:
         section_4 = _section_4_placeholder()
 
+    if subgroup_rows is not None and subgroup_headers is not None:
+        section_5 = _section_5_subgroups(
+            subgroup_rows, subgroup_headers, fig6_path
+        )
+    else:
+        section_5 = _section_5_placeholder()
+
     parts = [
         "# 진단 × 시험 결합 분석 보고서\n",
         f"**학기/과목**: {manifest.semester} / {manifest.course_slug}  ",
@@ -272,7 +343,7 @@ def build_us1_report(
         _section_2_correlation(correlation_cells, fig3_path),
         _section_3_regression(regression_coefs, regression_fit, fig4_path),
         section_4,
-        _section_5_placeholder(),
+        section_5,
         _section_6_recommendations(recommendations, manifest),
     ]
     text = "\n".join(parts).rstrip() + "\n"
