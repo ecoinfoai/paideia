@@ -165,6 +165,30 @@ def _maybe_load_needs_map(
         return None, None
 
     needs_map_dir = args.silver_root / "needs-map" / _key(args.semester, args.course_slug)
+    # Adversary P5 require-list: when the needs-map silver dir EXISTS,
+    # demand its full 4-file roster — partial presence implies the prior
+    # needs-map run was interrupted and the diagnostic_response.parquet
+    # alone might be stale relative to factor_scores etc. Refuse rather
+    # than silently joining against an inconsistent snapshot. The full
+    # absence path (graceful fallback) is handled below.
+    if needs_map_dir.is_dir():
+        required_needs_map = (
+            "diagnostic_response.parquet",
+            "factor_scores.parquet",
+            "cluster_assignment.parquet",
+            "scale_reliability.parquet",
+        )
+        present = [n for n in required_needs_map if (needs_map_dir / n).is_file()]
+        absent = [n for n in required_needs_map if not (needs_map_dir / n).is_file()]
+        if present and absent:
+            raise SilverNotFoundError(
+                "needs-map silver directory is partial — "
+                f"present: {present}, missing: {absent}. "
+                "Re-run needs-map (`paideia-needs-map run --semester ... "
+                "--course ...`) or pass --no-needs-map to skip the join. "
+                "(CLI exit 3)"
+            )
+
     diagnostic_pq = needs_map_dir / "diagnostic_response.parquet"
     if not diagnostic_pq.is_file():
         # Fall back to immersio's own diagnostic_response.parquet — both

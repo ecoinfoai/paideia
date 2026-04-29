@@ -71,14 +71,25 @@ def _detect_schema_version(*candidates: Path) -> str:
     return _UNKNOWN_SCHEMA_SUFFIX
 
 
-def _archive_one(direct_path: Path, subdir_name: str) -> str | None:
-    """Move every non-archive entry of ``direct_path`` into a fresh archive subdir.
+def _archive_one(
+    direct_path: Path,
+    subdir_name: str,
+    *,
+    only_names: frozenset[str] | None = None,
+) -> str | None:
+    """Move previous-run entries of ``direct_path`` into a fresh archive subdir.
 
     Args:
         direct_path: Canonical output directory. Returns ``None`` when
-            it does not exist or is already empty (no-op).
+            it does not exist or has nothing to archive (no-op).
         subdir_name: Pre-built archive subdir name shared across silver
             + gold so a single timestamp links the pair.
+        only_names: Optional whitelist of filenames to archive. When
+            ``None``, every non-``_archive`` entry is archived (legacy
+            behaviour). When set, only entries whose ``name`` appears
+            in the whitelist move — useful when ``direct_path`` mixes
+            persistent inputs (Phase 0 ingest silver) with rotating
+            outputs (analyze pipeline mirror).
 
     Returns:
         Relative path string ``"_archive/{subdir_name}"`` on success,
@@ -91,7 +102,11 @@ def _archive_one(direct_path: Path, subdir_name: str) -> str | None:
             f"archive_previous_run: direct_path is not a directory: {direct_path}"
         )
 
-    entries = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
+    candidates = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
+    if only_names is not None:
+        entries = [p for p in candidates if p.name in only_names]
+    else:
+        entries = candidates
     if not entries:
         return None
 
@@ -118,12 +133,16 @@ def _archive_one(direct_path: Path, subdir_name: str) -> str | None:
                 f"archive_previous_run: failed to move {entry} → {destination}: {exc}"
             ) from exc
 
-    remaining = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
-    if remaining:
-        raise ArchivalError(
-            f"archive_previous_run: direct_path not emptied after archival: "
-            f"{[p.name for p in remaining]}"
-        )
+    if only_names is None:
+        # Strict mode: caller expects the canonical path to be empty so
+        # new outputs land into a clean directory. Whitelist mode tolerates
+        # pre-existing input files (Phase 0 ingest silver) — they stay put.
+        remaining = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
+        if remaining:
+            raise ArchivalError(
+                f"archive_previous_run: direct_path not emptied after archival: "
+                f"{[p.name for p in remaining]}"
+            )
 
     return f"{_ARCHIVE_NAME}/{subdir_name}"
 
@@ -133,6 +152,8 @@ def archive_previous_run(
     silver_dir: Path,
     gold_dir: Path,
     schema_version: str | None = None,
+    silver_whitelist: frozenset[str] | None = None,
+    gold_whitelist: frozenset[str] | None = None,
 ) -> dict[str, str] | None:
     """Move previous-run silver + gold outputs into ``_archive/{ISO}__v{schema}/``.
 
@@ -151,6 +172,15 @@ def archive_previous_run(
             archive subdir suffix. When ``None``, falls back to
             ``manifest.json::schema_version`` in silver, then gold,
             then ``"unknown"``.
+        silver_whitelist: Optional set of filenames to archive in
+            ``silver_dir``. When ``None``, every non-archive entry
+            moves. Use the whitelist when silver also holds persistent
+            inputs from Phase 0 ingest (student_master.parquet etc.) —
+            the analyze orchestrator passes ``{"학생지표.parquet",
+            "manifest.json"}`` so ingest inputs stay put.
+        gold_whitelist: Same idea for gold. The analyze orchestrator
+            keeps ``None`` (full archival) since gold is purely analyze
+            output territory.
 
     Returns:
         ``{"silver": "_archive/{name}", "gold": "_archive/{name}"}`` on
@@ -184,8 +214,8 @@ def archive_previous_run(
     timestamp = _archive_timestamp()
     subdir_name = f"{timestamp}__v{schema_version}"
 
-    silver_archive = _archive_one(silver_dir, subdir_name)
-    gold_archive = _archive_one(gold_dir, subdir_name)
+    silver_archive = _archive_one(silver_dir, subdir_name, only_names=silver_whitelist)
+    gold_archive = _archive_one(gold_dir, subdir_name, only_names=gold_whitelist)
 
     if silver_archive is None and gold_archive is None:
         return None

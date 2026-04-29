@@ -312,14 +312,31 @@ def _run_analyze(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    if args.created_at_utc is not None and not _ISO8601_PATTERN.match(args.created_at_utc):
-        print(
-            f"ERROR [immersio analyze]: invalid_created_at_utc — "
-            f"--created-at-utc must be ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ), "
-            f"got {args.created_at_utc!r}",
-            file=sys.stderr,
-        )
-        return 1
+    if args.created_at_utc is not None:
+        # Two-tier validation per adversary P7: regex shape + datetime
+        # semantic check. The regex catches gross typos (missing seconds,
+        # missing 'T', etc.); fromisoformat rejects out-of-range fields
+        # (e.g. 2026-13-99T...). Anti-pattern blocked: silent UTC offset
+        # rewrite — we accept ONLY the trailing 'Z' form.
+        if not _ISO8601_PATTERN.match(args.created_at_utc):
+            print(
+                f"ERROR [immersio analyze]: invalid_created_at_utc — "
+                f"--created-at-utc must be ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ), "
+                f"got {args.created_at_utc!r}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            import datetime as _dt
+            _dt.datetime.fromisoformat(args.created_at_utc.replace("Z", "+00:00"))
+        except ValueError as exc:
+            print(
+                f"ERROR [immersio analyze]: invalid_created_at_utc — "
+                f"calendar fields out of range: {args.created_at_utc!r} "
+                f"({exc})",
+                file=sys.stderr,
+            )
+            return 1
 
     legacy_xlsx = args.legacy_xlsx
     if legacy_xlsx is not None and not legacy_xlsx.is_file():
@@ -332,9 +349,18 @@ def _run_analyze(args: argparse.Namespace) -> int:
     silver_dir = silver_root / "immersio" / f"{args.semester}-{args.course}"
     gold_dir = gold_root / "immersio" / f"{args.semester}-{args.course}"
 
-    # Archival of any prior run BEFORE new outputs land.
+    # Archival of any prior run BEFORE new outputs land. silver_dir holds
+    # both Phase 0 ingest inputs (student_master.parquet etc., persistent)
+    # and the analyze pipeline's own mirrors (학생지표.parquet,
+    # manifest.json, rotating). Whitelist the rotating set so ingest
+    # inputs stay in place across re-runs.
+    silver_whitelist = frozenset({"학생지표.parquet", "manifest.json"})
     try:
-        archive_previous_run(silver_dir=silver_dir, gold_dir=gold_dir)
+        archive_previous_run(
+            silver_dir=silver_dir,
+            gold_dir=gold_dir,
+            silver_whitelist=silver_whitelist,
+        )
     except ArchivalError as exc:
         print(f"ERROR [immersio analyze]: archival — {exc}", file=sys.stderr)
         return 4
