@@ -1,0 +1,87 @@
+{
+  "cluster_k_used": 1,
+  "cluster_silhouette_used": null,
+  "course_slug": "anatomy",
+  "created_at_utc": "2026-04-29T00:00:00Z",
+  "dictionary_language_mismatch_warning": false,
+  "font_resolution": null,
+  "free_text_dictionary_match_rate": null,
+  "inputs": {
+    "diagnostic_mapping_path": "fixture://diagnostic_mapping.yaml",
+    "diagnostic_mapping_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "diagnostic_response_path": "fixture://diagnostic_response.parquet",
+    "diagnostic_response_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "missing_policy_source": {
+      "digital_efficacy": "default",
+      "feedback_seeking": "default",
+      "material_preference": "default",
+      "motivation": "default",
+      "social_learning": "default",
+      "study_environment": "default",
+      "study_strategy": "default",
+      "time_availability": "default"
+    },
+    "student_master_path": "fixture://student_master.parquet",
+    "student_master_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "llm_calls": [],
+  "llm_model": null,
+  "llm_provider": null,
+  "module_version": "needs-map/0.1.1",
+  "new_outputs": null,
+  "output_key": "2026-1-anatomy",
+  "phases_executed": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "pii_redaction_validated": true,
+  "previous_run_archive_path": null,
+  "rows_per_phase": [
+    {
+      "phase": "A",
+      "rows_written": 0
+    },
+    {
+      "phase": "B",
+      "rows_written": 0
+    },
+    {
+      "phase": "C",
+      "rows_written": 0
+    },
+    {
+      "phase": "D",
+      "rows_written": 0
+    },
+    {
+      "phase": "E",
+      "rows_written": 0
+    },
+    {
+      "phase": "F",
+      "rows_written": 0
+    }
+  ],
+  "schema_version": "1.1.0",
+  "semester": "2026-1",
+  "sentiment": null,
+  "standard_axes_skipped": [],
+  "standard_axes_used": [
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking"
+  ],
+  "unrecognized_inputs": [],
+  "vocabulary": null,
+  "warnings": [],
+  "weak_structure_warning": false
+}
