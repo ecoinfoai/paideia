@@ -385,7 +385,9 @@ def run_immersio_phase1(args: PipelineArgs) -> int:
     try:
         silver = _load_silver(args)
     except SilverNotFoundError as exc:
-        print(f"ERROR [immersio analyze]: file_missing — {exc}")
+        import sys
+
+        print(f"ERROR [immersio analyze]: file_missing — {exc}", file=sys.stderr)
         return 3
     _emit(stream, "[immersio analyze] phase=ingest_check ok (silver 4종 존재)")
 
@@ -551,7 +553,9 @@ def run_immersio_phase1(args: PipelineArgs) -> int:
                 f"[immersio analyze] phase=legacy_diff cells={diff_total} diff={diff_count}",
             )
         except LegacyLoadError as exc:
-            print(f"ERROR [immersio analyze]: legacy_load — {exc}")
+            import sys
+
+            print(f"ERROR [immersio analyze]: legacy_load — {exc}", file=sys.stderr)
             return 5
     else:
         notes.append(
