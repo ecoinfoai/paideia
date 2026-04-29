@@ -186,6 +186,37 @@ MetadataAggregate·HistogramBin·LegacyDiffEntry·ImmersioPhase1Manifest) +
 본 v0.1.0 산출 (특히 `factor_scores_long.csv` from needs-map +
 `학생지표.parquet` from immersio) 가 후속 spec 의 결합 분석 입력이 된다.
 
+## Limitations & Future Work
+
+본 v0.1.0-rc1 에서 의도적으로 polish/후속으로 미룬 항목:
+
+- **`topic_alignment.CHAPTER_KEYWORDS` 코드 상수**: anatomy 7장 ↔
+  needs-map 옵션 텍스트 substring 매칭 사전이 코드 상수. v2 에서 yaml
+  외부화 (`data/bronze/매핑/{course}.chapter_alignment.yaml`) 로
+  promote 해야 하는 트리거 3종:
+  1. 두 번째 과목 (microbio 등) 의 immersio Phase 1+2 분석 시작
+  2. anatomy 챕터 명칭이 학기 중 변경
+  3. needs-map multiselect 옵션 텍스트가 변경
+  (research §R-09 정합 — Constitution III v1 한정 절충.)
+- **`immersio/fonts.py` 가 `needs_map.fonts` 와 1:1 중복**: spec 의
+  `paideia_shared.fonts (이미 land)` 가 실제로는 needs-map 모듈에 land
+  된 상태. 본 phase 는 immersio 안에 복제 + 후속 polish phase 에서
+  paideia_shared 로 promote → 두 모듈 동시 import 변경 권장.
+- **logger 헬퍼 정책**: stdlib `logging.getLogger(__name__)` 모듈 단위
+  사용 (별도 `_log.py` 헬퍼 미도입). 향후 운영 메시지 표준화 시 cross-
+  cutting refactor 로 promote 가능.
+- **adversary A2 symlink escape**: env-var 폰트 경로의 symlink chain
+  이 NanumGothic 외부로 escape 하는 시나리오는 현재 ValueError 차단까지.
+  v0.2 에서 `Path.resolve(strict=True).is_relative_to(allowed_root)` 로
+  strict reject.
+- **adversary A8 16k 패턴 length cap 미land**: glob 패턴 length 가
+  16k 초과 시 운영 환경 ReDoS 가능성. 현재 `_MAX_GLOB_PATTERN_LEN`
+  (1024) 로 차단되지만 더 보수적 정책 (예: 운영 명시 256) 검토.
+- **xlsx 의 modified 후처리 (T076 fix)**: openpyxl 이 `wb.save()` 시
+  `<dcterms:modified>` 를 `datetime.now()` 로 덮어씀 → zip 후처리로
+  rewrite. 향후 openpyxl 이 native pin 옵션을 추가하면 후처리 코드 제거
+  가능 (현재는 가장 견고한 패턴).
+
 ## 라이선스
 
 paideia 우산 라이선스를 따른다.
