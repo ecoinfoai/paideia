@@ -161,8 +161,13 @@ def _render_discrimination(items: Sequence[ItemStatistics]) -> str:
         f"변별력 0.00–0.20 (약함) {len(weak)}개, 변별력 ≥ 0.40 (우수) {len(strong)}개."
     )
     if negatives:
-        nos = ", ".join(str(it.item_no) for it in sorted(negatives, key=lambda x: x.item_no))
-        lines.append(f"역변별 의심 문항: {nos}.")
+        nos = ", ".join(
+            str(it.item_no) for it in sorted(negatives, key=lambda x: x.item_no)
+        )
+        # Spec FR-021 template: 변별력 < 0 문항 ... (해당 문항: ...)
+        lines.append(
+            f"역변별 의심 문항 **(해당 문항: {nos})** — 출제 의도·정답 키 재검토 권장."
+        )
     lines.append("")
     return "\n".join(lines)
 
