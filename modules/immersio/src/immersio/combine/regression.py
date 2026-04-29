@@ -67,6 +67,10 @@ def compute_ols_regression(
             f"minimum {_MIN_COMPLETE_CASE} (8 predictors + intercept)"
         )
 
+    # joiner returns NaN→None coerced columns as object dtype; statsmodels
+    # rejects object input. Cast back to float64 on the complete-case slice.
+    complete = complete.astype({col: float for col in cols_needed})
+
     # GAP-9 mitigation B — zero-variance predictor reject.
     for axis in STANDARD_AXIS_KEYS:
         sd = float(complete[f"{axis}_z"].std(ddof=1))
