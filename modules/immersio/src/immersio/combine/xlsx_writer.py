@@ -352,9 +352,17 @@ def write_us1_xlsx(
     if subgroup_rows is not None and subgroup_headers is not None:
         _build_subgroup_sheet(wb, subgroup_rows, subgroup_headers)
 
+    # Determinism vector #5 — pin core.xml dcterms:created/modified to a
+    # fixed epoch. openpyxl strips tzinfo internally, so we hand it a
+    # naive UTC datetime sourced from _EPOCH_MODIFIED.
+    _epoch_naive = _EPOCH_MODIFIED.replace(tzinfo=None)
+    wb.properties.created = _epoch_naive
+    wb.properties.modified = _epoch_naive
+
     wb.save(out_path)
 
-    # Determinism vector #5 — pin <dcterms:modified> + zip entry dates.
+    # Determinism vector #5 — repack zip to also pin <dcterms:modified>
+    # (openpyxl rewrites it on save) and zip entry mtimes.
     rewrite_modified_in_zip(out_path, _EPOCH_MODIFIED)
 
 

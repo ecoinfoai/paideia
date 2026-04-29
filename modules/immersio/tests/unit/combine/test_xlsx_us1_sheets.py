@@ -254,6 +254,56 @@ def test_byte_identical_re_run(tmp_path: Path) -> None:
     assert out1.read_bytes() == out2.read_bytes()
 
 
+def test_dcterms_created_pinned_to_epoch(tmp_path: Path) -> None:
+    """``<dcterms:created>`` must also be pinned (not just ``modified``).
+
+    Without explicit ``wb.properties.created`` set, openpyxl writes
+    ``datetime.now()`` into core.xml so two runs with non-zero wall-clock
+    delta diverge. This test asserts the pinned epoch lands.
+    """
+    import io
+    import zipfile
+
+    out = tmp_path / "epoch.xlsx"
+    write_us1_xlsx(
+        correlation_cells=_cells(),
+        regression_coefs=_coefs(),
+        regression_fit=_fit(),
+        out_path=out,
+    )
+    with zipfile.ZipFile(out, "r") as zf:
+        core = zf.read("docProps/core.xml").decode("utf-8")
+    assert "<dcterms:created" in core
+    assert "2000-01-01T00:00:00Z" in core
+    assert core.count("2000-01-01T00:00:00Z") >= 2  # both created + modified
+
+
+def test_byte_identical_across_wallclock_delta(tmp_path: Path) -> None:
+    """Re-runs separated by >1s wall-clock delta must still match.
+
+    Reproduces the e2e regression where xlsx differed only in
+    ``<dcterms:created>`` because openpyxl's default uses ``datetime.now()``.
+    """
+    import time
+
+    out1 = tmp_path / "wc1.xlsx"
+    out2 = tmp_path / "wc2.xlsx"
+    write_us1_xlsx(
+        correlation_cells=_cells(),
+        regression_coefs=_coefs(),
+        regression_fit=_fit(),
+        out_path=out1,
+    )
+    time.sleep(1.1)
+    write_us1_xlsx(
+        correlation_cells=_cells(),
+        regression_coefs=_coefs(),
+        regression_fit=_fit(),
+        out_path=out2,
+    )
+    assert out1.read_bytes() == out2.read_bytes()
+
+
 # ----------------------------------------------------------------------
 # Fail-Fast
 # ----------------------------------------------------------------------
