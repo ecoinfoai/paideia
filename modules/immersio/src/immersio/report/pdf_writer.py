@@ -35,7 +35,7 @@ _PRODUCER = "paideia/immersio/0.1.0"
 
 
 @contextlib.contextmanager
-def _pin_source_date_epoch(epoch: int):
+def pin_source_date_epoch(epoch: int):
     """Set ``SOURCE_DATE_EPOCH`` for the wrapped block, restore on exit.
 
     reportlab's ``TimeStamp`` honours this env-var (see reportlab.pdfbase
@@ -143,8 +143,8 @@ def render_quality_report_pdf(
         canvas.setTitle("시험품질보고서")
         canvas.setAuthor(_PRODUCER)
 
-    with _pin_source_date_epoch(epoch):
+    with pin_source_date_epoch(epoch):
         doc.build(flowables, onFirstPage=_pin_metadata, onLaterPages=_pin_metadata)
 
 
-__all__ = ["render_quality_report_pdf"]
+__all__ = ["render_quality_report_pdf", "pin_source_date_epoch"]

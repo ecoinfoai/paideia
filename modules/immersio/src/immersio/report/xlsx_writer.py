@@ -61,7 +61,7 @@ _MODIFIED_RE = re.compile(
 )
 
 
-def _rewrite_modified_in_zip(xlsx_path: Path, when: datetime.datetime) -> None:
+def rewrite_modified_in_zip(xlsx_path: Path, when: datetime.datetime) -> None:
     """Repack ``xlsx_path`` with a pinned ``<dcterms:modified>`` value.
 
     openpyxl 의 save() 가 modified 를 datetime.now() 로 덮어씀. 본 함수는
@@ -440,7 +440,7 @@ def write_analysis_xlsx(
     # timestamp so two consecutive saves on the same input produce
     # byte-identical files (FR-023). See module docstring for why we
     # repack instead of monkey-patching openpyxl.writer.excel.
-    _rewrite_modified_in_zip(output_path, when)
+    rewrite_modified_in_zip(output_path, when)
 
 
-__all__ = ["write_analysis_xlsx"]
+__all__ = ["write_analysis_xlsx", "rewrite_modified_in_zip"]

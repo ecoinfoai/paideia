@@ -33,7 +33,7 @@ from paideia_shared.schemas import HistogramBin, MetadataAggregate  # noqa: E402
 
 from .. import fonts as _fonts  # noqa: E402
 
-_PNG_METADATA: dict[str, str] = {"Software": "paideia"}
+PNG_METADATA: dict[str, str] = {"Software": "paideia"}
 _DPI = 150
 
 
@@ -59,7 +59,7 @@ def _save(fig, output_path: Path) -> None:
         format="png",
         dpi=_DPI,
         bbox_inches="tight",
-        metadata=_PNG_METADATA,
+        metadata=PNG_METADATA,
     )
     plt.close(fig)
     output_path.write_bytes(buf.getvalue())
@@ -163,4 +163,5 @@ def render_fig2_metadata_correct_rates(
 __all__ = [
     "render_fig1_score_histogram",
     "render_fig2_metadata_correct_rates",
+    "PNG_METADATA",
 ]
