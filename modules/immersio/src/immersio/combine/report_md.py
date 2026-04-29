@@ -116,6 +116,69 @@ def _section_4_placeholder() -> str:
     )
 
 
+def _section_4_clusters(
+    cluster_rows: object,
+    cluster_header: object,
+    cluster_pairwise: object,
+    fig5_path: object,
+) -> str:
+    """T040 — §4 군집별 비교 (US2 wiring).
+
+    cluster_rows / cluster_header / cluster_pairwise 는 forward-typing
+    (객체 attribute access) 으로 받는다 — Pydantic schema (M5) 의
+    ClusterRow / ClusterScoreComparison / ClusterPairwise 를 caller 가
+    전달.
+    """
+    rows_lines = "\n".join(
+        f"| {r.cluster_id} | {r.cluster_label} | {r.n} | "
+        f"{'-' if r.mean is None else f'{r.mean:.2f}'} | "
+        f"{'-' if r.std is None else f'{r.std:.2f}'} | "
+        f"{'-' if r.ci_low_95 is None else f'[{r.ci_low_95:.2f}, {r.ci_high_95:.2f}]'} | "
+        f"{r.excluded_reason or '-'} |"
+        for r in cluster_rows
+    )
+
+    header_text = (
+        f"**검정**: k_used={cluster_header.k_used}, test={cluster_header.test_used}, "
+        f"levene_p={'-' if cluster_header.levene_p is None else f'{cluster_header.levene_p:.4f}'}, "
+        f"raw_p={'-' if cluster_header.raw_p is None else f'{cluster_header.raw_p:.4f}'}, "
+        f"η²={'-' if cluster_header.eta_squared is None else f'{cluster_header.eta_squared:.3f}'}, "
+        f"posthoc={cluster_header.posthoc_test}"
+    )
+
+    if cluster_pairwise:
+        pair_lines = "\n".join(
+            f"| {p.cluster_pair[0]} ↔ {p.cluster_pair[1]} | "
+            f"{p.mean_diff:+.2f} | {p.raw_p:.4f} | {p.fdr_q:.4f} | "
+            f"{'예' if p.significant_after_correction else '아니오'} |"
+            for p in cluster_pairwise
+        )
+        pairwise_block = (
+            "\n**사후 비교 (BH-FDR 보정 후 q<0.05 = 유의)**:\n\n"
+            "| 쌍 | 평균차 | raw_p | fdr_q | 유의 |\n"
+            "|---|---|---|---|---|\n"
+            f"{pair_lines}\n"
+        )
+    else:
+        pairwise_block = ""
+
+    fig5_md = (
+        f"\n![군집별 시험 점수 boxplot]({fig5_path.as_posix()})\n"
+        if fig5_path is not None
+        else ""
+    )
+
+    return (
+        "## 4. 군집별 비교\n\n"
+        f"{header_text}\n\n"
+        "| cluster_id | label | n | mean | std | 95% CI | 제외 사유 |\n"
+        "|---|---|---|---|---|---|---|\n"
+        f"{rows_lines}\n"
+        f"{pairwise_block}"
+        f"{fig5_md}"
+    )
+
+
 def _section_5_placeholder() -> str:
     return (
         "## 5. 부분군 비교\n\n"
@@ -157,6 +220,10 @@ def build_us1_report(
     fig3_path: Path,
     fig4_path: Path,
     out_path: Path,
+    cluster_rows: object | None = None,
+    cluster_header: object | None = None,
+    cluster_pairwise: object | None = None,
+    fig5_path: Path | None = None,
 ) -> None:
     """Compose the US1 partial markdown report and land it on disk.
 
@@ -185,6 +252,18 @@ def build_us1_report(
     if not regression_coefs:
         raise ValueError("build_us1_report: empty regression_coefs")
 
+    if cluster_rows is not None and cluster_header is not None:
+        # Pairwise list may legitimately be empty (k=1 fallback); §4 still
+        # renders the per-cluster table + omnibus header.
+        section_4 = _section_4_clusters(
+            cluster_rows,
+            cluster_header,
+            cluster_pairwise or [],
+            fig5_path,
+        )
+    else:
+        section_4 = _section_4_placeholder()
+
     parts = [
         "# 진단 × 시험 결합 분석 보고서\n",
         f"**학기/과목**: {manifest.semester} / {manifest.course_slug}  ",
@@ -192,7 +271,7 @@ def build_us1_report(
         _section_1_overview(manifest, regression_fit),
         _section_2_correlation(correlation_cells, fig3_path),
         _section_3_regression(regression_coefs, regression_fit, fig4_path),
-        _section_4_placeholder(),
+        section_4,
         _section_5_placeholder(),
         _section_6_recommendations(recommendations, manifest),
     ]

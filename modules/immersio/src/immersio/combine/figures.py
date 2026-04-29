@@ -196,4 +196,51 @@ def render_fig4_beta_bar(
     _save_png(fig, path)
 
 
-__all__ = ["render_fig3_heatmap", "render_fig4_beta_bar"]
+def render_fig5_cluster_boxplot(
+    *,
+    scores_by_cluster: dict[int, list[float]],
+    cluster_names: dict[int, str],
+    path: Path,
+) -> None:
+    """Render the per-cluster total_score boxplot (T039, US2).
+
+    Args:
+        scores_by_cluster: Mapping ``cluster_id -> list[total_score]``
+            for exam-taking respondents in each cluster.
+        cluster_names: SPEC-GAP-001 sidecar dict; must cover every key
+            in ``scores_by_cluster``.
+        path: PNG output path.
+
+    Raises:
+        ValueError: If ``scores_by_cluster`` is empty, or any cluster_id
+            is missing from ``cluster_names``.
+    """
+    if not scores_by_cluster:
+        raise ValueError("render_fig5_cluster_boxplot: empty scores_by_cluster")
+    missing = set(scores_by_cluster) - set(cluster_names)
+    if missing:
+        raise ValueError(
+            f"render_fig5_cluster_boxplot: cluster_names missing labels for "
+            f"cluster_id(s) {sorted(missing)}"
+        )
+
+    _register_korean_font()
+
+    cluster_ids = sorted(scores_by_cluster)
+    data = [scores_by_cluster[cid] for cid in cluster_ids]
+    labels = [f"{cid}: {cluster_names[cid]}" for cid in cluster_ids]
+
+    fig, ax = plt.subplots(figsize=(max(6.0, 1.5 * len(cluster_ids) + 2.0), 5.0))
+    ax.boxplot(data, tick_labels=labels)
+    ax.set_xlabel("군집 (cluster_id: 명명)")
+    ax.set_ylabel("총점 (total_score)")
+    ax.set_title("군집별 시험 총점 분포")
+    fig.tight_layout()
+    _save_png(fig, path)
+
+
+__all__ = [
+    "render_fig3_heatmap",
+    "render_fig4_beta_bar",
+    "render_fig5_cluster_boxplot",
+]

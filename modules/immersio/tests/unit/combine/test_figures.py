@@ -184,3 +184,91 @@ def test_fig4_highlights_q_below_005(tmp_path: Path) -> None:
 def test_fig4_empty_coefs_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="empty"):
         render_fig4_beta_bar([], tmp_path / "fig4.png")
+
+
+# ----------------------------------------------------------------------
+# fig5 — cluster total_score boxplot (T039)
+# ----------------------------------------------------------------------
+
+
+def _cluster_dataset() -> dict[int, list[float]]:
+    return {
+        0: [60.0, 62.0, 65.0, 70.0, 72.0],
+        1: [70.0, 75.0, 78.0, 80.0, 82.0],
+        2: [80.0, 85.0, 88.0, 90.0, 92.0],
+    }
+
+
+def test_fig5_writes_png(tmp_path: Path) -> None:
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    out = tmp_path / "fig5.png"
+    render_fig5_cluster_boxplot(
+        scores_by_cluster=_cluster_dataset(),
+        cluster_names={0: "A", 1: "B", 2: "C"},
+        path=out,
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_fig5_software_metadata(tmp_path: Path) -> None:
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    out = tmp_path / "fig5.png"
+    render_fig5_cluster_boxplot(
+        scores_by_cluster=_cluster_dataset(),
+        cluster_names={0: "A", 1: "B", 2: "C"},
+        path=out,
+    )
+    raw = out.read_bytes()
+    assert b"Software" in raw and b"paideia" in raw
+
+
+def test_fig5_byte_deterministic(tmp_path: Path) -> None:
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    out1 = tmp_path / "fig5_a.png"
+    out2 = tmp_path / "fig5_b.png"
+    payload = dict(
+        scores_by_cluster=_cluster_dataset(),
+        cluster_names={0: "A", 1: "B", 2: "C"},
+    )
+    render_fig5_cluster_boxplot(**payload, path=out1)
+    render_fig5_cluster_boxplot(**payload, path=out2)
+    assert out1.read_bytes() == out2.read_bytes()
+
+
+def test_fig5_empty_dataset_rejected(tmp_path: Path) -> None:
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    with pytest.raises(ValueError, match="empty"):
+        render_fig5_cluster_boxplot(
+            scores_by_cluster={},
+            cluster_names={},
+            path=tmp_path / "fig5.png",
+        )
+
+
+def test_fig5_missing_cluster_name_rejected(tmp_path: Path) -> None:
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    with pytest.raises(ValueError, match="cluster_names"):
+        render_fig5_cluster_boxplot(
+            scores_by_cluster=_cluster_dataset(),
+            cluster_names={0: "A"},  # 1, 2 missing
+            path=tmp_path / "fig5.png",
+        )
+
+
+def test_fig5_cluster_id_ascending_order(tmp_path: Path) -> None:
+    """Determinism — boxes ordered by cluster_id ascending regardless of
+    cluster_names dict insertion order."""
+    from immersio.combine.figures import render_fig5_cluster_boxplot
+
+    out = tmp_path / "fig5.png"
+    render_fig5_cluster_boxplot(
+        scores_by_cluster=_cluster_dataset(),
+        cluster_names={2: "C", 1: "B", 0: "A"},  # dict order shuffled
+        path=out,
+    )
+    assert out.exists()
