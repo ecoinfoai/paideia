@@ -305,10 +305,21 @@ def join_silver_phase3(
 
     # Convert pandas NA / NaT / NaN sentinels to None for Pydantic
     # downstream — Pydantic V2 only accepts None for ``Optional`` fields,
-    # not pd.NA / numpy.nan. Skip dict columns (they hold real dicts and
-    # ``where`` would coerce empty ones to None).
-    non_dict_cols = [c for c in df.columns if c not in _DICT_COLUMNS]
-    for col in non_dict_cols:
+    # not pd.NA / numpy.nan. Skip dict columns (they hold real dicts) and
+    # bool columns (no NaN possible: Group 2 *_missing fillna(True), Group
+    # 4 exam_taken from student_master, Group 7 진단응답/시험응시 fully
+    # populated). Coercing bool columns to object would break downstream
+    # boolean negation (`~series` over object yields garbage), so we keep
+    # their bool dtype.
+    bool_cols: set[str] = {f"{axis}_missing" for axis in STANDARD_AXIS_KEYS} | {
+        "on_roster",
+        "exam_taken",
+        "진단응답",
+        "시험응시",
+    }
+    for col in df.columns:
+        if col in _DICT_COLUMNS or col in bool_cols:
+            continue
         df[col] = df[col].astype(object).where(df[col].notna(), None)
 
     return df, counts
