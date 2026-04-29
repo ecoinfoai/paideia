@@ -47,6 +47,7 @@ from .regression import compute_ols_regression
 from .report_md import build_us1_report
 from .report_pdf import render_combined_analysis_pdf
 from .silver_writer import write_combined_silver
+from .student_report import build_student_reports
 from .subgroup_compare import compute_subgroup_score_comparison
 from .xlsx_writer import write_us1_xlsx
 
@@ -304,6 +305,15 @@ def run_us1_pipeline(
         cluster_pairwise=cluster_pairwise,
         subgroup_rows=subgroup_rows,
         subgroup_headers=subgroup_headers,
+    )
+
+    # 12. T070 — per-student counseling sheets (post-closure follow-up).
+    #     INTEGRATION (RULE 4): combine.student_report 호출됨
+    #     (orchestrator: combine/pipeline.py, change: add-call, task: T070).
+    build_student_reports(
+        df,
+        manifest_dict=manifest.model_dump(mode="json"),
+        gold_dir=gold_target,
     )
 
     return 0
