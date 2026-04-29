@@ -10,9 +10,9 @@ Spec 004 contracts/xlsx_sheets.md §1-§6 — six sheets in this build:
   5. 4_정답률          (per-item correct rate + 메타 + 정답·최다오답)
   6. 5_오답분석        (per-item label + 무응답률 + 인접 distractor 등)
 
-The 7th legacy sheet (학생성적) is Phase 4's responsibility (T052) — it
-is intentionally absent from this writer and added by an update path
-later.
+The 7th sheet (학생성적) lives behind the ``student_metrics`` kwarg
+(Phase 4 / T052) — opt-in so Phase 3 callers preserve the original
+6-sheet output.
 
 Determinism (FR-023 / R-10):
 * ``Workbook.properties.creator`` and ``lastModifiedBy`` pinned to a
@@ -20,25 +20,31 @@ Determinism (FR-023 / R-10):
 * ``created`` / ``modified`` parsed from the operator's
   ``generated_at_utc`` argument — that string is a single source of
   truth shared by xlsx Producer, pdf CreationDate, and png Software.
-* openpyxl's ``save()`` overwrites ``modified`` with ``datetime.now()``
-  via ``openpyxl.writer.excel.write_root_rels`` neighbour code. We
-  defeat this by monkey-patching ``datetime.datetime.now`` *inside the
-  openpyxl.writer.excel namespace only* for the duration of the save
-  call; the override is reverted in a ``try/finally`` so global state is
-  never polluted. This keeps two consecutive calls byte-identical
-  (verified by T030).
+* openpyxl's ``save()`` overwrites ``modified`` with ``datetime.now()``.
+  Earlier revisions tried a ``contextmanager`` monkey-patch on
+  ``openpyxl.writer.excel.datetime.datetime`` but that bled into other
+  test fixtures' openpyxl interactions during the same pytest session
+  (xlsx bytes diverged when test_legacy_diff fixtures preceded
+  test_two_runs_byte_identical). The current implementation rewrites
+  the ``<dcterms:modified>`` element of ``docProps/core.xml`` *after*
+  ``save()`` lands by repacking the zip — purely local file work, zero
+  shared-namespace mutation. The repack uses ``ZipInfo`` with a fixed
+  ``date_time=(1980,1,1,0,0,0)`` so the resulting bytes match
+  openpyxl's own pin and the two-call byte-equal property holds even
+  across heavy fixture interleaving.
 """
 
 from __future__ import annotations
 
-import contextlib
 import datetime
+import io
+import re
+import zipfile
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from openpyxl.writer import excel as _openpyxl_excel
 from paideia_shared.schemas import (
     HistogramBin,
     ItemStatistics,
@@ -47,30 +53,48 @@ from paideia_shared.schemas import (
 )
 
 _PRODUCER = "paideia/immersio/0.1.0"
+_FIXED_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+_CORE_XML_PATH = "docProps/core.xml"
+_MODIFIED_RE = re.compile(
+    r"(<dcterms:modified[^>]*>)([^<]+)(</dcterms:modified>)",
+    re.DOTALL,
+)
 
 
-@contextlib.contextmanager
-def _pin_openpyxl_now(when: datetime.datetime):
-    """Monkey-patch ``openpyxl.writer.excel.datetime.datetime.now`` to ``when``.
+def _rewrite_modified_in_zip(xlsx_path: Path, when: datetime.datetime) -> None:
+    """Repack ``xlsx_path`` with a pinned ``<dcterms:modified>`` value.
 
-    Restored on context exit even if ``Workbook.save()`` raises. ``when``
-    is treated as UTC and any tzinfo is stripped so the patched ``now``
-    matches openpyxl's expected ``datetime.datetime.now(tz=...).replace(
-    tzinfo=None)`` shape.
+    openpyxl 의 save() 가 modified 를 datetime.now() 로 덮어씀. 본 함수는
+    save() 후 호출되어:
+      1. 원본 xlsx 의 모든 entry 를 메모리 buffer 에 unpack (date_time 보존
+         불필요 — 어차피 새 archive 에서 fixed mtime 사용).
+      2. ``docProps/core.xml`` 안의 ``<dcterms:modified>`` 텍스트만
+         ``when.strftime("%Y-%m-%dT%H:%M:%SZ")`` 로 교체.
+      3. 새 archive 를 fixed ZipInfo (date_time=1980-01-01) 로 다시 작성.
+      4. 결과 bytes 로 ``xlsx_path`` 덮어쓰기 (atomic via .write_bytes).
+
+    ``when`` 은 ISO 8601 UTC ('YYYY-MM-DDTHH:MM:SSZ') 형식으로 직렬화.
     """
-    pinned = when.replace(tzinfo=None) if when.tzinfo is not None else when
+    iso = when.strftime("%Y-%m-%dT%H:%M:%SZ")
+    with zipfile.ZipFile(xlsx_path, "r") as src:
+        members: list[tuple[str, bytes, int]] = []
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == _CORE_XML_PATH:
+                text = data.decode("utf-8")
+                text = _MODIFIED_RE.sub(rf"\g<1>{iso}\g<3>", text, count=1)
+                data = text.encode("utf-8")
+            members.append((info.filename, data, info.compress_type))
 
-    class _PinnedDateTime(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):  # noqa: D401 — match openpyxl's call signature
-            return pinned
-
-    original = _openpyxl_excel.datetime.datetime
-    _openpyxl_excel.datetime.datetime = _PinnedDateTime  # type: ignore[misc]
-    try:
-        yield
-    finally:
-        _openpyxl_excel.datetime.datetime = original  # type: ignore[misc]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as dst:
+        for name, data, compress_type in members:
+            zi = zipfile.ZipInfo(filename=name, date_time=_FIXED_ZIP_DATE)
+            # Preserve the openpyxl-chosen compression so the archive
+            # behaves identically to the original.
+            zi.compress_type = compress_type or zipfile.ZIP_DEFLATED
+            dst.writestr(zi, data)
+    xlsx_path.write_bytes(buf.getvalue())
 
 
 def _parse_iso8601_utc(s: str) -> datetime.datetime:
@@ -411,8 +435,12 @@ def write_analysis_xlsx(
         _build_student_score_sheet(wb, metrics_list)
 
     _stamp_workbook(wb, semester, course_name_kr, when)
-    with _pin_openpyxl_now(when):
-        wb.save(output_path)
+    wb.save(output_path)
+    # Rewrite docProps/core.xml's <dcterms:modified> to the pinned
+    # timestamp so two consecutive saves on the same input produce
+    # byte-identical files (FR-023). See module docstring for why we
+    # repack instead of monkey-patching openpyxl.writer.excel.
+    _rewrite_modified_in_zip(output_path, when)
 
 
 __all__ = ["write_analysis_xlsx"]
