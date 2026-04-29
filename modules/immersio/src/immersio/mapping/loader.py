@@ -34,4 +34,10 @@ def load_mapping(path: Path) -> DiagnosticMappingConfig:
             f"load_mapping: expected top-level mapping in {path}, got "
             f"{type(data).__name__}."
         )
+    # YAML anchor-only top-level keys (e.g. `ordinal_maps:`) are reusable
+    # alias blocks; drop them before strict (extra='forbid') validation so
+    # production mapping YAMLs that share likert tables across columns still
+    # validate. Aliases inside other keys remain resolved by safe_load.
+    for anchor_key in ("ordinal_maps",):
+        data.pop(anchor_key, None)
     return DiagnosticMappingConfig.model_validate(data)
