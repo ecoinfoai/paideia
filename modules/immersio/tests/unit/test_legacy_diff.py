@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 
-from immersio.report.legacy_diff import generate_legacy_diff
+from immersio.report.legacy_diff import LegacyLoadError, generate_legacy_diff
 
 
 def _stamp_workbook(wb: Workbook, when: str) -> None:
@@ -307,3 +307,66 @@ def test_rejects_missing_legacy_path(tmp_path: Path, immersio_path: Path) -> Non
             semester="2026-1",
             course_slug="anatomy",
         )
+
+
+def test_corrupt_legacy_xlsx_raises_legacy_load_error(
+    tmp_path: Path, immersio_path: Path
+) -> None:
+    """Adversary P4: corrupt legacy xlsx → LegacyLoadError (CLI exit 5)."""
+    bad = tmp_path / "corrupt.xlsx"
+    bad.write_bytes(b"this is not a real xlsx -- just garbage bytes")
+    out = tmp_path / "diff.md"
+    with pytest.raises(LegacyLoadError) as exc_info:
+        generate_legacy_diff(
+            legacy_xlsx=bad,
+            immersio_xlsx=immersio_path,
+            output_path=out,
+            compared_at_utc="2026-04-29T00:00:00Z",
+            semester="2026-1",
+            course_slug="anatomy",
+        )
+    msg = str(exc_info.value)
+    assert "legacy" in msg
+    assert "corrupt" in msg or "valid xlsx" in msg
+    # message must point at the failing path so operators can act on it
+    assert str(bad) in msg
+
+
+def test_corrupt_immersio_xlsx_raises_legacy_load_error(
+    tmp_path: Path, legacy_path: Path
+) -> None:
+    bad = tmp_path / "corrupt.xlsx"
+    bad.write_bytes(b"PK\x03\x04 -- truncated zip header, not a real xlsx")
+    out = tmp_path / "diff.md"
+    with pytest.raises(LegacyLoadError) as exc_info:
+        generate_legacy_diff(
+            legacy_xlsx=legacy_path,
+            immersio_xlsx=bad,
+            output_path=out,
+            compared_at_utc="2026-04-29T00:00:00Z",
+            semester="2026-1",
+            course_slug="anatomy",
+        )
+    msg = str(exc_info.value)
+    assert "immersio" in msg
+    assert str(bad) in msg
+
+
+def test_legacy_load_error_chains_original_exception(
+    tmp_path: Path, immersio_path: Path
+) -> None:
+    """Adversary P4 anti-pattern guard: original exception preserved via __cause__."""
+    bad = tmp_path / "x.xlsx"
+    bad.write_bytes(b"not xlsx")
+    out = tmp_path / "diff.md"
+    with pytest.raises(LegacyLoadError) as exc_info:
+        generate_legacy_diff(
+            legacy_xlsx=bad,
+            immersio_xlsx=immersio_path,
+            output_path=out,
+            compared_at_utc="2026-04-29T00:00:00Z",
+            semester="2026-1",
+            course_slug="anatomy",
+        )
+    # `raise ... from exc` populates __cause__ — never silently swallow
+    assert exc_info.value.__cause__ is not None

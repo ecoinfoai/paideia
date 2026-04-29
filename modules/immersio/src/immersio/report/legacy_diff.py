@@ -24,10 +24,22 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 logger = logging.getLogger(__name__)
+
+
+class LegacyLoadError(RuntimeError):
+    """Raised when a legacy / immersio xlsx fails to load.
+
+    Wraps low-level openpyxl errors (``InvalidFileException``,
+    ``BadZipFile``, ``ValueError``) so the orchestrator can map every
+    load failure to a single CLI exit code (FR-033 → exit 5) without
+    leaking implementation-detail traces to operators.
+    """
 
 _TOLERANCE = 0.001
 
@@ -352,6 +364,41 @@ def _render_md(
     return "\n".join(lines)
 
 
+def _load_xlsx_or_raise(path: Path, *, role: str) -> Any:
+    """Load ``path`` via openpyxl, wrapping low-level errors as ``LegacyLoadError``.
+
+    Args:
+        path: Target xlsx path (must exist — caller should ``is_file()``
+            check first).
+        role: ``"legacy"`` or ``"immersio"`` — surfaced in the error
+            message so the operator knows which input is corrupt.
+
+    Returns:
+        The loaded ``openpyxl.Workbook``.
+
+    Raises:
+        LegacyLoadError: When the file cannot be parsed as xlsx. Logs at
+            error level before raising so the orchestrator's stderr
+            stream carries the trace + actionable suggestion.
+    """
+    try:
+        return load_workbook(path, data_only=True)
+    except (InvalidFileException, BadZipFile, ValueError) as exc:
+        logger.error(
+            "legacy_diff: failed to load %s xlsx %s — %s: %s",
+            role,
+            path,
+            type(exc).__name__,
+            exc,
+        )
+        raise LegacyLoadError(
+            f"{role} xlsx is corrupt or not a valid xlsx file: {path} "
+            f"({type(exc).__name__}: {exc}). Verify the file with "
+            f"`unzip -l {path}` (every xlsx is a zip archive); if "
+            f"unreadable, restore from backup or re-export. CLI exit 5."
+        ) from exc
+
+
 def _structure_check(
     legacy_wb: Any, immersio_wb: Any
 ) -> tuple[list[str], list[str]]:
@@ -393,6 +440,11 @@ def generate_legacy_diff(
     Raises:
         FileNotFoundError: When either input xlsx is missing or the
             output parent directory does not exist.
+        LegacyLoadError: When either input xlsx exists but is corrupt /
+            not a valid xlsx (CLI exit 5 per FR-033). Wraps
+            ``openpyxl`` 's ``InvalidFileException``, ``zipfile``'s
+            ``BadZipFile``, and ``ValueError`` so callers don't have to
+            reach into openpyxl internals.
     """
     legacy_xlsx = Path(legacy_xlsx)
     immersio_xlsx = Path(immersio_xlsx)
@@ -410,8 +462,8 @@ def generate_legacy_diff(
             f"generate_legacy_diff: parent directory missing: {output_path.parent}"
         )
 
-    legacy_wb = load_workbook(legacy_xlsx, data_only=True)
-    immersio_wb = load_workbook(immersio_xlsx, data_only=True)
+    legacy_wb = _load_xlsx_or_raise(legacy_xlsx, role="legacy")
+    immersio_wb = _load_xlsx_or_raise(immersio_xlsx, role="immersio")
 
     structure_rows, common_sheets = _structure_check(legacy_wb, immersio_wb)
     logger.info(
@@ -454,4 +506,4 @@ def generate_legacy_diff(
     )
 
 
-__all__ = ["generate_legacy_diff"]
+__all__ = ["LegacyLoadError", "generate_legacy_diff"]
