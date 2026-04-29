@@ -24,7 +24,18 @@ from typing import IO
 
 from pydantic import ValidationError
 
+from ..analyze.archival import ArchivalError, archive_previous_run
+from ..analyze.pipeline import (
+    PipelineArgs,
+    SilverNotFoundError,
+    run_immersio_phase1,
+)
+from ..fonts import KoreanFontUnavailableError
 from ..ingest import DataIntegrityError, IngestValidationError, run_ingest
+
+_SEMESTER_PATTERN = re.compile(r"^\d{4}-[12SW]$")
+_COURSE_SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,39}$")
+_ISO8601_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 _OUTPUT_KEY_PATTERN = re.compile(r"^\d{4}-[12SW]-[a-z][a-z0-9-]{1,39}$")
 
@@ -173,6 +184,26 @@ def _build_parser() -> argparse.ArgumentParser:
     verbosity.add_argument("--quiet", action="store_true")
     verbosity.add_argument("--verbose", action="store_true")
 
+    analyze = sub.add_parser("analyze", help="Run Phase 1+2 analysis pipeline")
+    analyze.add_argument("--semester", required=True, type=str)
+    analyze.add_argument("--course", required=True, type=str)
+    analyze.add_argument("--bronze-dir", type=Path, default=Path("data/bronze"))
+    analyze.add_argument("--silver-dir", type=Path, default=Path("data/silver"))
+    analyze.add_argument("--gold-dir", type=Path, default=Path("data/gold"))
+    analyze.add_argument(
+        "--legacy-xlsx",
+        type=Path,
+        default=Path("data/silver/legacy/중간고사_분석결과.xlsx"),
+    )
+    analyze.add_argument("--exam-result-pattern", type=str, default=None)
+    analyze.add_argument("--exam-absent-pattern", type=str, default=None)
+    analyze.add_argument("--created-at-utc", type=str, default=None)
+    analyze.add_argument("--seed", type=int, default=42)
+    analyze.add_argument("--no-needs-map", action="store_true")
+    a_verbosity = analyze.add_mutually_exclusive_group()
+    a_verbosity.add_argument("--quiet", action="store_true")
+    a_verbosity.add_argument("--verbose", action="store_true")
+
     return parser
 
 
@@ -252,8 +283,98 @@ def app(argv: list[str] | None = None) -> int:
             return 3
         return 0
 
+    if args.command == "analyze":
+        return _run_analyze(args)
+
     parser.error(f"unknown command: {args.command}")
     return 2  # pragma: no cover
+
+
+def _run_analyze(args: argparse.Namespace) -> int:
+    """Drive the Phase 1+2 analysis orchestrator end-to-end.
+
+    Maps every fail-fast exception to the contracts/cli.md exit code
+    table (FR-033). archival of the previous run happens *before*
+    ``run_immersio_phase1`` writes new outputs so the canonical paths
+    are empty when the pipeline starts (Constitution V '부분 산출 금지').
+    """
+    if not _SEMESTER_PATTERN.match(args.semester):
+        print(
+            f"ERROR [immersio analyze]: invalid_semester — "
+            f"--semester must match YYYY-N (1/2/S/W), got {args.semester!r}",
+            file=sys.stderr,
+        )
+        return 1
+    if not _COURSE_SLUG_PATTERN.match(args.course):
+        print(
+            f"ERROR [immersio analyze]: invalid_course — "
+            f"--course must be kebab-case slug, got {args.course!r}",
+            file=sys.stderr,
+        )
+        return 1
+    if args.created_at_utc is not None and not _ISO8601_PATTERN.match(args.created_at_utc):
+        print(
+            f"ERROR [immersio analyze]: invalid_created_at_utc — "
+            f"--created-at-utc must be ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ), "
+            f"got {args.created_at_utc!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    legacy_xlsx = args.legacy_xlsx
+    if legacy_xlsx is not None and not legacy_xlsx.is_file():
+        # Soft path — the orchestrator will record a manifest note instead
+        # of failing. Operator can pass /dev/null to suppress entirely.
+        legacy_xlsx = None
+
+    silver_root = args.silver_dir.resolve()
+    gold_root = args.gold_dir.resolve()
+    silver_dir = silver_root / "immersio" / f"{args.semester}-{args.course}"
+    gold_dir = gold_root / "immersio" / f"{args.semester}-{args.course}"
+
+    # Archival of any prior run BEFORE new outputs land.
+    try:
+        archive_previous_run(silver_dir=silver_dir, gold_dir=gold_dir)
+    except ArchivalError as exc:
+        print(f"ERROR [immersio analyze]: archival — {exc}", file=sys.stderr)
+        return 4
+
+    pipeline_args = PipelineArgs(
+        semester=args.semester,
+        course_slug=args.course,
+        bronze_dir=args.bronze_dir,
+        silver_root=silver_root,
+        gold_root=gold_root,
+        legacy_xlsx=legacy_xlsx,
+        created_at_utc_override=args.created_at_utc,
+        seed=args.seed,
+        no_needs_map=args.no_needs_map,
+        verbose_stream=_resolve_stream(args),
+    )
+
+    try:
+        return run_immersio_phase1(pipeline_args)
+    except KoreanFontUnavailableError as exc:
+        print(str(exc), file=sys.stderr)
+        return 6
+    except SilverNotFoundError as exc:
+        print(f"ERROR [immersio analyze]: file_missing — {exc}", file=sys.stderr)
+        return 3
+    except ValidationError as exc:
+        print("ERROR [immersio analyze]: schema_validation", file=sys.stderr)
+        for error in exc.errors():
+            loc = ".".join(str(part) for part in error["loc"])
+            print(f"  - {loc}: {error['msg']}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as exc:
+        print(f"ERROR [immersio analyze]: file_missing — {exc}", file=sys.stderr)
+        return 3
+    except ValueError as exc:
+        print(f"ERROR [immersio analyze]: invalid_input — {exc}", file=sys.stderr)
+        return 1
+    except (PermissionError, OSError) as exc:
+        print(f"ERROR [immersio analyze]: io — {exc}", file=sys.stderr)
+        return 3
 
 
 if __name__ == "__main__":  # pragma: no cover

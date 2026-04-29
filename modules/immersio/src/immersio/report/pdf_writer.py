@@ -82,6 +82,7 @@ def render_quality_report_pdf(
     md_text: str,
     output_path: Path,
     created_at_utc: str,
+    image_base_dir: Path | None = None,
 ) -> None:
     """Render ``md_text`` to ``output_path`` as a deterministic PDF.
 
@@ -91,6 +92,11 @@ def render_quality_report_pdf(
         output_path: Target ``.pdf`` path.
         created_at_utc: ISO8601 UTC timestamp pinned at the manifest;
             mapped onto Producer/CreationDate/ModDate.
+        image_base_dir: Optional base directory used to resolve relative
+            ``![alt](path)`` references inside ``md_text``. Defaults to
+            ``output_path.parent`` so figures sitting next to the PDF
+            (e.g. ``figs/fig1_*.png``) resolve naturally without the
+            caller having to pre-rewrite the Markdown.
 
     Raises:
         ValueError: When ``md_text`` is empty.
@@ -117,7 +123,8 @@ def render_quality_report_pdf(
     styles["Heading1"].fontName = bold_name
     styles["Heading2"].fontName = bold_name
 
-    flowables = parse_markdown_to_flowables(md_text)
+    base = image_base_dir if image_base_dir is not None else output_path.parent
+    flowables = parse_markdown_to_flowables(md_text, image_base_dir=base)
 
     epoch = _to_epoch(created_at_utc)
 

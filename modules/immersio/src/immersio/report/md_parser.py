@@ -93,13 +93,21 @@ def _build_table(rows: Sequence[Sequence[str]]) -> Table:
     return table
 
 
-def parse_markdown_to_flowables(md_text: str) -> list[Flowable]:
+def parse_markdown_to_flowables(
+    md_text: str,
+    *,
+    image_base_dir: Path | None = None,
+) -> list[Flowable]:
     """Parse ``md_text`` into a deterministic list of reportlab flowables.
 
     Args:
         md_text: Markdown source. Only the subset listed in the module
             docstring is recognised. Unknown constructs degrade gracefully
             to plain paragraphs.
+        image_base_dir: Optional base directory used to resolve relative
+            ``![alt](path)`` image references. When ``None``, image
+            paths are interpreted relative to the process's current
+            working directory (the historical behaviour).
 
     Returns:
         List of ``Flowable`` instances ready to be passed to
@@ -140,8 +148,19 @@ def parse_markdown_to_flowables(md_text: str) -> list[Flowable]:
         # Image (must be alone on the line)
         m = _IMAGE_PATTERN.match(stripped)
         if m:
-            path = Path(m.group(2)).expanduser()
-            flowables.append(Image(str(path)))
+            raw_path = Path(m.group(2)).expanduser()
+            if not raw_path.is_absolute() and image_base_dir is not None:
+                raw_path = (image_base_dir / raw_path).resolve()
+            # Reportlab raises LayoutError when an Image's intrinsic size
+            # overflows the frame; clamp to the A4 usable width and let
+            # reportlab scale the height proportionally.
+            usable_width = A4[0] - 30 * mm
+            img = Image(str(raw_path))
+            if img.imageWidth > usable_width:
+                ratio = usable_width / float(img.imageWidth)
+                img.drawWidth = usable_width
+                img.drawHeight = float(img.imageHeight) * ratio
+            flowables.append(img)
             i += 1
             continue
 
