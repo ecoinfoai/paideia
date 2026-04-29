@@ -23,6 +23,13 @@ from .diagnostic_mapping import (
     MappingMetadata,
 )
 from .axis_summary import AxisSummaryRow
+from .cluster_score_comparison import (
+    ClusterPairwise,
+    ClusterScoreComparison,
+)
+from .combined_analysis_manifest import CombinedAnalysisManifest
+from .combined_analysis_row import CombinedAnalysisRow
+from .correlation_cell import CorrelationCell
 from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
@@ -46,9 +53,11 @@ from .needs_map_manifest import (
     SentimentRunInfo,
     VocabularyInfo,
 )
+from .regression_summary import RegressionCoefficient, RegressionFitSummary
 from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
 from .student_exam_metrics import StudentExamMetrics
 from .student_master import StudentMaster
+from .subgroup_score_comparison import SubgroupScoreComparison
 
 __all__ = [
     "CanonicalStudentId",
@@ -99,4 +108,13 @@ __all__ = [
     "HistogramBin",
     "LegacyDiffEntry",
     "ImmersioPhase1Manifest",
+    # Phase 3 combined-analysis (spec 005) — M1-M7
+    "CombinedAnalysisRow",
+    "CorrelationCell",
+    "RegressionCoefficient",
+    "RegressionFitSummary",
+    "ClusterScoreComparison",
+    "ClusterPairwise",
+    "SubgroupScoreComparison",
+    "CombinedAnalysisManifest",
 ]
