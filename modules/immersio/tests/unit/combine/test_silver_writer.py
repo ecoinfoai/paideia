@@ -238,3 +238,23 @@ def test_write_rejects_input_missing_required_columns(
     out = tmp_path / "bad.parquet"
     with pytest.raises(ValueError, match="60-column contract"):
         write_combined_silver(bad, out)
+
+
+def test_write_rejects_bool_column_nan(
+    joined_df: pd.DataFrame, tmp_path: Path
+) -> None:
+    """architect Phase 3 위협 (c): 13 bool 컬럼은 NaN 절대 불가 — Fail-Fast.
+
+    pandas refuses to assign NaN to bool dtype directly, so we cast 진단응답
+    to ``object`` first to simulate an upstream mutation that broke the
+    invariant. silver_writer's explicit guard surfaces the anomaly before
+    parquet land instead of producing a malformed silver.
+    """
+    import numpy as np
+
+    bad = joined_df.copy()
+    bad["진단응답"] = bad["진단응답"].astype(object)
+    bad.loc[0, "진단응답"] = np.nan
+    out = tmp_path / "bad_bool.parquet"
+    with pytest.raises(ValueError, match="bool column"):
+        write_combined_silver(bad, out)

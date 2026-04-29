@@ -93,6 +93,33 @@ def write_combined_silver(df: pd.DataFrame, path: Path) -> None:
             f"is missing columns {sorted(missing)}"
         )
 
+    # architect (c) — 13 bool columns must never carry NaN. The joiner
+    # builds them via fillna/직접 산출, but a manual mutation upstream could
+    # break this contract; explicit Fail-Fast surfaces the anomaly before
+    # parquet land.
+    _BOOL_COLUMNS = (
+        "on_roster",
+        "exam_taken",
+        "진단응답",
+        "시험응시",
+        *(f"{axis}_missing" for axis in (
+            "digital_efficacy",
+            "motivation",
+            "time_availability",
+            "material_preference",
+            "study_strategy",
+            "study_environment",
+            "social_learning",
+            "feedback_seeking",
+        )),
+    )
+    for col in _BOOL_COLUMNS:
+        if df[col].isna().any():
+            raise ValueError(
+                f"silver_writer: bool column {col!r} carries NaN — pipeline "
+                f"anomaly (Constitution III + architect Phase 3 위협 (c))"
+            )
+
     out = df.copy()
     for col in _DICT_COLUMNS:
         out[col] = out[col].map(_encode_dict_column)
