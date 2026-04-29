@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+from .archival import archive_phase3_previous_run
 from .cluster_compare import compute_cluster_score_comparison
 from .correlation import compute_correlation_matrix
 from .figures import (
@@ -85,6 +86,7 @@ def run_us1_pipeline(
     gold_dir: Path,
     include_cluster: bool = False,
     include_subgroup: bool = False,
+    archive: bool = True,
 ) -> int:
     """Run the Phase 3 pipeline (US1 partial or US1+US2 wired).
 
@@ -107,6 +109,15 @@ def run_us1_pipeline(
         cli.py can map them.
     """
     inputs = _load_inputs(silver_dir, semester, course_slug)
+
+    # 0. archival — move prior-run Phase 3 outputs into _archive (FR-022).
+    #    Persistent inputs (Phase 0 student_master / 학생지표) stay put via
+    #    silver_whitelist. Skip on the first run (returns None).
+    if archive:
+        archive_phase3_previous_run(
+            silver_dir=inputs["im_dir"],
+            gold_dir=gold_dir / "immersio" / f"{semester}-{course_slug}",
+        )
 
     # 1. joiner — left-join + R-10 audit
     df, counts = join_silver_phase3(
