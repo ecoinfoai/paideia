@@ -238,7 +238,8 @@ def run_us1_pipeline(
         n_unmatched_cluster_assignment=counts.unmatched_cluster_assignment,
         n_unmatched_student_metrics=counts.unmatched_student_metrics,
         n_off_roster_respondents=counts.off_roster_respondents,
-        ruleset_version="0.1.0",
+        # 0.1.1 — ADR-016 #7 군집 명명 prose form land (build_cluster_recommendations).
+        ruleset_version="0.1.1",
         regression_method="OLS",
         multiple_comparison_method="BH-FDR",
         # US1 partial mode = "N/A"; US2 wiring uses the actual posthoc.

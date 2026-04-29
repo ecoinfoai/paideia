@@ -25,6 +25,7 @@ from .diagnostic_mapping import (
 from .axis_summary import AxisSummaryRow
 from .cluster_score_comparison import (
     ClusterPairwise,
+    ClusterRow,
     ClusterScoreComparison,
 )
 from .combined_analysis_manifest import CombinedAnalysisManifest
@@ -115,6 +116,7 @@ __all__ = [
     "RegressionFitSummary",
     "ClusterScoreComparison",
     "ClusterPairwise",
+    "ClusterRow",
     "SubgroupScoreComparison",
     "CombinedAnalysisManifest",
 ]

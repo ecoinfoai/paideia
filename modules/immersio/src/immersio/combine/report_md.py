@@ -168,6 +168,12 @@ def _section_4_clusters(
         else ""
     )
 
+    # ADR-016 #7 군집 명명 prose (ruleset_version 0.1.1).
+    from immersio.combine.recommendations import build_cluster_recommendations
+
+    cluster_prose = build_cluster_recommendations(cluster_rows, cluster_header)
+    prose_block = f"\n**운영 권고 (ruleset_version 0.1.1, ADR-016 #7)**:\n\n{cluster_prose}\n"
+
     return (
         "## 4. 군집별 비교\n\n"
         f"{header_text}\n\n"
@@ -175,6 +181,7 @@ def _section_4_clusters(
         "|---|---|---|---|---|---|---|\n"
         f"{rows_lines}\n"
         f"{pairwise_block}"
+        f"{prose_block}"
         f"{fig5_md}"
     )
 
