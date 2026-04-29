@@ -31,8 +31,13 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+from .cluster_compare import compute_cluster_score_comparison
 from .correlation import compute_correlation_matrix
-from .figures import render_fig3_heatmap, render_fig4_beta_bar
+from .figures import (
+    render_fig3_heatmap,
+    render_fig4_beta_bar,
+    render_fig5_cluster_boxplot,
+)
 from .joiner import join_silver_phase3
 from .manifest import compute_input_sha256, write_manifest
 from .recommendations import build_recommendations
@@ -76,8 +81,13 @@ def run_us1_pipeline(
     course_slug: str,
     silver_dir: Path,
     gold_dir: Path,
+    include_cluster: bool = False,
 ) -> int:
-    """Run the US1 partial Phase 3 pipeline.
+    """Run the Phase 3 pipeline (US1 partial or US1+US2 wired).
+
+    INTEGRATION (RULE 4 active extension): T042 wire-in adds
+    cluster_compare → fig5 → report_md §4 → xlsx sheet 3 to the
+    orchestrator. Set ``include_cluster=True`` to enable US2 wiring.
 
     Args:
         semester: Academic semester code (e.g. "2026-1").
@@ -85,6 +95,8 @@ def run_us1_pipeline(
         silver_dir: Silver root containing ``needs-map/`` and
             ``immersio/`` subdirectories.
         gold_dir: Gold root for report/xlsx/figs output.
+        include_cluster: When True, also run cluster_compare and emit the
+            §4 + sheet 3 + fig5 artefacts (US2 wiring, T042).
 
     Returns:
         Exit code (0 on success). FR-024 exit codes 2-6 are surfaced by
@@ -121,10 +133,37 @@ def run_us1_pipeline(
     figs_dir = gold_target / "figs"
     fig3_path = figs_dir / "fig3_corr_heatmap.png"
     fig4_path = figs_dir / "fig4_beta_bar.png"
+    fig5_path = figs_dir / "fig5_cluster_boxplot.png"
 
-    # 7. figures
+    # 7. figures (fig3 + fig4 always; fig5 in US2 wiring)
     render_fig3_heatmap(correlation_cells, fig3_path)
     render_fig4_beta_bar(regression_coefs, fig4_path)
+
+    # 7b. cluster_compare (T038) — US2 wiring only.
+    cluster_rows = None
+    cluster_header = None
+    cluster_pairwise = None
+    if include_cluster:
+        cluster_rows, cluster_header, cluster_pairwise = (
+            compute_cluster_score_comparison(df, inputs["cluster_names"])
+        )
+        # fig5 — cluster boxplot of total_score per cluster.
+        scores_by_cluster: dict[int, list[float]] = {}
+        cluster_df = df[
+            df["exam_taken"].astype(bool)
+            & df["cluster_id"].notna()
+            & df["total_score"].notna()
+        ]
+        for cid, group in cluster_df.groupby("cluster_id"):
+            scores_by_cluster[int(cid)] = [
+                float(v) for v in group["total_score"].tolist()
+            ]
+        if scores_by_cluster:
+            render_fig5_cluster_boxplot(
+                scores_by_cluster=scores_by_cluster,
+                cluster_names=inputs["cluster_names"],
+                path=fig5_path,
+            )
 
     # 8. manifest — partition counts + R-10 audit + 6 sha256
     n_dx = int(((df["진단응답"]) & (~df["시험응시"])).sum())
@@ -168,8 +207,10 @@ def run_us1_pipeline(
         ruleset_version="0.1.0",
         regression_method="OLS",
         multiple_comparison_method="BH-FDR",
-        # US1 partial mode does not run cluster_compare; mark posthoc N/A.
-        posthoc_method_used="N/A",
+        # US1 partial mode = "N/A"; US2 wiring uses the actual posthoc.
+        posthoc_method_used=(
+            cluster_header.posthoc_test if cluster_header is not None else "N/A"
+        ),
         run_seed=0,
         needs_map_schema_version="1.1.0",
         immersio_phase2_schema_version="0.1.0",
@@ -177,7 +218,7 @@ def run_us1_pipeline(
     )
     write_manifest(manifest, inputs["im_dir"] / "manifest_phase3.json")
 
-    # 9. report_md (4 sections + §4/§5 placeholder)
+    # 9. report_md (4 sections + §4/§5 placeholder; §4 active in US2 wiring)
     md_path = gold_target / "결합분석보고서.md"
     build_us1_report(
         manifest=manifest,
@@ -190,6 +231,14 @@ def run_us1_pipeline(
         fig3_path=Path("figs/fig3_corr_heatmap.png"),
         fig4_path=Path("figs/fig4_beta_bar.png"),
         out_path=md_path,
+        cluster_rows=cluster_rows,
+        cluster_header=cluster_header,
+        cluster_pairwise=cluster_pairwise,
+        fig5_path=(
+            Path("figs/fig5_cluster_boxplot.png")
+            if include_cluster
+            else None
+        ),
     )
 
     # 10. report_pdf (uses md_text + image_base_dir=gold_target so figs/
@@ -202,12 +251,15 @@ def run_us1_pipeline(
         image_base_dir=gold_target,
     )
 
-    # 11. xlsx (2 sheets US1 mode)
+    # 11. xlsx (2 sheets US1 mode; +sheet 3 in US2 wiring)
     write_us1_xlsx(
         correlation_cells=correlation_cells,
         regression_coefs=regression_coefs,
         regression_fit=regression_fit,
         out_path=gold_target / "결합분석.xlsx",
+        cluster_rows=cluster_rows,
+        cluster_header=cluster_header,
+        cluster_pairwise=cluster_pairwise,
     )
 
     return 0

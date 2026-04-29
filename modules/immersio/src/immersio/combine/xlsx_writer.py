@@ -153,27 +153,127 @@ def _build_regression_sheet(
         sheet.column_dimensions[get_column_letter(i)].width = 16
 
 
+_CLUSTER_ROW_HEADERS = (
+    "cluster_id",
+    "cluster_label",
+    "n",
+    "mean",
+    "std",
+    "ci_low_95",
+    "ci_high_95",
+    "excluded_reason",
+)
+
+_CLUSTER_PAIRWISE_HEADERS = (
+    "cluster_pair",
+    "mean_diff",
+    "raw_p",
+    "fdr_q",
+    "significant_after_correction",
+)
+
+
+def _build_cluster_sheet(
+    wb: "Workbook",
+    rows: object,
+    header: object,
+    pairwise: object,
+) -> None:
+    """T041 — sheet `군집비교` 3-block (rows + ANOVA header + posthoc)."""
+    sheet = wb.create_sheet("군집비교")
+
+    # Block 1 — per-cluster rows.
+    sheet.append(["군집별 통계"])
+    sheet.append(list(_CLUSTER_ROW_HEADERS))
+    for r in rows:
+        sheet.append(
+            [
+                r.cluster_id,
+                r.cluster_label,
+                r.n,
+                r.mean,
+                r.std,
+                r.ci_low_95,
+                r.ci_high_95,
+                r.excluded_reason,
+            ]
+        )
+    sheet.append([])
+
+    # Block 2 — omnibus header.
+    sheet.append(["검정 결과"])
+    sheet.append(
+        [
+            "k_used",
+            "test_used",
+            "levene_p",
+            "test_stat",
+            "raw_p",
+            "eta_squared",
+            "omega_squared",
+            "posthoc_test",
+        ]
+    )
+    sheet.append(
+        [
+            header.k_used,
+            header.test_used,
+            header.levene_p,
+            header.test_stat,
+            header.raw_p,
+            header.eta_squared,
+            header.omega_squared,
+            header.posthoc_test,
+        ]
+    )
+    sheet.append([])
+
+    # Block 3 — posthoc pairwise.
+    sheet.append(["사후 비교"])
+    sheet.append(list(_CLUSTER_PAIRWISE_HEADERS))
+    for p in pairwise:
+        sheet.append(
+            [
+                f"{p.cluster_pair[0]}-{p.cluster_pair[1]}",
+                p.mean_diff,
+                p.raw_p,
+                p.fdr_q,
+                p.significant_after_correction,
+            ]
+        )
+
+    for i in range(1, len(_CLUSTER_ROW_HEADERS) + 1):
+        sheet.column_dimensions[get_column_letter(i)].width = 18
+
+
 def write_us1_xlsx(
     *,
     correlation_cells: Sequence[CorrelationCell],
     regression_coefs: Sequence[RegressionCoefficient],
     regression_fit: RegressionFitSummary,
     out_path: Path,
+    cluster_rows: object | None = None,
+    cluster_header: object | None = None,
+    cluster_pairwise: object | None = None,
 ) -> None:
-    """Write the US1 partial workbook (2 sheets) to ``out_path``.
+    """Write the combined-analysis workbook to ``out_path``.
+
+    US1 partial mode (default): 2 sheets — `상관매트릭스` + `회귀결과`.
+    US2 wiring (T041): supply ``cluster_rows`` + ``cluster_header`` (and
+    optionally ``cluster_pairwise``) to add `군집비교` sheet 3-block.
 
     Args:
-        correlation_cells: Output of :func:`compute_correlation_matrix`
-            — caller is responsible for deterministic ordering
-            (STANDARD_AXIS_KEYS × exam_metric_key alphabetic).
-        regression_coefs: Output of :func:`compute_ols_regression`
-            (1st element).
-        regression_fit: Output of :func:`compute_ols_regression`
-            (2nd element).
+        correlation_cells: ``compute_correlation_matrix`` output.
+        regression_coefs: ``compute_ols_regression`` 1st elem.
+        regression_fit: ``compute_ols_regression`` 2nd elem.
         out_path: ``.xlsx`` destination. Parent dir auto-created.
+        cluster_rows: ``compute_cluster_score_comparison`` 1st elem (US2).
+        cluster_header: ``compute_cluster_score_comparison`` 2nd elem (US2).
+        cluster_pairwise: ``compute_cluster_score_comparison`` 3rd elem
+            (US2). Empty list permitted (k=1 fallback).
 
     Raises:
-        ValueError: If either input list is empty (Fail-Fast).
+        ValueError: If correlation_cells / regression_coefs is empty.
     """
     if not correlation_cells:
         raise ValueError("write_us1_xlsx: correlation_cells is empty")
@@ -183,13 +283,18 @@ def write_us1_xlsx(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     wb = Workbook()
-    # Remove the default sheet that openpyxl creates so our 2 sheets are
+    # Remove the default sheet that openpyxl creates so our sheets are
     # the only ones present (deterministic sheet order).
     if wb.active is not None and wb.active.title == "Sheet":
         wb.remove(wb.active)
 
     _build_correlation_sheet(wb, correlation_cells)
     _build_regression_sheet(wb, regression_coefs, regression_fit)
+
+    if cluster_rows is not None and cluster_header is not None:
+        _build_cluster_sheet(
+            wb, cluster_rows, cluster_header, cluster_pairwise or []
+        )
 
     wb.save(out_path)
 
