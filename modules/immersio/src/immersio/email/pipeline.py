@@ -30,6 +30,13 @@ from paideia_shared.schemas import (
 
 from . import __version__ as EMAIL_VERSION
 from .archival import archive_previous_run
+from .cohort_filter import (
+    CohortError,
+    CohortFilterResult,
+    filter_by_cohort,
+    write_cohort_md,
+    write_cohort_silver,
+)
 from .composer import build_email_draft
 from .confirm_gate import ConfirmGateAborted, confirm_first_n
 from .log import (
@@ -173,6 +180,49 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     )
     write_mapping_silver(entries, silver_mapping_path)
 
+    # Phase A.5 — cohort filter (US6 / FR-H02/H06).
+    # Reads 학생지표.parquet → partitions students into low_score / rest.
+    # Writes 2 silver parquets + 3 cohort 명단 md (regardless of dry-run
+    # / send mode), then narrows ``entries`` to the requested cohort.
+    cohort_score_unavailable_sids: set[str] = set()
+    student_metrics_path: Path | None = (
+        Path(args.silver_student_metrics)
+        if getattr(args, "silver_student_metrics", None) is not None
+        else paths["silver_email_dir"] / "학생지표.parquet"
+    )
+    if student_metrics_path is not None and student_metrics_path.is_file():
+        try:
+            cohort_result = filter_by_cohort(
+                entries, student_metrics_path, cohort
+            )
+        except CohortError as exc:
+            print(
+                f"ERROR [immersio email]: phase A.5 cohort — {exc}",
+                file=sys.stderr,
+            )
+            return 3
+        # Filter mapping_entries to only the requested cohort (or all).
+        entries = cohort_result.keep_entries
+        cohort_score_unavailable_sids = set(cohort_result.unavailable_sids)
+        # Write cohort silvers + md regardless of mode (operator
+        # planning artefact independent of send vs dry-run).
+        cohort_silver_dir = paths["silver_email_dir"]
+        if cohort_result.low_rows:
+            write_cohort_silver(
+                cohort_result.low_rows,
+                cohort_silver_dir / "cohort_저득점.parquet",
+            )
+        if cohort_result.rest_rows:
+            write_cohort_silver(
+                cohort_result.rest_rows,
+                cohort_silver_dir / "cohort_나머지.parquet",
+            )
+        write_cohort_md(
+            cohort_result.low_rows,
+            cohort_result.rest_rows,
+            paths["gold_email_dir"],
+        )
+
     # Phase B — pdf scan
     try:
         bundles = scan_pdf_directory(paths["gold_pdf_dir"])
@@ -293,14 +343,25 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
         entry = entries_by_sid.get(sid)
         if entry is None:
+            # Distinguish (a) student dropped by cohort filter due to
+            # missing score → score_unavailable (FR-H04 / US6) from
+            # (b) student missing from the diagnostic CSV → invalid_email.
+            if sid in cohort_score_unavailable_sids:
+                error_kind = "score_unavailable"
+                error_detail = (
+                    "score_percent absent — student excluded from cohort"
+                )
+            else:
+                error_kind = "invalid_email"
+                error_detail = "student_id has no diagnostic CSV row"
             log_rows.append(
                 _skip_row(
                     bundle=bundle,
                     email="",
                     started_at=started_at,
                     mode=mode,
-                    error_kind="invalid_email",
-                    error_detail="student_id has no diagnostic CSV row",
+                    error_kind=error_kind,
+                    error_detail=error_detail,
                     exam_name=args.exam_name,
                     cohort=cohort,
                 )
