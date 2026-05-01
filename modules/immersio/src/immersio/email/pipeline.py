@@ -31,6 +31,15 @@ from paideia_shared.schemas import (
 from . import __version__ as EMAIL_VERSION
 from .archival import archive_previous_run
 from .composer import build_email_draft
+from .confirm_gate import ConfirmGateAborted, confirm_first_n
+from .log import (
+    DispatchLockError,
+    RetryMode,
+    append_dispatch_log_row,
+    idempotent_skip_filter,
+    mask_secrets_in_error_detail,
+    read_dispatch_log,
+)
 from .manifest import write_email_manifest
 from .master_check import (
     MasterMismatchError,
@@ -184,10 +193,32 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     verify_by_sid = {v.bundle.student_id: v for v in verified}
     missing_sids = {b.student_id for b in missing_in_master}
 
+    # Phase D.5 — idempotent skip (US3 / US4 production re-runs).
+    is_self_test = bool(args.send and args.self_test is not None)
+    log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
+    if profile.profile_kind == "test":
+        log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
+
+    retry_mode = _resolve_retry_mode(args)
+    if args.send and not is_self_test:
+        try:
+            existing_log = read_dispatch_log(log_csv_path)
+        except OSError as exc:
+            print(
+                f"ERROR [immersio email]: cannot read dispatch log "
+                f"{log_csv_path}: {exc}",
+                file=sys.stderr,
+            )
+            return 3
+        all_sids = [b.student_id for b in bundles]
+        keep_sids = set(
+            idempotent_skip_filter(all_sids, existing_log, mode=retry_mode)
+        )
+        bundles = [b for b in bundles if b.student_id in keep_sids]
+
     # Phase E — composer + log. ``override_to`` is set when self-test
     # mode is active (US2): all drafts share the operator's own email
     # and the student's email is *not used at all* (FR-C05).
-    is_self_test = bool(args.send and args.self_test is not None)
     operator_to: str | None = profile.sender.email if is_self_test else None
 
     started_at = datetime.now(tz=KST)
@@ -326,13 +357,45 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         if rc != 0:
             return rc
     else:
-        print(
-            "ERROR [immersio email]: production --send (US3) lands in spec "
-            "006 Phase 5. v0.1.0 currently supports dry-run (no flag) + "
-            "self-test (--self-test N --send).",
-            file=sys.stderr,
+        # Production send (US3): Phase G (confirm gate) + Phase H
+        # (per-student GmailAPIDispatcher.send_one + log append).
+        sample_size = (
+            args.confirm_sample
+            if args.confirm_sample is not None
+            else profile.operational_defaults.confirm_sample_size
         )
-        return 2
+        if drafts_with_pdfs:
+            try:
+                confirm_first_n(
+                    drafts_with_pdfs,
+                    sample_size=sample_size,
+                    stdin=getattr(args, "_stdin", None),
+                    stdout=getattr(args, "_stdout", None),
+                )
+            except ConfirmGateAborted as exc:
+                print(
+                    f"[immersio email] 운영자 중단 — {exc}. 학생 도달 0.",
+                    file=sys.stderr,
+                )
+                return 0
+            except ValueError as exc:
+                print(
+                    f"ERROR [immersio email]: {exc}", file=sys.stderr
+                )
+                return 2
+        try:
+            production_rc = _run_production_send(
+                drafts_with_pdfs,
+                profile=profile,
+                log_rows=log_rows,
+                log_csv_path=log_csv_path,
+            )
+        except DispatchLockError as exc:
+            print(
+                f"ERROR [immersio email]: 동시 실행 차단 — {exc}",
+                file=sys.stderr,
+            )
+            return 7
 
     # Manifest + log + report
     counts = _aggregate_counts(log_rows)
@@ -381,11 +444,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     )
     write_email_manifest(manifest, paths["gold_email_dir"])
 
-    log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
-    if profile.profile_kind == "test":
-        log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
-    log_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_log_csv(log_rows, log_csv_path)
+    # Production-send mode already appended rows durably (per-row flock
+    # + fsync via append_dispatch_log_row). Other modes write the bulk
+    # log here.
+    if not (args.send and not is_self_test):
+        log_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_log_csv(log_rows, log_csv_path)
 
     summary = {s: counts.model_dump()[s.value] for s in DispatchStatus}
     write_dispatch_report_md(
