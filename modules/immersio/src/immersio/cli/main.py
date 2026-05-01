@@ -351,6 +351,33 @@ def app(argv: list[str] | None = None) -> int:
     if args.command == "email":
         # Foundational stub (T030). Actual orchestration wires in via
         # T049 (US1 dry-run), T057 (US2 self-test), T073 (US3 send).
+        # FR-F03: validate semester / course / exam-name format at CLI entry
+        # (mirror of `analyze` pattern at L430-444). Without this guard,
+        # malformed --semester values surface as Phase B "directory not
+        # found" with a misleading error message (post-release smoke).
+        if not _SEMESTER_PATTERN.match(args.semester):
+            print(
+                f"ERROR [immersio email]: invalid_semester — "
+                f"--semester must match YYYY-N (1/2/S/W), got {args.semester!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if not _COURSE_SLUG_PATTERN.match(args.course):
+            print(
+                f"ERROR [immersio email]: invalid_course — "
+                f"--course must match {_COURSE_SLUG_PATTERN.pattern}, "
+                f"got {args.course!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if not args.exam_name.strip():
+            print(
+                "ERROR [immersio email]: invalid_exam_name — "
+                "--exam-name must be non-empty (FR-B04)",
+                file=sys.stderr,
+            )
+            return 1
+
         from immersio.email.pipeline import run_email_dispatch
 
         return run_email_dispatch(args)

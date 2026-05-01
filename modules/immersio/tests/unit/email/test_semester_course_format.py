@@ -66,3 +66,54 @@ def test_required_args_missing_exits_2() -> None:
     with pytest.raises(SystemExit) as exc_info:
         parser.parse_args(["email", "--profile", "alpha-prof"])
     assert exc_info.value.code == 2
+
+
+# CLI entry-level format validation (post-argparse) — FR-F03 + FR-B04.
+# Closes the gap between unit tests (argparse-only) and the actual CLI
+# behavior. Without this guard, malformed --semester surfaces as Phase B
+# "directory not found" with a misleading error message.
+
+from immersio.cli.main import app
+
+
+def test_email_invalid_semester_exits_1(capsys) -> None:
+    """--semester '26-1' rejected at CLI entry, before pipeline starts."""
+    rc = app([
+        "email",
+        "--profile", "alpha-prof",
+        "--semester", "26-1",
+        "--course", "anatomy",
+        "--exam-name", "중간고사",
+    ])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "invalid_semester" in captured.err
+    assert "YYYY-N" in captured.err
+
+
+def test_email_invalid_course_exits_1(capsys) -> None:
+    """--course 'Anatomy' (uppercase) rejected at CLI entry."""
+    rc = app([
+        "email",
+        "--profile", "alpha-prof",
+        "--semester", "2026-1",
+        "--course", "Anatomy",
+        "--exam-name", "중간고사",
+    ])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "invalid_course" in captured.err
+
+
+def test_email_empty_exam_name_exits_1(capsys) -> None:
+    """--exam-name whitespace-only rejected (FR-B04)."""
+    rc = app([
+        "email",
+        "--profile", "alpha-prof",
+        "--semester", "2026-1",
+        "--course", "anatomy",
+        "--exam-name", "   ",
+    ])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "invalid_exam_name" in captured.err
