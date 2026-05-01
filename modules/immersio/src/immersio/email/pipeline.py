@@ -474,12 +474,19 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
                     f"ERROR [immersio email]: {exc}", file=sys.stderr
                 )
                 return 2
+        # Resolve rate-per-minute from CLI override or profile default.
+        rate_per_minute = (
+            args.rate_per_min
+            if args.rate_per_min is not None
+            else profile.operational_defaults.rate_per_minute
+        )
         try:
             production_rc = _run_production_send(
                 drafts_with_pdfs,
                 profile=profile,
                 log_rows=log_rows,
                 log_csv_path=log_csv_path,
+                rate_per_minute=rate_per_minute,
             )
         except DispatchLockError as exc:
             print(
@@ -671,6 +678,7 @@ def _run_production_send(
     profile,
     log_rows: list[DispatchLogRow],
     log_csv_path: Path,
+    rate_per_minute: int | None = None,
 ) -> int:
     """Send each draft via Gmail API + append result to dispatch log durably.
 
@@ -700,8 +708,11 @@ def _run_production_send(
     log_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with GmailAPIDispatcher(profile) as dispatcher:
-            for draft, bundle in drafts_with_pdfs:
+        with GmailAPIDispatcher(
+            profile, rate_per_minute=rate_per_minute
+        ) as dispatcher:
+            total = len(drafts_with_pdfs)
+            for index, (draft, bundle) in enumerate(drafts_with_pdfs):
                 pdf_bytes = bundle.pdf_path.read_bytes()
                 result = dispatcher.send_one(draft, pdf_bytes=pdf_bytes)
 
@@ -738,6 +749,17 @@ def _run_production_send(
                     return 5
                 if result.status == DispatchStatus.FAILED:
                     failed_count += 1
+                # US5 / FR-E01: rate-limit sleep BETWEEN sends (skip
+                # after the final send — no successor needs spacing).
+                # ``getattr`` fallback keeps test fake dispatchers
+                # backward-compatible (they may not implement the
+                # sleep_between_sends method).
+                if index < total - 1:
+                    sleep_fn = getattr(
+                        dispatcher, "sleep_between_sends", None
+                    )
+                    if sleep_fn is not None:
+                        sleep_fn()
     except DispatchLockError:
         raise
     except Exception as exc:  # noqa: BLE001 — last-resort safety net

@@ -46,7 +46,7 @@ class _SequencedDispatcher:
     sequence: list[SendResult] = []
     captured: list = []
 
-    def __init__(self, profile):
+    def __init__(self, profile, **kwargs):
         type(self).captured = []
 
     def __enter__(self):

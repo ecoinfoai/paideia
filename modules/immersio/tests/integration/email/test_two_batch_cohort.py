@@ -42,7 +42,7 @@ def _args(*, cohort: str) -> argparse.Namespace:
 class _CountingDispatcher:
     captured: list = []
 
-    def __init__(self, profile):
+    def __init__(self, profile, **kwargs):
         pass
 
     def __enter__(self):

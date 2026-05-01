@@ -49,7 +49,7 @@ def _args() -> argparse.Namespace:
 class _AlwaysSucceeds:
     captured: list = []
 
-    def __init__(self, profile):
+    def __init__(self, profile, **kwargs):
         pass
 
     def __enter__(self):

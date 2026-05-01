@@ -16,6 +16,7 @@ explicitly when ``--send`` is set.
 from __future__ import annotations
 
 import base64
+import time
 from dataclasses import dataclass
 
 from google.oauth2.service_account import Credentials  # ALLOW_HARDCODING: SA imports
@@ -85,17 +86,38 @@ def _mask_secrets(text: str) -> str:
 
 
 class GmailAPIDispatcher:
-    """Context manager around the Gmail API service for single-message send."""
+    """Context manager around the Gmail API service for single-message send.
 
-    def __init__(self, profile: ProfessorProfile | TestProfile) -> None:
+    Rate limiting (US5 / FR-E01): when ``rate_per_minute`` is set,
+    ``send_one`` sleeps ``60 / rate_per_minute`` seconds *after* each send
+    so the per-minute throughput stays at or below the operator-configured
+    limit. The caller is responsible for *not* applying the sleep on the
+    final send (no successor needs spacing) — typically by counting the
+    pending queue and skipping the sleep when 0.
+    """
+
+    def __init__(
+        self,
+        profile: ProfessorProfile | TestProfile,
+        *,
+        rate_per_minute: int | None = None,
+    ) -> None:
         if not isinstance(profile, (ProfessorProfile, TestProfile)):
             raise TypeError(
                 f"GmailAPIDispatcher: profile must be ProfessorProfile or "
                 f"TestProfile, got {type(profile).__name__}"
             )
+        if rate_per_minute is not None and (
+            rate_per_minute < 1 or rate_per_minute > 30
+        ):
+            raise ValueError(
+                f"GmailAPIDispatcher: rate_per_minute must be 1 ≤ N ≤ 30 "
+                f"(got {rate_per_minute})"
+            )
         self._profile = profile
         self._service = None
         self._creds: Credentials | None = None
+        self._rate_per_minute = rate_per_minute
 
     def __enter__(self) -> "GmailAPIDispatcher":
         self._creds = get_gmail_credentials(self._profile)
@@ -110,6 +132,18 @@ class GmailAPIDispatcher:
     def __exit__(self, exc_type, exc, tb) -> None:
         self._service = None
         self._creds = None
+
+    def sleep_between_sends(self) -> None:
+        """Apply rate-limit sleep between sends (US5 / FR-E01).
+
+        Caller invokes this *after* a successful send and *before* the
+        next ``send_one`` call. No-op when ``rate_per_minute`` was not
+        configured. The caller is expected to skip this between the
+        last send and EOF (no successor needs spacing).
+        """
+        if self._rate_per_minute is None:
+            return
+        time.sleep(60.0 / self._rate_per_minute)
 
     def send_one(
         self, draft: EmailMessageDraft, *, pdf_bytes: bytes

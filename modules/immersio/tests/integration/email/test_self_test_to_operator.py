@@ -40,7 +40,7 @@ def test_self_test_sends_to_operator_only(email_fixture, monkeypatch) -> None:
     captured_drafts = []
 
     class _FakeDispatcher:
-        def __init__(self, profile):
+        def __init__(self, profile, **kwargs):
             self.profile = profile
 
         def __enter__(self):
@@ -79,7 +79,7 @@ def test_self_test_log_status_is_test_dummy(email_fixture, monkeypatch) -> None:
     """Self-test → log status = test_dummy (FR-D08), not success."""
 
     class _FakeDispatcher:
-        def __init__(self, profile):
+        def __init__(self, profile, **kwargs):
             pass
 
         def __enter__(self):
