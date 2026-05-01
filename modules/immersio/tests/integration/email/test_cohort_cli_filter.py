@@ -106,3 +106,24 @@ def test_cohort_low_score_filters_to_low(email_fixture, monkeypatch) -> None:
     assert len(eml_files) == 3
     eml_sids = {f.name.split("_")[0] for f in eml_files}
     assert eml_sids == {sids[0], sids[2], sids[4]}
+
+
+def test_explicit_cohort_with_missing_metrics_fails_fast(email_fixture) -> None:
+    """AV-C10 guard: explicit --cohort low_score|rest with missing
+    학생지표.parquet → exit 3 (no silent fallback to 'all' mode).
+    """
+    # Do NOT write_student_metrics_parquet — file is intentionally absent.
+    rc = run_email_dispatch(_args(cohort="low_score"))
+    assert rc == 3
+
+
+def test_cohort_all_with_missing_metrics_graceful_fallback(
+    email_fixture,
+) -> None:
+    """--cohort all (default) + missing metrics → graceful skip + exit 0.
+
+    Operators who haven't run analyze yet should still be able to dry-run
+    roster + cohort='all' (no cohort artefacts in that case).
+    """
+    rc = run_email_dispatch(_args(cohort="all"))
+    assert rc == 0

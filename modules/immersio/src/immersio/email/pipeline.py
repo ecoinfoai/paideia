@@ -190,6 +190,23 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         if getattr(args, "silver_student_metrics", None) is not None
         else paths["silver_email_dir"] / "학생지표.parquet"
     )
+    if (
+        student_metrics_path is not None
+        and not student_metrics_path.is_file()
+        and cohort != CohortLabel.ALL
+    ):
+        # AV-C10 fail-fast: explicit --cohort low_score|rest with missing
+        # 학생지표.parquet would silently fall back to "all" mode without
+        # this guard — a serious operator-confusion risk (the operator
+        # *intended* a partial send but receives the full roster).
+        print(
+            f"ERROR [immersio email]: --cohort {cohort.value} requires "
+            f"학생지표.parquet at {student_metrics_path} (run "
+            f"`immersio analyze` first or pass --silver-student-metrics).",
+            file=sys.stderr,
+        )
+        return 3
+
     if student_metrics_path is not None and student_metrics_path.is_file():
         try:
             cohort_result = filter_by_cohort(
