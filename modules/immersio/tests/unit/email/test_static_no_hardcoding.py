@@ -109,6 +109,7 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     # Deterministic Message-ID literal asserted in tests — same domain
     # (example.ac.kr) prefixed with the synthetic message-id form
     "1234567890.2026-05-01.anatomy.2026-1@example.ac.kr",
+    "x@example.ac.kr",  # synthetic short message-id literal in csv schema test
     "Alice@Example.COM",  # case-variant for lowercase normalization test
     # ADR-009 allowed exception #3 — operational labels in body template
     # and report headings, not student/professor PII.

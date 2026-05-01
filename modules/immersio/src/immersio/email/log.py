@@ -169,7 +169,9 @@ def append_dispatch_log_row(log_path: Path, row: DispatchLogRow) -> None:
         # the underlying inode; the second open is fine on POSIX).
         with log_path.open("a", encoding="utf-8", newline="") as text_fh:
             writer = csv.DictWriter(
-                text_fh, fieldnames=list(DispatchLogRow.COLUMN_ORDER)
+                text_fh,
+                fieldnames=list(DispatchLogRow.COLUMN_ORDER),
+                lineterminator="\n",
             )
             if is_new:
                 writer.writeheader()
@@ -191,7 +193,9 @@ def append_dispatch_log_rows(
 
         with log_path.open("a", encoding="utf-8", newline="") as text_fh:
             writer = csv.DictWriter(
-                text_fh, fieldnames=list(DispatchLogRow.COLUMN_ORDER)
+                text_fh,
+                fieldnames=list(DispatchLogRow.COLUMN_ORDER),
+                lineterminator="\n",
             )
             if is_new:
                 writer.writeheader()
