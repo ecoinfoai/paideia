@@ -56,6 +56,25 @@ operational_defaults:
     return ProfessorProfile.model_validate(yaml.safe_load(yaml_text))
 
 
+@pytest.fixture
+def whitelist_tmp_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Path:
+    """Whitelist tmp_path under the SA-allowlist for tests reaching past it.
+
+    The production allowlist is /run/agenix, ~/.config/paideia, etc. —
+    tests must whitelist tmp_path explicitly to exercise the
+    permission/parse/type/missing-field paths beyond the path gate.
+    Tests that *want* to verify the path-traversal defence (the dedicated
+    Reflag #2 test) MUST NOT use this fixture.
+    """
+    monkeypatch.setattr(
+        "immersio.email.secrets._allowed_sa_path_prefixes",
+        lambda: (tmp_path,),
+    )
+    return tmp_path
+
+
 def _make_sa_json(tmp_path: Path, *, mode: int = 0o400, **overrides) -> Path:
     base = {
         "type": "service_account",
@@ -97,9 +116,9 @@ def test_file_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
 
 
 def test_permission_too_loose(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
 ) -> None:
-    sa = _make_sa_json(tmp_path, mode=0o644)
+    sa = _make_sa_json(whitelist_tmp_path, mode=0o644)
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
     profile = _profile()
     with pytest.raises(SecretsError) as exc_info:
@@ -113,9 +132,9 @@ def test_permission_too_loose(
 
 
 def test_json_parse_error(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
 ) -> None:
-    bad = tmp_path / "bad.json"
+    bad = whitelist_tmp_path / "bad.json"
     bad.write_text("{ not valid json", encoding="utf-8")
     bad.chmod(0o400)
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(bad))
@@ -125,9 +144,9 @@ def test_json_parse_error(
 
 
 def test_type_not_service_account(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
 ) -> None:
-    sa = _make_sa_json(tmp_path, type="user_credentials")
+    sa = _make_sa_json(whitelist_tmp_path, type="user_credentials")
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
     profile = _profile()
     with pytest.raises(SecretsError, match="not a service account"):
@@ -135,10 +154,10 @@ def test_type_not_service_account(
 
 
 def test_missing_required_field(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
 ) -> None:
     # Drop private_key to trigger missing-field check
-    sa = tmp_path / "missing.json"
+    sa = whitelist_tmp_path / "missing.json"
     sa.write_text(
         json.dumps({"type": "service_account", "client_email": "x@y.com"}),  # ALLOW_HARDCODING: fake placeholder for missing-field test
         encoding="utf-8",
@@ -151,10 +170,10 @@ def test_missing_required_field(
 
 
 def test_happy_path_calls_from_service_account_info(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
 ) -> None:
     """Valid SA JSON → Credentials.from_service_account_info(...) called."""
-    sa = _make_sa_json(tmp_path)
+    sa = _make_sa_json(whitelist_tmp_path)
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
     profile = _profile()
 
@@ -171,6 +190,33 @@ def test_happy_path_calls_from_service_account_info(
         "https://www.googleapis.com/auth/gmail.send"
     ]
     assert call_kwargs["subject"] == "noreply@example.ac.kr"
+
+
+def test_path_outside_allowlist_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reflag #2 / AV-A1: SA JSON path outside allowlist → SecretsError.
+
+    Even when file content is valid (mode 0400, parses, type=service_
+    account, all required fields present), a path under /tmp without an
+    explicit allowlist whitelist must be rejected before
+    ``Credentials.from_service_account_info`` is ever called. Defence
+    against env-var injection or misconfigured agenix paths pointing at
+    e.g. ``/etc/passwd``.
+    """
+    sa = _make_sa_json(tmp_path)
+    monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
+    # Do NOT monkeypatch _allowed_sa_path_prefixes — production allowlist
+    # is in effect, so /tmp is rejected.
+    profile = _profile()
+    with pytest.raises(SecretsError) as exc_info:
+        get_gmail_credentials(profile)
+    msg = str(exc_info.value)
+    assert "not in allowlist" in msg
+    # Defence-in-depth: never leak SA contents in error message
+    assert "BEGIN PRIVATE KEY" not in msg
+    assert "fake-bytes" not in msg
+    assert "fake-sa@fake-project" not in msg
 
 
 def test_invalid_env_var_name_pattern() -> None:

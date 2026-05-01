@@ -29,6 +29,32 @@ _REQUIRED_SA_FIELDS: tuple[str, ...] = (
 )
 
 
+def _is_under(child: Path, parent: Path) -> bool:
+    """True if ``child`` is the same as or descended from ``parent``."""
+    try:
+        child.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _allowed_sa_path_prefixes() -> tuple[Path, ...]:
+    """Return canonical prefixes the SA JSON file is allowed to live under.
+
+    Path-traversal defence (Reflag #2 / adversary AV-A1). Any path that
+    resolves outside this allowlist is rejected so a misconfigured
+    agenix path or hostile env-var injection cannot point the loader at,
+    for example, ``/etc/passwd``.
+    """
+    home = Path.home()
+    return (
+        Path("/run/agenix"),
+        home / ".config" / "paideia",
+        home / ".local" / "share" / "paideia",
+        home / ".config" / "keys",
+    )
+
+
 class SecretsError(RuntimeError):
     """Raised on any agenix / SA JSON precondition failure (FR-C07).
 
@@ -87,6 +113,19 @@ def get_gmail_credentials(
     if not path.is_file():
         raise SecretsError(
             f"FR-C07: SA JSON file not found at {str(path)!r}"
+        )
+
+    # Path-traversal defence (Reflag #2 / AV-A1) — reject any SA JSON path
+    # that, after symlink resolution, escapes the canonical allowlist.
+    resolved = path.resolve()
+    allowed_prefixes = tuple(p.resolve() for p in _allowed_sa_path_prefixes())
+    if not any(
+        resolved == prefix or _is_under(resolved, prefix)
+        for prefix in allowed_prefixes
+    ):
+        raise SecretsError(
+            f"FR-C07: SA JSON path {str(resolved)!r} not in allowlist. "
+            f"Allowed prefixes: {[str(p) for p in allowed_prefixes]}"
         )
 
     try:

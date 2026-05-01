@@ -36,7 +36,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 # ---------------------------------------------------------------------------
-# 11 regex patterns (ADR-009 + secrets_contract.md).
+# 12 regex patterns (ADR-009 + secrets_contract.md + Reflag #3).
 # ---------------------------------------------------------------------------
 _PATTERNS: dict[str, re.Pattern[str]] = {
     "real_email": re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
@@ -52,6 +52,10 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
     "llm_sdk_import": re.compile(
         r"^\s*(import|from)\s+(anthropic|openai|instructor)\b", re.MULTILINE
     ),
+    # Reflag #3: bare ``yaml.load`` (without an explicit safe Loader) is
+    # unsafe — it can deserialize arbitrary Python objects (RCE risk).
+    # Allowed: ``yaml.safe_load``, ``yaml.safe_load_all``, ``yaml.SafeLoader``.
+    "unsafe_yaml_load": re.compile(r"\byaml\.load(?!_?safe|_all|er)\b"),
 }
 
 
@@ -109,6 +113,10 @@ _ALLOWED_FILE_NAMES: frozenset[str] = frozenset({
     # The static-search test itself contains every regex pattern — would
     # match itself recursively without exemption.
     "test_static_no_hardcoding.py",
+    # Reflag #1 PII bidirectional contract test — the FAIL-case fixture
+    # must contain real-shape PII so the meta-test can verify regex
+    # match. Whole-file exemption mirrors the static-search test pattern.
+    "test_pii_static_scan.py",
 })
 
 
@@ -208,6 +216,7 @@ json_pk_id_violation = '"private_key_id": "0123456789abcdef0123456789abcdef01234
 sa_domain_violation = "fake-sa@project.iam.gserviceaccount.com"
 import anthropic  # noqa
 from openai import OpenAI  # noqa
+unsafe_yaml = yaml.load(stream)  # bare load — RCE risk
 """
 
 
