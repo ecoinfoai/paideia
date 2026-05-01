@@ -473,6 +473,11 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             f"skipped={counts.skipped} failed={counts.failed}",
             file=sys.stdout,
         )
+    # Production-send returns its own rc (0 / 5 / 8) so the auth-fail
+    # path (gmail_api_auth_failed → 5) propagates to the CLI exit. Other
+    # modes use the count-based default.
+    if args.send and not is_self_test and "production_rc" in locals():
+        return production_rc
     return 0 if counts.failed == 0 else 8
 
 
