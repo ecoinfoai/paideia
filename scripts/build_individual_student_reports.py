@@ -1,37 +1,42 @@
-"""학생별 면담 시트 — md + PDF + figs (radar + bar charts).
+"""학생별 중간고사 보고서 — 학생 전달용 + 교수자 보관용 + 이메일_발송용.
 
-사용자 명시 (2026-04-30):
-1. md + PDF 양쪽 산출
-2. radar chart: 챕터별 cohort 평균 (파란 실선) + 학생 점수 (빨간 실선)
-3. bar charts: 메타데이터별 cohort 평균 (파랑) + 학생 평균 (빨강)
-   - 예상_난이도 (쉬움/보통/어려움 = 상중하 순)
-   - 문제유형 / 출처 / 난이도 / 주차 / 챕터
-4. 모든 문제 5점
+사용자 명시 (2026-04-30 / 2026-05-01):
+1. 보고서 두 종류:
+   - 교수자 보관용 (현행 형식 유지, 그림 옆 안내 문구 2건만 삭제)
+   - 학생 전달용 (제목/헤더/시험결과 요약 단순화)
+2. 그림 정책:
+   - radar chart: 챕터별 + 주차별 (파란 실선 cohort + 빨간 실선 학생)
+   - bar chart: 예상 난이도(쉬움/보통/어려움 = 상중하 순) / 문제 유형 / 출처 / 객관 난이도
+   - 챕터·주차는 radar 로만 (bar 생산 X)
+3. "객관 난이도" 1/2/3 → 쉬움/보통/어려움 라벨 (양쪽 보고서)
+4. 그림 옆 안내 문구 ("파란 실선 = ...", "파란 막대 = ...") 양쪽 보고서에서 삭제
+5. 모든 시험문제 5점
 
-입력:
-- data/bronze/시험성적/인체구조와기능_{A,B,C,D}반 결과(OX).xls (학생당 3 row: 정답/표기/결과)
-- data/bronze/시험문제/실제_출제문제.yaml (44 문항 메타)
-- data/silver/immersio/2026-1-anatomy/진단×시험결합.parquet (60-col silver)
+폴더 구조:
+- data/gold/immersio/{semester}-{course_slug}/
+  - 학생 전달용/{학번}_{이름}/
+      - {학번}_{이름}.md
+      - {학번}_{이름}.pdf
+      - figs_{학번}_{이름}/{...png}
+  - 교수자 보관용/{학번}_{이름}/
+      - 보고서.md
+      - 보고서.pdf
+      - figs/{...png}
+  - 이메일_발송용/{학번}_{이름}.pdf  (학생 전달용 PDF 복사 + 중복/개수 검증)
 
-산출:
-- data/gold/immersio/2026-1-anatomy/학생별_상세/{sid}_{name}/
-  - 보고서.md
-  - 보고서.pdf
-  - figs/radar_chapter.png
-  - figs/bar_expected_difficulty.png
-  - figs/bar_question_type.png
-  - figs/bar_source.png
-  - figs/bar_difficulty.png
-  - figs/bar_week.png
-  - figs/bar_chapter.png
+학년도/학기/교과목명 source-of-truth (하드코딩 없음):
+- semester ("2026-1") → 학년도/학기 split (학생 전달용 제목)
+- mapping yaml metadata.course_name_kr → 교과목명
 """
 
 from __future__ import annotations
 
-import json
+import argparse
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 matplotlib.use("Agg")
@@ -41,42 +46,34 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import yaml
-from matplotlib.patches import Patch
 
 REPO = Path("/home/kjeong/localgit/paideia")
-BRONZE_OX = REPO / "data/bronze/시험성적"
-EXAM_YAML = REPO / "data/bronze/시험문제/실제_출제문제.yaml"
-SILVER_IM = REPO / "data/silver/immersio/2026-1-anatomy"
-GOLD_IM = REPO / "data/gold/immersio/2026-1-anatomy"
-OUT_ROOT = GOLD_IM / "학생별_상세"
+BRONZE_EXAM_ROOT = REPO / "data/bronze/시험성적"
 SECTIONS = ("A", "B", "C", "D")
 POINTS_PER_ITEM = 5.0  # 사용자 명시
 
-# Korean font setup — NixOS / Gentoo / 일반 distro 대응. fc-match fallback.
+# Korean font setup (NixOS / Gentoo / 일반 distro 대응 + fc-match fallback)
 _NANUM: str | None = None
-_FONT_HARDCODED = (
+for cand in (
     "/run/current-system/sw/share/fonts/nanum/NanumGothic.ttf",
     "/usr/share/fonts/nanum/NanumGothic.ttf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-)
-for cand in _FONT_HARDCODED:
+):
     if Path(cand).exists():
         _NANUM = cand
         break
 if _NANUM is None:
-    import subprocess
     try:
         result = subprocess.run(
             ["fc-match", "-f", "%{file}", "NanumGothic"],
             capture_output=True, text=True, timeout=5,
         )
-        candidate = result.stdout.strip()
-        if candidate and Path(candidate).exists() and "Nanum" in candidate:
-            _NANUM = candidate
+        c = result.stdout.strip()
+        if c and Path(c).exists() and "Nanum" in c:
+            _NANUM = c
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 if _NANUM is None:
-    # NixOS home-manager path glob fallback
     for p in Path("/nix/store").glob("*/share/fonts/NanumGothic.ttf"):
         _NANUM = str(p)
         break
@@ -85,10 +82,37 @@ if _NANUM:
     plt.rcParams["font.family"] = "NanumGothic"
     print(f"[font] NanumGothic land: {_NANUM}")
 else:
-    print("[font] WARN — NanumGothic not found. 한글 figs 깨짐 가능.", file=sys.stderr)
+    print("[font] WARN — NanumGothic not found.", file=sys.stderr)
 plt.rcParams["axes.unicode_minus"] = False
 plt.rcParams["figure.dpi"] = 150
 
+
+# --- semester / course parsing ----------------------------------------------
+
+def split_semester(semester: str) -> tuple[str, str]:
+    """`2026-1` → (`2026`, `1`). 하드코딩 없이 입력값에서 split."""
+    parts = semester.split("-")
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        raise ValueError(f"split_semester: expected 'YYYY-N', got {semester!r}")
+    return parts[0], parts[1]
+
+
+def get_course_name_kr(mapping_path: Path, course_slug: str) -> str:
+    """mapping yaml `metadata.course_name_kr` 추출 — 하드코딩 우회."""
+    data = yaml.safe_load(mapping_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"get_course_name_kr: expected mapping in {mapping_path}")
+    md = data.get("metadata") or {}
+    name = md.get("course_name_kr")
+    if not name:
+        raise ValueError(
+            f"get_course_name_kr: metadata.course_name_kr 가 {mapping_path} 에 없음 — "
+            f"매핑 yaml 에 명시 필요"
+        )
+    return str(name).strip()
+
+
+# --- bronze OX parsers ------------------------------------------------------
 
 def _normalize_sid(raw: object) -> str | None:
     if pd.isna(raw):
@@ -103,14 +127,15 @@ def _normalize_sid(raw: object) -> str | None:
     return None
 
 
-def parse_ox_xls(path: Path, section: str, n_items: int) -> pd.DataFrame:
+def parse_ox_xls(
+    path: Path, section: str, n_items: int, course_name_kr: str,
+) -> pd.DataFrame:
     """학생당 3 row (정답/표기/결과) → DataFrame[student_id, item_no, correct]."""
     raw = pd.read_excel(path, sheet_name="Sheet1", dtype=object, header=None)
     rows: list[dict] = []
     n_rows = len(raw)
-    i = 2  # row 0+1 = 헤더
+    i = 2
     while i < n_rows:
-        # 메타 row 식별: col 0 (순번) 이 숫자 + col 8 == "정답"
         col0 = raw.iat[i, 0]
         if pd.isna(col0):
             i += 1
@@ -126,17 +151,14 @@ def parse_ox_xls(path: Path, section: str, n_items: int) -> pd.DataFrame:
         if sid is None:
             i += 1
             continue
-        # 다음 두 row 가 표기/결과여야 함
         if i + 2 >= n_rows:
             break
-        # 결과 row = i+2
         result_row = raw.iloc[i + 2]
         if str(result_row.iat[8]).strip() != "결과":
-            # 패턴 위반 — skip
             i += 3
             continue
         for it in range(1, n_items + 1):
-            col_idx = 8 + it  # col 9 = item 1
+            col_idx = 8 + it
             ox = result_row.iat[col_idx] if col_idx < raw.shape[1] else None
             if pd.isna(ox):
                 continue
@@ -171,37 +193,24 @@ def parse_exam_meta(path: Path) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("item_no").reset_index(drop=True)
 
 
-def compute_meta_scores(ox: pd.DataFrame, meta: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """학생별 + cohort 메타데이터별 평균 점수.
-
-    Returns dict[meta_kind] = DataFrame columns:
-      [meta_value, cohort_mean_score, count]
-    + per-student: dict[meta_kind][sid] = DataFrame [meta_value, score, count]
-    """
-    merged = ox.merge(meta, on="item_no", how="left")
-    merged["score"] = merged["correct"] * POINTS_PER_ITEM
-    return merged
-
-
 def cohort_mean_by(merged: pd.DataFrame, meta_col: str) -> pd.DataFrame:
-    """cohort: 메타값별 평균 점수 (학생별 평균의 평균이 아니라 모든 정답×5점 평균)."""
-    grp = (
+    return (
         merged.groupby(meta_col)
         .agg(mean_score=("score", "mean"), n_responses=("score", "count"))
         .reset_index()
     )
-    return grp
 
 
 def student_mean_by(merged: pd.DataFrame, sid: str, meta_col: str) -> pd.DataFrame:
     sub = merged[merged["student_id"] == sid]
-    grp = (
+    return (
         sub.groupby(meta_col)
         .agg(mean_score=("score", "mean"), n_responses=("score", "count"))
         .reset_index()
     )
-    return grp
 
+
+# --- chart rendering --------------------------------------------------------
 
 def _render_radar_generic(
     cohort: pd.DataFrame,
@@ -242,8 +251,7 @@ def _render_radar_generic(
     ax.legend(loc="lower right", bbox_to_anchor=(1.25, -0.05))
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, format="png", dpi=150,
-                metadata={"Software": "paideia"})
+    fig.savefig(out, format="png", dpi=150, metadata={"Software": "paideia"})
     plt.close(fig)
 
 
@@ -262,7 +270,6 @@ def render_radar_week(cohort, student, out: Path) -> None:
     )
 
 
-# 주차/챕터는 radar 로만 land — bar 생산 X (사용자 명시 2026-04-30).
 _META_KIND_LABEL = {
     "expected_difficulty": "예상 난이도",
     "question_type": "문제 유형",
@@ -270,11 +277,16 @@ _META_KIND_LABEL = {
     "difficulty": "객관 난이도",
 }
 
-_CATEGORY_ORDER = {
-    "expected_difficulty": ["쉬움", "보통", "어려움"],  # 상중하 순
-    "question_type": None,  # alphabetical fallback
+_CATEGORY_ORDER: dict[str, list[Any] | None] = {
+    "expected_difficulty": ["쉬움", "보통", "어려움"],  # 상중하
+    "question_type": None,
     "source": ["교과서", "형성평가", "퀴즈"],
-    "difficulty": [1, 2, 3],
+    "difficulty": [1, 2, 3],  # internal value order (쉬움→보통→어려움)
+}
+
+# 사용자 명시 (2026-05-01): 객관 난이도 1/2/3 → 쉬움/보통/어려움 라벨.
+_CATEGORY_LABEL_MAP: dict[str, dict[Any, str]] = {
+    "difficulty": {1: "쉬움", 2: "보통", 3: "어려움"},
 }
 
 
@@ -284,7 +296,6 @@ def render_bar_meta(
     meta_col: str,
     out: Path,
 ) -> None:
-    """파란 막대 cohort + 빨간 막대 student. 카테고리 순서 _CATEGORY_ORDER 강제."""
     order = _CATEGORY_ORDER.get(meta_col)
     cohort_map = dict(zip(cohort[meta_col], cohort["mean_score"]))
     student_map = dict(zip(student[meta_col], student["mean_score"]))
@@ -297,13 +308,16 @@ def render_bar_meta(
     cohort_vals = [cohort_map.get(c, 0.0) for c in cats]
     student_vals = [student_map.get(c, 0.0) for c in cats]
 
+    label_map = _CATEGORY_LABEL_MAP.get(meta_col, {})
+    tick_labels = [str(label_map.get(c, c)) for c in cats]
+
     x = np.arange(len(cats))
     w = 0.35
     fig, ax = plt.subplots(figsize=(max(6, len(cats) * 1.2), 5))
     ax.bar(x - w / 2, cohort_vals, w, color="blue", label="전체 학생 평균")
     ax.bar(x + w / 2, student_vals, w, color="red", label="해당 학생")
     ax.set_xticks(x)
-    ax.set_xticklabels([str(c) for c in cats], rotation=15, ha="right", size=10)
+    ax.set_xticklabels(tick_labels, rotation=15, ha="right", size=10)
     ax.set_ylim(0, 5.0)
     ax.set_ylabel("평균 점수 (5점 만점)")
     label = _META_KIND_LABEL.get(meta_col, meta_col)
@@ -312,10 +326,11 @@ def render_bar_meta(
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, format="png", dpi=150,
-                metadata={"Software": "paideia"})
+    fig.savefig(out, format="png", dpi=150, metadata={"Software": "paideia"})
     plt.close(fig)
 
+
+# --- needs-map axis vocabulary (교수자 보관용 §4) ----------------------------
 
 _AXIS_KR = {
     "digital_efficacy": "디지털 효능감",
@@ -341,15 +356,92 @@ def _interpret_z(z: float) -> str:
     return f"평균 대비 매우 낮음 (z={z:+.2f})"
 
 
-def _build_md(
+# --- md builders ------------------------------------------------------------
+
+def _radar_block(figs_subdir_name: str) -> list[str]:
+    """Radar 섹션 — 안내 문구 삭제 (양쪽 보고서 공통)."""
+    return [
+        "## 2. 챕터·주차별 평균 점수 (Radar)",
+        "",
+        "### 챕터별 평균 점수",
+        "",
+        f"![챕터별 평균 점수]({figs_subdir_name}/radar_chapter.png)",
+        "",
+        "### 주차별 평균 점수",
+        "",
+        f"![주차별 평균 점수]({figs_subdir_name}/radar_week.png)",
+        "",
+    ]
+
+
+def _bar_block(figs_subdir_name: str) -> list[str]:
+    """Bar 섹션 — 안내 문구 삭제 (양쪽 보고서 공통)."""
+    return [
+        "## 3. 문제 메타데이터별 평균 점수 (Bar)",
+        "",
+        "### 예상 난이도별 평균 점수",
+        "",
+        f"![예상 난이도별 평균 점수]({figs_subdir_name}/bar_expected_difficulty.png)",
+        "",
+        "### 문제 유형별 평균 점수",
+        "",
+        f"![문제 유형별 평균 점수]({figs_subdir_name}/bar_question_type.png)",
+        "",
+        "### 문제 출처별 평균 점수",
+        "",
+        f"![문제 출처별 평균 점수]({figs_subdir_name}/bar_source.png)",
+        "",
+        "### 객관 난이도별 평균 점수",
+        "",
+        f"![객관 난이도별 평균 점수]({figs_subdir_name}/bar_difficulty.png)",
+        "",
+    ]
+
+
+def build_md_student(
+    sid: str,
+    name: str,
+    silver_row: pd.Series,
+    course_name_kr: str,
+    year: str,
+    term: str,
+    figs_subdir_name: str,
+) -> str:
+    """학생 전달용 — 제목/헤더/시험결과 단순화."""
+    title = f"# {sid} {name} {year}학년도 {term}학기 {course_name_kr} 중간고사 보고서"
+    parts: list[str] = [title, "", "---", "", "## 1. 시험 결과 요약", ""]
+    if bool(silver_row.get("시험응시", False)):
+        parts.extend([
+            f"- **총점**: **{float(silver_row['total_score']):.1f}** 점",
+            f"- **100점 환산**: {float(silver_row['score_percent']):.1f}",
+            "",
+            "(모든 시험문제는 5점)",
+            "",
+        ])
+    else:
+        parts.extend(["**시험 미응시 (결시)**", ""])
+    parts.append("---")
+    parts.append("")
+    parts.extend(_radar_block(figs_subdir_name))
+    parts.append("---")
+    parts.append("")
+    parts.extend(_bar_block(figs_subdir_name))
+    parts.append("---")
+    return "\n".join(parts)
+
+
+def build_md_instructor(
     sid: str,
     name: str,
     silver_row: pd.Series,
     cohort_mean: float,
-    out_dir: Path,
-    fig_files: list[tuple[str, str]],
+    course_name_kr: str,
+    year: str,
+    term: str,
+    figs_subdir_name: str,
 ) -> str:
-    """학생별 보고서 md 본문 (그림 inline)."""
+    """교수자 보관용 — 현행 형식 + 안내 문구만 삭제."""
+    title = f"# {name} 학생 면담 보고서 — {year}-{term} {course_name_kr}"
     section = silver_row.get("section") or "—"
     cluster_label = (
         silver_row["cluster_label"]
@@ -362,15 +454,11 @@ def _build_md(
         else "—"
     )
     parts = [
-        f"# {name} 학생 면담 보고서 — 2026-1 인체구조와기능",
-        "",
+        title, "",
         f"**학번**: `{sid}` | **분반**: {section} | "
         f"**군집**: {cluster_label} (id={cluster_id})",
-        "",
-        "---",
-        "",
-        "## 1. 시험 결과 요약",
-        "",
+        "", "---", "",
+        "## 1. 시험 결과 요약", "",
     ]
     if bool(silver_row.get("시험응시", False)):
         parts.extend([
@@ -386,46 +474,18 @@ def _build_md(
         ])
     else:
         parts.extend(["**시험 미응시 (결시)** — 아래 그림은 미land.", ""])
-
-    parts.extend([
-        "---",
-        "",
-        "## 2. 챕터·주차별 평균 점수 (Radar)",
-        "",
-        "파란 실선 = 전체 학생 평균 / 빨간 실선 = 해당 학생",
-        "",
-    ])
-    for fname, caption in fig_files:
-        if fname.startswith("radar"):
-            parts.append(f"### {caption}")
-            parts.append("")
-            parts.append(f"![{caption}](figs/{fname})")
-            parts.append("")
-    parts.extend([
-        "---",
-        "",
-        "## 3. 문제 메타데이터별 평균 점수 (Bar)",
-        "",
-        "파란 막대 = 전체 학생 평균 / 빨간 막대 = 해당 학생. "
-        "챕터·주차는 radar 로 land 됨 (이 섹션 제외).",
-        "",
-    ])
-    for fname, caption in fig_files:
-        if fname.startswith("bar_"):
-            parts.append(f"### {caption}")
-            parts.append("")
-            parts.append(f"![{caption}](figs/{fname})")
-            parts.append("")
-
-    # needs-map 진단
-    parts.extend([
-        "---",
-        "",
-        "## 4. needs-map 진단 8 정량 축",
-        "",
-        "| 정량 축 | raw | z-score | 해석 |",
-        "|---|---|---|---|",
-    ])
+    parts.append("---")
+    parts.append("")
+    parts.extend(_radar_block(figs_subdir_name))
+    parts.append("---")
+    parts.append("")
+    parts.extend(_bar_block(figs_subdir_name))
+    parts.append("---")
+    parts.append("")
+    parts.append("## 4. needs-map 진단 8 정량 축")
+    parts.append("")
+    parts.append("| 정량 축 | raw | z-score | 해석 |")
+    parts.append("|---|---|---|---|")
     for axis, kr in _AXIS_KR.items():
         raw = silver_row.get(f"{axis}_raw")
         z = silver_row.get(f"{axis}_z")
@@ -438,12 +498,12 @@ def _build_md(
                 f"{_interpret_z(float(z))} |"
             )
     parts.extend(["", "---", ""])
-
     return "\n".join(parts)
 
 
-def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
-    """간단 md → PDF (reportlab Platypus). 그림 inline 으로 embed."""
+# --- PDF (md → reportlab Platypus) ------------------------------------------
+
+def md_to_pdf(md_text: str, base_dir: Path, out_pdf: Path) -> None:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -451,8 +511,7 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
-        Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
-        TableStyle,
+        Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
 
     if _NANUM and "NanumGothic" not in pdfmetrics.getRegisteredFontNames():
@@ -460,17 +519,16 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
 
     styles = getSampleStyleSheet()
     base_font = "NanumGothic" if _NANUM else "Helvetica"
-    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontName=base_font, fontSize=18, leading=22)
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName=base_font, fontSize=14, leading=18, textColor=colors.HexColor("#0b3d8c"))
-    h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontName=base_font, fontSize=12, leading=15)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontName=base_font, fontSize=16, leading=20)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName=base_font, fontSize=13, leading=17, textColor=colors.HexColor("#0b3d8c"))
+    h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontName=base_font, fontSize=11, leading=14)
     body = ParagraphStyle("body", parent=styles["BodyText"], fontName=base_font, fontSize=10, leading=14)
 
     flow: list = []
     table_buf: list[list[str]] = []
-    in_table = False
 
     def _flush_table():
-        nonlocal table_buf, in_table
+        nonlocal table_buf
         if table_buf:
             tbl = Table(table_buf, hAlign="LEFT")
             tbl.setStyle(TableStyle([
@@ -485,7 +543,6 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
             flow.append(tbl)
             flow.append(Spacer(1, 0.3 * cm))
             table_buf = []
-        in_table = False
 
     for line in md_text.split("\n"):
         s = line.rstrip()
@@ -505,7 +562,7 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
             _flush_table()
             try:
                 rel_path = s.split("](")[1][:-1]
-                abs_path = (fig_dir.parent / rel_path).resolve()
+                abs_path = (base_dir / rel_path).resolve()
                 if abs_path.exists():
                     img = Image(str(abs_path), width=14 * cm, height=10 * cm,
                                 kind="proportional")
@@ -516,8 +573,7 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
         elif s.startswith("|") and s.endswith("|"):
             cells = [c.strip() for c in s.strip("|").split("|")]
             if all(set(c) <= set("- :") for c in cells):
-                continue  # markdown table separator
-            in_table = True
+                continue
             table_buf.append(cells)
         elif s.strip() == "---":
             _flush_table()
@@ -539,105 +595,233 @@ def _md_to_pdf(md_text: str, fig_dir: Path, out_pdf: Path) -> None:
     doc.build(flow)
 
 
+# --- main -------------------------------------------------------------------
+
+def _safe_name(name: str) -> str:
+    return (name or "이름없음").strip().replace("/", "_").replace(" ", "_")
+
+
+def _emit_one_student(
+    sid: str,
+    name: str,
+    student_grps: dict[str, pd.DataFrame],
+    cohort_grps: dict[str, pd.DataFrame],
+    silver_row: pd.Series,
+    cohort_mean: float,
+    course_name_kr: str,
+    year: str,
+    term: str,
+    student_root: Path,
+    instructor_root: Path,
+) -> tuple[Path, Path]:
+    safe_name = _safe_name(name)
+    folder = f"{sid}_{safe_name}"
+
+    # 학생 전달용 — figs_{학번}_{이름}/
+    s_dir = student_root / folder
+    s_figs_name = f"figs_{sid}_{safe_name}"
+    s_figs = s_dir / s_figs_name
+
+    # 교수자 보관용 — figs/
+    i_dir = instructor_root / folder
+    i_figs_name = "figs"
+    i_figs = i_dir / i_figs_name
+
+    for figs in (s_figs, i_figs):
+        figs.mkdir(parents=True, exist_ok=True)
+
+    # 그림 6개 — 양 폴더에 동일 land
+    for figs in (s_figs, i_figs):
+        render_radar_chapter(
+            cohort_grps["chapter"], student_grps["chapter"],
+            figs / "radar_chapter.png",
+        )
+        render_radar_week(
+            cohort_grps["week"], student_grps["week"],
+            figs / "radar_week.png",
+        )
+        for col in _META_KIND_LABEL.keys():
+            render_bar_meta(
+                cohort_grps[col], student_grps[col], col,
+                figs / f"bar_{col}.png",
+            )
+
+    # 학생 전달용 md/pdf — 파일명 = 학번_이름
+    s_md_text = build_md_student(
+        sid, name, silver_row, course_name_kr, year, term, s_figs_name,
+    )
+    s_md_path = s_dir / f"{sid}_{safe_name}.md"
+    s_pdf_path = s_dir / f"{sid}_{safe_name}.pdf"
+    s_md_path.write_text(s_md_text, encoding="utf-8")
+    md_to_pdf(s_md_text, s_dir, s_pdf_path)
+
+    # 교수자 보관용 md/pdf — 파일명 = 보고서
+    i_md_text = build_md_instructor(
+        sid, name, silver_row, cohort_mean,
+        course_name_kr, year, term, i_figs_name,
+    )
+    i_md_path = i_dir / "보고서.md"
+    i_pdf_path = i_dir / "보고서.pdf"
+    i_md_path.write_text(i_md_text, encoding="utf-8")
+    md_to_pdf(i_md_text, i_dir, i_pdf_path)
+
+    return s_pdf_path, i_pdf_path
+
+
+def _copy_student_pdfs_for_email(
+    student_root: Path, email_root: Path,
+) -> tuple[int, list[str]]:
+    """학생 전달용 PDF 모두 → 이메일_발송용 단일 폴더 복사 + 검증.
+
+    Returns:
+        (copied_count, conflicts) — conflicts 가 비어있어야 정상.
+    """
+    if email_root.exists():
+        shutil.rmtree(email_root)
+    email_root.mkdir(parents=True, exist_ok=True)
+    seen: dict[str, Path] = {}
+    conflicts: list[str] = []
+    src_pdfs: list[Path] = []
+    for sid_dir in sorted(student_root.iterdir()):
+        if not sid_dir.is_dir():
+            continue
+        for pdf in sid_dir.glob("*.pdf"):
+            src_pdfs.append(pdf)
+    for src in src_pdfs:
+        target = email_root / src.name
+        if target.exists() or src.name in seen:
+            conflicts.append(src.name)
+            continue
+        shutil.copy2(src, target)
+        seen[src.name] = src
+    return len(seen), conflicts
+
+
 def main() -> int:
-    n_items = 44
-    print(f"=== production OX parse (4 sections) ===")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--semester", required=True, help="e.g. 2026-1")
+    ap.add_argument("--course-slug", required=True, help="e.g. anatomy")
+    ap.add_argument("--mapping", required=True, type=Path,
+                    help="Diagnostic mapping yaml (course_name_kr 추출).")
+    ap.add_argument("--bronze-exam-dir", default=BRONZE_EXAM_ROOT, type=Path)
+    ap.add_argument("--exam-yaml", required=True, type=Path)
+    ap.add_argument("--silver-dir", required=True, type=Path)
+    ap.add_argument("--gold-dir", required=True, type=Path)
+    ap.add_argument("--n-items", type=int, default=44)
+    args = ap.parse_args()
+
+    year, term = split_semester(args.semester)
+    course_name_kr = get_course_name_kr(args.mapping, args.course_slug)
+    print(f"[meta] {year}학년도 {term}학기 / {course_name_kr} ({args.course_slug})")
+
+    silver_im = args.silver_dir / "immersio" / f"{args.semester}-{args.course_slug}"
+    gold_im = args.gold_dir / "immersio" / f"{args.semester}-{args.course_slug}"
+    student_root = gold_im / "학생 전달용"
+    instructor_root = gold_im / "교수자 보관용"
+    email_root = gold_im / "이메일_발송용"
+
+    # Reset student/instructor dirs (이메일_발송용은 _copy 단계에서 reset).
+    for r in (student_root, instructor_root):
+        if r.exists():
+            shutil.rmtree(r)
+        r.mkdir(parents=True, exist_ok=True)
+
+    # OX parse
+    print("=== production OX parse ===")
     ox_frames = []
     for sect in SECTIONS:
-        path = BRONZE_OX / f"인체구조와기능_{sect}반 결과(OX).xls"
+        # production 파일명 패턴: {course_name_kr}_{section}반 결과(OX).xls
+        path = args.bronze_exam_dir / f"{course_name_kr}_{sect}반 결과(OX).xls"
         if path.exists():
-            df = parse_ox_xls(path, sect, n_items)
+            df = parse_ox_xls(path, sect, args.n_items, course_name_kr)
             ox_frames.append(df)
-            print(f"  {sect}반: {df['student_id'].nunique()} 학생, {len(df)} OX 행")
+            print(f"  {sect}반: {df['student_id'].nunique()} 학생")
+    if not ox_frames:
+        raise FileNotFoundError(
+            f"OX xls 미land 아래 패턴: {args.bronze_exam_dir}/{course_name_kr}_*반 결과(OX).xls"
+        )
     ox = pd.concat(ox_frames, ignore_index=True)
     print(f"  total: {ox['student_id'].nunique()} 학생, {len(ox)} OX 행")
 
-    meta = parse_exam_meta(EXAM_YAML)
-    print(f"\n=== meta: {len(meta)} items ===")
+    # meta + score
+    meta = parse_exam_meta(args.exam_yaml)
+    print(f"=== exam yaml: {len(meta)} items ===")
+    merged = ox.merge(meta, on="item_no", how="left")
+    merged["score"] = merged["correct"] * POINTS_PER_ITEM
 
-    merged = compute_meta_scores(ox, meta)
-    print(f"merged shape: {merged.shape}")
-
-    print("\n=== silver round-trip ===")
-    silver = pq.read_table(SILVER_IM / "진단×시험결합.parquet").to_pandas()
-    print(f"silver rows: {len(silver)}")
+    # silver round-trip
+    silver = pq.read_table(silver_im / "진단×시험결합.parquet").to_pandas()
     silver_idx = silver.set_index("student_id")
-    cohort_mean = float(
-        silver.loc[silver["시험응시"], "total_score"].mean()
-    ) if silver["시험응시"].any() else float("nan")
-
-    # radar 용 메타 (chapter, week) + bar 용 메타 (4종) 모두 cohort 평균 미리 land
-    META_COLS = (
-        "chapter", "week",  # radar
-        "expected_difficulty", "question_type", "source", "difficulty",  # bar
+    cohort_mean = (
+        float(silver.loc[silver["시험응시"], "total_score"].mean())
+        if silver["시험응시"].any()
+        else float("nan")
     )
 
+    META_COLS = (
+        "chapter", "week",
+        "expected_difficulty", "question_type", "source", "difficulty",
+    )
     cohort_grps = {col: cohort_mean_by(merged, col) for col in META_COLS}
 
-    # Reset OUT_ROOT
-    if OUT_ROOT.exists():
-        shutil.rmtree(OUT_ROOT)
-    OUT_ROOT.mkdir(parents=True, exist_ok=True)
-
     sids = sorted(set(ox["student_id"].unique()))
-    print(f"\n=== rendering reports for {len(sids)} students ===")
+    print(f"=== rendering {len(sids)} students × 2 reports ===")
+    s_pdfs: list[Path] = []
+    i_pdfs: list[Path] = []
     for n, sid in enumerate(sids, 1):
         sub = merged[merged["student_id"] == sid]
         if sub.empty:
             continue
         name = sub["name_kr"].iloc[0] or "이름없음"
-        safe_name = name.replace("/", "_").replace(" ", "")
-        student_dir = OUT_ROOT / f"{sid}_{safe_name}"
-        figs_dir = student_dir / "figs"
-        figs_dir.mkdir(parents=True, exist_ok=True)
+        student_grps = {col: student_mean_by(merged, sid, col) for col in META_COLS}
 
-        student_grps = {
-            col: student_mean_by(merged, sid, col) for col in META_COLS
-        }
-
-        # Radar 2종 — 챕터 + 주차 (사용자 명시: 이 둘은 radar 로만)
-        render_radar_chapter(
-            cohort_grps["chapter"], student_grps["chapter"],
-            figs_dir / "radar_chapter.png",
-        )
-        render_radar_week(
-            cohort_grps["week"], student_grps["week"],
-            figs_dir / "radar_week.png",
-        )
-        fig_files = [
-            ("radar_chapter.png", "챕터별 평균 점수"),
-            ("radar_week.png", "주차별 평균 점수"),
-        ]
-
-        # Bar 4종 — 챕터/주차 제외 (예상_난이도/문제유형/출처/난이도)
-        for col, label in _META_KIND_LABEL.items():
-            png = f"bar_{col}.png"
-            render_bar_meta(
-                cohort_grps[col], student_grps[col], col,
-                figs_dir / png,
-            )
-            fig_files.append((png, f"{label}별 평균 점수"))
-
-        # silver row (없으면 default)
         if sid in silver_idx.index:
-            silver_row = silver_idx.loc[sid]
-            if isinstance(silver_row, pd.DataFrame):
-                silver_row = silver_row.iloc[0]
+            srow = silver_idx.loc[sid]
+            if isinstance(srow, pd.DataFrame):
+                srow = srow.iloc[0]
         else:
-            silver_row = pd.Series({"시험응시": False, "section": sub["section"].iloc[0]})
+            # off-roster 응시자 — silver 미land. OX 점수에서 직접 합성.
+            total = float(sub["score"].sum())
+            srow = pd.Series({
+                "시험응시": True,
+                "total_score": total,
+                "score_percent": total / (POINTS_PER_ITEM * args.n_items) * 100.0,
+                "section_percentile": float("nan"),
+                "cohort_percentile": float("nan"),
+                "z_score": float("nan"),
+                "section": sub["section"].iloc[0],
+            })
 
-        md_text = _build_md(sid, name, silver_row, cohort_mean, student_dir, fig_files)
-        md_path = student_dir / "보고서.md"
-        md_path.write_text(md_text, encoding="utf-8")
-
-        pdf_path = student_dir / "보고서.pdf"
-        _md_to_pdf(md_text, figs_dir, pdf_path)
-
+        s_pdf, i_pdf = _emit_one_student(
+            sid, name, student_grps, cohort_grps, srow, cohort_mean,
+            course_name_kr, year, term, student_root, instructor_root,
+        )
+        s_pdfs.append(s_pdf)
+        i_pdfs.append(i_pdf)
         if n % 25 == 0:
-            print(f"  ... {n}/{len(sids)} 완료")
+            print(f"  ... {n}/{len(sids)} done")
 
-    print(f"\n=== land 완료 — {len(sids)} 학생 ===")
-    print(f"out: {OUT_ROOT}")
+    # 이메일_발송용 PDF 복사 + 검증
+    print("=== 이메일_발송용 PDF copy ===")
+    n_copied, conflicts = _copy_student_pdfs_for_email(student_root, email_root)
+    expected = len(s_pdfs)
+    if conflicts:
+        raise RuntimeError(
+            f"이메일_발송용 PDF 복사 중 중복 파일명 {len(conflicts)}건 — "
+            f"sample {conflicts[:5]}"
+        )
+    if n_copied != expected:
+        raise RuntimeError(
+            f"이메일_발송용 PDF 개수 불일치 — copied={n_copied}, expected={expected}"
+        )
+    print(f"  ✅ {n_copied} PDF 복사 — 중복 0건, 학생 전달용 == 이메일_발송용 정합")
+
+    # 최종 점검
+    print()
+    print("=== 산출 inventory ===")
+    print(f"  학생 전달용:    {len(list(student_root.iterdir()))} 학생 폴더")
+    print(f"  교수자 보관용: {len(list(instructor_root.iterdir()))} 학생 폴더")
+    print(f"  이메일_발송용: {len(list(email_root.glob('*.pdf')))} PDF")
     return 0
 
 
