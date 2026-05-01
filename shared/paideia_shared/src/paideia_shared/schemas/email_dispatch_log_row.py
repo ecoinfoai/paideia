@@ -62,6 +62,8 @@ _VALID_ERROR_KINDS: frozenset[str] = frozenset({
     "gmail_api_rate_limit",
     "gmail_api_server_error",
     "gmail_api_unknown",
+    "gmail_api_auth_failed",
+    "gmail_api_domain_policy",
     "network_timeout",
     "score_unavailable",
 })

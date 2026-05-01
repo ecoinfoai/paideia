@@ -184,7 +184,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     verify_by_sid = {v.bundle.student_id: v for v in verified}
     missing_sids = {b.student_id for b in missing_in_master}
 
-    # Phase E — composer + log
+    # Phase E — composer + log. ``override_to`` is set when self-test
+    # mode is active (US2): all drafts share the operator's own email
+    # and the student's email is *not used at all* (FR-C05).
+    is_self_test = bool(args.send and args.self_test is not None)
+    operator_to: str | None = profile.sender.email if is_self_test else None
+
     started_at = datetime.now(tz=KST)
     log_rows: list[DispatchLogRow] = []
     drafts_with_pdfs: list[tuple] = []
@@ -268,6 +273,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             exam_name=args.exam_name,
             sent_date=sent_date,
             mode=mode,
+            override_to=operator_to,
         )
         drafts_with_pdfs.append((draft, bundle))
         log_rows.append(
@@ -288,15 +294,42 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     paths["gold_email_dir"].mkdir(parents=True, exist_ok=True)
 
     if not args.send:
+        # Dry-run (US1): write .eml previews, no Gmail API call.
         preview_dir = paths["preview_dir"]
         if profile.profile_kind == "test":
             preview_dir = preview_dir / "_test"
         write_eml_preview_files(drafts_with_pdfs, preview_dir)
+    elif is_self_test:
+        # Self-test (US2): first N drafts → operator's own mailbox.
+        # Student emails are NOT used (override_to applied above).
+        n = args.self_test
+        if n < 1 or n > 10:
+            print(
+                f"ERROR [immersio email]: --self-test must be 1 ≤ N ≤ 10 "
+                f"(got {n}).",
+                file=sys.stderr,
+            )
+            return 2
+        if len(drafts_with_pdfs) < n:
+            print(
+                f"ERROR [immersio email]: only {len(drafts_with_pdfs)} "
+                f"sendable drafts available — cannot satisfy --self-test "
+                f"{n}.",
+                file=sys.stderr,
+            )
+            return 2
+        rc = _run_self_test_send(
+            drafts_with_pdfs[:n],
+            profile=profile,
+            log_rows=log_rows,
+        )
+        if rc != 0:
+            return rc
     else:
         print(
-            "ERROR [immersio email]: live send modes (--send) land in spec "
-            "006 Phase 4 (US2) and Phase 5 (US3). v0.1.0 Phase 3 ships "
-            "dry-run only.",
+            "ERROR [immersio email]: production --send (US3) lands in spec "
+            "006 Phase 5. v0.1.0 currently supports dry-run (no flag) + "
+            "self-test (--self-test N --send).",
             file=sys.stderr,
         )
         return 2
@@ -461,6 +494,84 @@ def _aggregate_counts(rows: list[DispatchLogRow]) -> EmailManifestCounts:
         dry_run=counts[DispatchStatus.DRY_RUN],
         test_dummy=counts[DispatchStatus.TEST_DUMMY],
     )
+
+
+def _run_self_test_send(
+    drafts_with_pdfs: list[tuple],
+    *,
+    profile,
+    log_rows: list[DispatchLogRow],
+) -> int:
+    """Send the first N drafts via Gmail API to the operator's own mailbox.
+
+    Args:
+        drafts_with_pdfs: ``(draft, bundle)`` pairs already pre-built with
+            ``override_to=profile.sender.email`` so each ``To`` header is
+            the operator's own address (FR-C05 — student emails not used).
+        profile: ProfessorProfile or TestProfile carrying SA credentials.
+        log_rows: Mutable list of DispatchLogRow rows. Self-test rows are
+            updated in-place with the actual send result + status.
+
+    Returns:
+        ``0`` on full success; ``5`` on Gmail auth failure (FR-C07);
+        ``8`` if any send returned FAILED other than auth.
+    """
+    # Lazy import — keeps the dry-run path free of the Gmail API SDK
+    # (test_dry_run_no_send_call.py guards this scope).
+    from .sender import GmailAPIDispatcher
+
+    failed_count = 0
+    sid_to_log_idx = {row.student_id: i for i, row in enumerate(log_rows)}
+
+    try:
+        with GmailAPIDispatcher(profile) as dispatcher:
+            for draft, bundle in drafts_with_pdfs:
+                pdf_bytes = bundle.pdf_path.read_bytes()
+                result = dispatcher.send_one(draft, pdf_bytes=pdf_bytes)
+
+                idx = sid_to_log_idx.get(draft.student_id)
+                if idx is None:
+                    continue
+                old = log_rows[idx]
+                # Self-test → log status TEST_DUMMY on success (FR-D08)
+                # so prod reports never count these as live sends.
+                effective_status = (
+                    DispatchStatus.TEST_DUMMY
+                    if result.status == DispatchStatus.SUCCESS
+                    else result.status
+                )
+                log_rows[idx] = DispatchLogRow(
+                    student_id=old.student_id,
+                    name_kr=old.name_kr,
+                    email=old.email,
+                    pdf_filename=old.pdf_filename,
+                    pdf_sha256=old.pdf_sha256,
+                    attempt_at_kst=old.attempt_at_kst,
+                    mode=old.mode,
+                    status=effective_status,
+                    smtp_message_id=old.smtp_message_id,
+                    error_kind=result.error_kind,
+                    error_detail=result.error_detail[:200],
+                    exam_name=old.exam_name,
+                    cohort=old.cohort,
+                )
+                if result.error_kind == "gmail_api_auth_failed":
+                    print(
+                        f"ERROR [immersio email]: Gmail API auth failed — "
+                        f"{result.error_detail}",
+                        file=sys.stderr,
+                    )
+                    return 5
+                if result.status == DispatchStatus.FAILED:
+                    failed_count += 1
+    except Exception as exc:  # noqa: BLE001 — last-resort safety net
+        print(
+            f"ERROR [immersio email]: dispatcher error — {exc}",
+            file=sys.stderr,
+        )
+        return 5
+
+    return 0 if failed_count == 0 else 8
 
 
 def _write_log_csv(rows: list[DispatchLogRow], path: Path) -> None:
