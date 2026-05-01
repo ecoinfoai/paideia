@@ -28,6 +28,7 @@ from .cluster_score_comparison import (
     ClusterRow,
     ClusterScoreComparison,
 )
+from .cohort_row import CohortRow
 from .combined_analysis_manifest import CombinedAnalysisManifest
 from .combined_analysis_row import CombinedAnalysisRow
 from .correlation_cell import CorrelationCell
@@ -141,6 +142,7 @@ __all__ = [
     "DispatchStatus",
     "DispatchMode",
     "CohortLabel",
+    "CohortRow",
     "DispatchLogRow",
     "EmailManifest",
     "EmailManifestInputs",
