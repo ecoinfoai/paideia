@@ -217,6 +217,38 @@ def _build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--include-subgroup", action="store_true")
     combine.add_argument("--verbose", action="store_true")
 
+    # T030 — spec 006 immersio-email subparser (Foundational stub).
+    # Body wiring lands in T049/T057/T073/T080/T083/T100l per phase.
+    email_p = sub.add_parser(
+        "email",
+        help="Send per-student PDF reports (spec 006 immersio-email v0.1.0)",
+    )
+    email_p.add_argument("--profile", required=True, type=str)
+    email_p.add_argument("--semester", required=True, type=str)
+    email_p.add_argument("--course", required=True, type=str)
+    email_p.add_argument("--exam-name", required=True, type=str)
+    email_p.add_argument("--sent-date", type=str, default=None)
+    email_p.add_argument("--send", action="store_true")
+    email_p.add_argument("--self-test", type=int, default=None)
+    retry_group = email_p.add_mutually_exclusive_group()
+    retry_group.add_argument("--retry-failed", action="store_true")
+    retry_group.add_argument("--retry-skipped", action="store_true")
+    email_p.add_argument("--rate-per-min", type=int, default=None)
+    email_p.add_argument(
+        "--cohort",
+        type=str,
+        choices=("low_score", "rest", "all"),
+        default="all",
+    )
+    email_p.add_argument("--confirm-sample", type=int, default=None)
+    email_p.add_argument("--bronze-csv", type=Path, default=None)
+    email_p.add_argument("--gold-pdf-dir", type=Path, default=None)
+    email_p.add_argument("--silver-master", type=Path, default=None)
+    email_p.add_argument("--silver-student-metrics", type=Path, default=None)
+    e_verbosity = email_p.add_mutually_exclusive_group()
+    e_verbosity.add_argument("--quiet", action="store_true")
+    e_verbosity.add_argument("--verbose", action="store_true")
+
     return parser
 
 
@@ -298,6 +330,13 @@ def app(argv: list[str] | None = None) -> int:
 
     if args.command == "analyze":
         return _run_analyze(args)
+
+    if args.command == "email":
+        # Foundational stub (T030). Actual orchestration wires in via
+        # T049 (US1 dry-run), T057 (US2 self-test), T073 (US3 send).
+        from immersio.email.pipeline import run_email_dispatch
+
+        return run_email_dispatch(args)
 
     if args.command == "combine":
         # T048 — INTEGRATION (RULE 4). Delegate to combine.cli.main with
