@@ -93,3 +93,25 @@ def test_scan_body_contains_student_id_true(tmp_path: Path) -> None:
     _make_pdf(pdf_dir / "1234567890_홍길동.pdf", text="학번 1234567890")
     [bundle] = scan_pdf_directory(pdf_dir)
     assert bundle.body_contains_student_id is True
+
+
+def test_filename_path_traversal_rejected() -> None:
+    """AV-S2 (adversary advisory): ``{이름}`` with traversal segment rejected."""
+    with pytest.raises(PDFScanError, match="path-traversal"):
+        parse_filename_pattern("1234567890_../escape.pdf")
+    with pytest.raises(PDFScanError, match="path-traversal"):
+        parse_filename_pattern("1234567890_evil/../name.pdf")
+    with pytest.raises(PDFScanError, match="path-traversal"):
+        parse_filename_pattern("1234567890_back\\slash.pdf")
+
+
+def test_filename_nul_byte_rejected() -> None:
+    """AV-S2: NUL byte in filename is rejected pre-regex."""
+    with pytest.raises(PDFScanError, match="NUL byte"):
+        parse_filename_pattern("1234567890_holder\x00.pdf")
+
+
+def test_filename_control_byte_rejected() -> None:
+    """AV-S2: ASCII control bytes (< 32) rejected pre-regex."""
+    with pytest.raises(PDFScanError, match="control characters"):
+        parse_filename_pattern("1234567890_holder\x01.pdf")

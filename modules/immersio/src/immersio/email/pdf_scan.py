@@ -27,7 +27,9 @@ def parse_filename_pattern(name: str) -> tuple[str, str]:
     """Extract ``(student_id, name_kr)`` from ``{학번}_{이름}.pdf``.
 
     Args:
-        name: Basename of the PDF file (no path).
+        name: Basename of the PDF file (no path). Path-traversal
+            sequences (``..``, ``/``, ``\\``, NUL, control bytes) are
+            rejected even if they pass the regex (AV-S2 defence).
 
     Returns:
         ``(student_id, name_kr)`` tuple — student_id is 10 digits,
@@ -35,15 +37,31 @@ def parse_filename_pattern(name: str) -> tuple[str, str]:
         consumed beyond the first underscore).
 
     Raises:
-        PDFScanError: When ``name`` does not match the regex.
+        PDFScanError: When ``name`` does not match the regex or contains
+            path-traversal segments / NUL / control bytes.
     """
+    if "\x00" in name:
+        raise PDFScanError(
+            f"FR-A04: PDF filename {name!r} contains NUL byte"
+        )
+    if any(ord(c) < 32 for c in name):
+        raise PDFScanError(
+            f"FR-A04: PDF filename {name!r} contains control characters"
+        )
     m = _FILENAME_RE.fullmatch(name)
     if m is None:
         raise PDFScanError(
             f"FR-A04: PDF filename {name!r} violates pattern "
             f"^(\\d{{10}})_(.+)\\.pdf$"
         )
-    return m.group(1), m.group(2)
+    sid, name_kr = m.group(1), m.group(2)
+    # Path-traversal defence (AV-S2): reject ``..``, path separators.
+    if ".." in name_kr or "/" in name_kr or "\\" in name_kr:
+        raise PDFScanError(
+            f"FR-A04: PDF filename {name!r} contains path-traversal "
+            f"segment in name_kr={name_kr!r}"
+        )
+    return sid, name_kr
 
 
 def _normalize_first_page_text(text: str) -> str:
