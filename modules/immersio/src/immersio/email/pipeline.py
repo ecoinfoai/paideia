@@ -360,7 +360,33 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # and the student's email is *not used at all* (FR-C05).
     operator_to: str | None = profile.sender.email if is_self_test else None
 
-    started_at = datetime.now(tz=KST)
+    # M3 advisory: --created-at-utc external override pins manifest
+    # started_at/completed_at to a fixed UTC timestamp so re-runs of
+    # the same input produce byte-identical manifest_email.json. When
+    # absent, the wall clock is used (matches prior behaviour).
+    created_at_override: datetime | None = None
+    if getattr(args, "created_at_utc", None) is not None:
+        try:
+            override_str = args.created_at_utc
+            if not override_str.endswith("Z"):
+                raise ValueError(
+                    f"--created-at-utc must end with 'Z' (UTC) — got "
+                    f"{override_str!r}"
+                )
+            created_at_override = datetime.fromisoformat(
+                override_str.replace("Z", "+00:00")
+            ).astimezone(KST)
+        except ValueError as exc:
+            print(
+                f"ERROR [immersio email]: invalid --created-at-utc — {exc}",
+                file=sys.stderr,
+            )
+            return 1
+    started_at = (
+        created_at_override
+        if created_at_override is not None
+        else datetime.now(tz=KST)
+    )
     log_rows: list[DispatchLogRow] = []
     drafts_with_pdfs: list[tuple] = []
     entries_by_sid: dict[str, EmailMappingEntry] = {
@@ -556,7 +582,11 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     # Manifest + log + report
     counts = _aggregate_counts(log_rows)
-    completed_at = datetime.now(tz=KST)
+    completed_at = (
+        created_at_override
+        if created_at_override is not None
+        else datetime.now(tz=KST)
+    )
     bronze_sha = _sha256_file(paths["bronze_csv"])
     master_sha = (
         _sha256_file(paths["silver_master"])

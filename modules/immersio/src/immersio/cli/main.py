@@ -245,6 +245,16 @@ def _build_parser() -> argparse.ArgumentParser:
     email_p.add_argument("--gold-pdf-dir", type=Path, default=None)
     email_p.add_argument("--silver-master", type=Path, default=None)
     email_p.add_argument("--silver-student-metrics", type=Path, default=None)
+    email_p.add_argument(
+        "--created-at-utc",
+        type=str,
+        default=None,
+        help=(
+            "UTC timestamp override (YYYY-MM-DDTHH:MM:SSZ) for manifest "
+            "started_at/completed_at — pins re-runs to a fixed timestamp "
+            "for byte-identical manifest output (M3 advisory)."
+        ),
+    )
     e_verbosity = email_p.add_mutually_exclusive_group()
     e_verbosity.add_argument("--quiet", action="store_true")
     e_verbosity.add_argument("--verbose", action="store_true")
