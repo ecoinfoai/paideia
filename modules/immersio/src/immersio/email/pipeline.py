@@ -560,6 +560,100 @@ def _aggregate_counts(rows: list[DispatchLogRow]) -> EmailManifestCounts:
     )
 
 
+def _resolve_retry_mode(args: argparse.Namespace) -> RetryMode:
+    """Map the CLI's mutually-exclusive retry flags to ``RetryMode``."""
+    if getattr(args, "retry_failed", False):
+        return RetryMode.RETRY_FAILED
+    if getattr(args, "retry_skipped", False):
+        return RetryMode.RETRY_SKIPPED
+    return RetryMode.DEFAULT
+
+
+def _run_production_send(
+    drafts_with_pdfs: list[tuple],
+    *,
+    profile,
+    log_rows: list[DispatchLogRow],
+    log_csv_path: Path,
+) -> int:
+    """Send each draft via Gmail API + append result to dispatch log durably.
+
+    Args:
+        drafts_with_pdfs: All ``(draft, bundle)`` pairs to send (already
+            idempotent-filtered upstream).
+        profile: ProfessorProfile or TestProfile carrying SA credentials.
+        log_rows: Mutable list of DispatchLogRow rows. Each placeholder
+            row is replaced in-place with the live send result; a copy
+            is also appended durably to ``log_csv_path``.
+        log_csv_path: Path to ``메일_발송로그.csv`` (production gold dir).
+
+    Returns:
+        ``0`` on full success; ``5`` on Gmail auth failure (FR-C07);
+        ``8`` if any send returned FAILED other than auth.
+
+    Raises:
+        DispatchLockError: When another process holds LOCK_EX on the
+            log file (caller maps to exit 7).
+    """
+    # Lazy import — keeps the dry-run path free of the Gmail API SDK
+    # (test_dry_run_no_send_call.py guards this scope).
+    from .sender import GmailAPIDispatcher
+
+    failed_count = 0
+    sid_to_log_idx = {row.student_id: i for i, row in enumerate(log_rows)}
+    log_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with GmailAPIDispatcher(profile) as dispatcher:
+            for draft, bundle in drafts_with_pdfs:
+                pdf_bytes = bundle.pdf_path.read_bytes()
+                result = dispatcher.send_one(draft, pdf_bytes=pdf_bytes)
+
+                idx = sid_to_log_idx.get(draft.student_id)
+                if idx is None:
+                    continue
+                old = log_rows[idx]
+                new_row = DispatchLogRow(
+                    student_id=old.student_id,
+                    name_kr=old.name_kr,
+                    email=old.email,
+                    pdf_filename=old.pdf_filename,
+                    pdf_sha256=old.pdf_sha256,
+                    attempt_at_kst=old.attempt_at_kst,
+                    mode=old.mode,
+                    status=result.status,
+                    smtp_message_id=old.smtp_message_id,
+                    error_kind=result.error_kind,
+                    error_detail=mask_secrets_in_error_detail(
+                        result.error_detail
+                    )[:200],
+                    exam_name=old.exam_name,
+                    cohort=old.cohort,
+                )
+                log_rows[idx] = new_row
+                append_dispatch_log_row(log_csv_path, new_row)
+
+                if result.error_kind == "gmail_api_auth_failed":
+                    print(
+                        f"ERROR [immersio email]: Gmail API auth failed — "
+                        f"{new_row.error_detail}",
+                        file=sys.stderr,
+                    )
+                    return 5
+                if result.status == DispatchStatus.FAILED:
+                    failed_count += 1
+    except DispatchLockError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — last-resort safety net
+        print(
+            f"ERROR [immersio email]: dispatcher error — {exc}",
+            file=sys.stderr,
+        )
+        return 5
+
+    return 0 if failed_count == 0 else 8
+
+
 def _run_self_test_send(
     drafts_with_pdfs: list[tuple],
     *,
