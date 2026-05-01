@@ -117,6 +117,7 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     "다른 학생",
     "실패 학생",
     "누락 학생",
+    "해당 학생",  # cohort 명단 md placeholder for empty partition
     # Mock service-account placeholders (non-routable, fake-prefixed)
     "fake-sa@fake-project.iam.gserviceaccount.com",
     "x@y.com",
