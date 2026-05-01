@@ -194,32 +194,32 @@ def test_idempotent_filter_empty_log_returns_all(tmp_path: Path) -> None:
 
 
 def test_mask_app_password() -> None:
-    text = "auth failed with abcd efgh ijkl mnop"
+    text = "auth failed with abcd efgh ijkl mnop"  # ALLOW_HARDCODING: intentional violation fixture for masking test
     masked = mask_secrets_in_error_detail(text)
-    assert "abcd efgh ijkl mnop" not in masked
+    assert "abcd efgh ijkl mnop" not in masked  # ALLOW_HARDCODING: intentional violation fixture
     assert "<redacted-app-password>" in masked
 
 
 def test_mask_rsa_private_key_block() -> None:
-    text = (
-        "context: -----BEGIN PRIVATE KEY-----\nfake-bytes\n"
+    text = (  # ALLOW_HARDCODING: intentional fixture for RSA mask test
+        "context: -----BEGIN PRIVATE KEY-----\nfake-bytes\n"  # ALLOW_HARDCODING: fake PEM bytes
         "-----END PRIVATE KEY-----"
     )
     masked = mask_secrets_in_error_detail(text)
-    assert "BEGIN PRIVATE KEY" not in masked
+    assert "BEGIN PRIVATE KEY" not in masked  # ALLOW_HARDCODING: assertion against PEM marker
     assert "fake-bytes" not in masked
     assert "<redacted-rsa-private-key>" in masked
 
 
 def test_mask_json_private_key_field() -> None:
-    text = '{"private_key": "fake-bytes"}'
+    text = '{"private_key": "fake-bytes"}'  # ALLOW_HARDCODING: intentional fixture for json mask test
     masked = mask_secrets_in_error_detail(text)
     assert "fake-bytes" not in masked
     assert '"private_key": "<redacted>"' in masked
 
 
 def test_mask_sa_email_domain() -> None:
-    text = "rejected sender fake-sa@fake-project.iam.gserviceaccount.com"
+    text = "rejected sender fake-sa@fake-project.iam.gserviceaccount.com"  # ALLOW_HARDCODING: intentional SA-domain fixture
     masked = mask_secrets_in_error_detail(text)
     assert "fake-sa@fake-project" not in masked
     assert "<redacted-sa-email>" in masked

@@ -13,8 +13,8 @@ writes:
 
 Secret masking: ``mask_secrets_in_error_detail`` strips App Password
 quadruplets, RSA private key blobs, JSON ``"private_key"`` fields, and
-the GCP Service Account ``.iam.gserviceaccount.com`` domain pattern from
-any error_detail string before it lands on disk (FR-G02 / ADR-014).
+the GCP Service Account ``.iam.gserviceaccount.com`` domain pattern  # ALLOW_HARDCODING: docstring meta-mention of masking pattern
+from any error_detail string before it lands on disk (FR-G02 / ADR-014).
 """
 
 from __future__ import annotations
