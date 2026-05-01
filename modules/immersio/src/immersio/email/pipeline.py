@@ -132,6 +132,25 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         CohortLabel(args.cohort) if getattr(args, "cohort", None) else CohortLabel.ALL
     )
 
+    # Read the prior dispatch log BEFORE archival moves it (US4 idempotent
+    # re-run depends on knowing which students already succeeded).
+    prior_log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
+    if profile.profile_kind == "test":
+        prior_log_csv_path = (
+            paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
+        )
+    prior_log_rows: list[DispatchLogRow] = []
+    if prior_log_csv_path.is_file():
+        try:
+            prior_log_rows = read_dispatch_log(prior_log_csv_path)
+        except OSError as exc:
+            print(
+                f"ERROR [immersio email]: cannot read prior dispatch log "
+                f"{prior_log_csv_path}: {exc}",
+                file=sys.stderr,
+            )
+            return 3
+
     if args.send:
         try:
             archive_previous_run(paths["gold_email_dir"])
@@ -201,18 +220,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     retry_mode = _resolve_retry_mode(args)
     if args.send and not is_self_test:
-        try:
-            existing_log = read_dispatch_log(log_csv_path)
-        except OSError as exc:
-            print(
-                f"ERROR [immersio email]: cannot read dispatch log "
-                f"{log_csv_path}: {exc}",
-                file=sys.stderr,
-            )
-            return 3
+        # Use the log snapshot captured BEFORE archival (above) so the
+        # filter sees yesterday's success rows even after archival has
+        # moved them to _archive/.
         all_sids = [b.student_id for b in bundles]
         keep_sids = set(
-            idempotent_skip_filter(all_sids, existing_log, mode=retry_mode)
+            idempotent_skip_filter(all_sids, prior_log_rows, mode=retry_mode)
         )
         bundles = [b for b in bundles if b.student_id in keep_sids]
 
