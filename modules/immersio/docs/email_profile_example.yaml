@@ -1,0 +1,38 @@
+# immersio-email Operator Profile — Example (placeholder values only)
+#
+# 사용법: 본 파일을 `~/.config/paideia/immersio_email/profiles/<NAME>.yaml` 로 복사하고
+# placeholder (`<...>`) 를 본인 값으로 치환. 실제 자격증명 (SA JSON) 은 agenix 로 관리하고
+# 본 파일에 *경로 환경 변수명만* 남긴다 — 비밀값 평문 금지 (FR-G02).
+#
+# Contract: specs/006-immersio-email-v0-1-0/contracts/email_profile_yaml.md (operator 형식)
+# Discriminator: profile_kind == "operator"
+
+profile_kind: operator
+profile_name: <profile-name>
+
+sender:
+  display_name: "<교수명>"
+  email: "<your-email@example.ac.kr>"
+
+send_account:
+  email: "<noreply-account@example.ac.kr>"
+
+institution:
+  university_name: "<대학명 placeholder>"
+  department_name: "<학과명 placeholder>"
+
+booking:
+  google_calendar_url: "https://calendar.google.com/calendar/u/0/appointments/<APPT-ID>"
+
+gmail_api:
+  service_account_subject: "<noreply-account@example.ac.kr>"  # send_account.email 과 일치 강제
+  scopes:
+    - "https://www.googleapis.com/auth/gmail.send"            # 정확히 1개 — least privilege
+
+secrets_ref:
+  service_account_json_path_env: "<PAIDEIA_GCP_SA_JSON_PATH_PROFILE_NAME>"
+
+operational_defaults:
+  rate_per_minute: 20
+  confirm_sample_size: 3
+  attachment_max_bytes: 104857600   # 100 MB
