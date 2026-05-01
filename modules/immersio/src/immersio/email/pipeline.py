@@ -119,6 +119,28 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         return 1
 
     paths = _default_paths(args)
+
+    # T089 — TestProfile mode override: use dummy_fixture_dir as PDF
+    # source, route outputs to _test/ subtree. Reject explicit
+    # --bronze-csv / --gold-pdf-dir overrides (those are operator
+    # production paths and meaningless under a test profile).
+    if profile.profile_kind == "test":
+        if args.bronze_csv is not None or args.gold_pdf_dir is not None:
+            print(
+                "ERROR [immersio email]: --bronze-csv / --gold-pdf-dir are "
+                "not allowed with a test profile (TestProfile uses "
+                "dummy_fixture_dir + recipient_pool).",
+                file=sys.stderr,
+            )
+            return 2
+        # Use the TestProfile-declared dummy fixture dir as the PDF source.
+        # The bronze CSV is auto-generated below from dummy_students +
+        # recipient_pool — we still write to a synthetic CSV path so the
+        # roster phase reads canonical UTF-8/ISO timestamps.
+        from pathlib import Path as _Path
+
+        paths["gold_pdf_dir"] = _Path(str(profile.dummy_fixture_dir))
+
     try:
         sent_date = _parse_sent_date(args.sent_date)
     except ValueError as exc:
@@ -164,6 +186,39 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"ERROR [immersio email]: archival — {exc}", file=sys.stderr)
             return 4
+
+    # T089 — TestProfile auto-generates a synthetic bronze CSV from
+    # dummy_students × recipient_pool (1:1 by sorted student_id ↔ pool
+    # order — TC-007). The CSV is written to a deterministic test path
+    # so Phase A reads it normally.
+    if profile.profile_kind == "test":
+        synthetic_bronze = (
+            paths["silver_email_dir"] / "_test_bronze_synthetic.csv"
+        )
+        synthetic_bronze.parent.mkdir(parents=True, exist_ok=True)
+        from csv import writer as _csv_writer
+
+        sorted_students = sorted(
+            profile.dummy_students, key=lambda s: s.student_id
+        )
+        # recipient_pool is treated as parallel — same length as
+        # dummy_students per TestProfile validator
+        with synthetic_bronze.open(
+            "w", encoding="utf-8", newline=""
+        ) as fh:
+            w = _csv_writer(fh)
+            w.writerow(["타임스탬프", "사용자 이름", "학번"])
+            for student, recipient in zip(
+                sorted_students, profile.recipient_pool, strict=True
+            ):
+                w.writerow(
+                    [
+                        "2026/03/03 11:03:36 AM GMT+9",
+                        str(recipient),
+                        student.student_id,
+                    ]
+                )
+        paths["bronze_csv"] = synthetic_bronze
 
     # Phase A — roster
     try:
@@ -250,23 +305,28 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         )
         return 4
 
-    # Phase C — master cross-check
-    try:
-        matched, missing_in_master = cross_check_with_master(
-            bundles, paths["silver_master"]
-        )
-    except MasterMismatchError as exc:
-        print(
-            f"ERROR [immersio email]: phase C master — {exc}",
-            file=sys.stderr,
-        )
-        return 4
-    except MasterMissingError as exc:
-        print(
-            f"ERROR [immersio email]: phase C master — {exc}",
-            file=sys.stderr,
-        )
-        return 3
+    # Phase C — master cross-check. T089: TestProfile skips master
+    # cross-check entirely (dummy students aren't in production master).
+    if profile.profile_kind == "test":
+        matched = list(bundles)
+        missing_in_master = []
+    else:
+        try:
+            matched, missing_in_master = cross_check_with_master(
+                bundles, paths["silver_master"]
+            )
+        except MasterMismatchError as exc:
+            print(
+                f"ERROR [immersio email]: phase C master — {exc}",
+                file=sys.stderr,
+            )
+            return 4
+        except MasterMissingError as exc:
+            print(
+                f"ERROR [immersio email]: phase C master — {exc}",
+                file=sys.stderr,
+            )
+            return 3
 
     # Phase D — pdf body verify
     attachment_max = profile.operational_defaults.attachment_max_bytes

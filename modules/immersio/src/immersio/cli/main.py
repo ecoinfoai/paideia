@@ -249,6 +249,13 @@ def _build_parser() -> argparse.ArgumentParser:
     e_verbosity.add_argument("--quiet", action="store_true")
     e_verbosity.add_argument("--verbose", action="store_true")
 
+    # T088 — Polish init-test-fixtures helper (TestProfile dummy PDFs).
+    init_p = sub.add_parser(
+        "email-init-test-fixtures",
+        help="Generate dummy PDFs into TestProfile.dummy_fixture_dir (spec 006 T088)",
+    )
+    init_p.add_argument("--profile", required=True, type=str)
+
     return parser
 
 
@@ -337,6 +344,42 @@ def app(argv: list[str] | None = None) -> int:
         from immersio.email.pipeline import run_email_dispatch
 
         return run_email_dispatch(args)
+
+    if args.command == "email-init-test-fixtures":
+        # T088 — generate dummy PDFs into TestProfile.dummy_fixture_dir.
+        from immersio.email.dummy_fixture import generate_dummy_pdfs
+        from immersio.email.profile import ProfileError, ProfileLoader
+        from paideia_shared.schemas import TestProfile
+
+        try:
+            profile = ProfileLoader().load(args.profile)
+        except ProfileError as exc:
+            print(
+                f"ERROR [immersio email-init-test-fixtures]: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        if not isinstance(profile, TestProfile):
+            print(
+                f"ERROR [immersio email-init-test-fixtures]: profile "
+                f"{args.profile!r} is not a TestProfile (got "
+                f"{profile.profile_kind}). This subcommand only works "
+                f"with profile_kind: test.",
+                file=sys.stderr,
+            )
+            return 1
+        students = [(d.student_id, d.name_kr) for d in profile.dummy_students]
+        from pathlib import Path as _Path
+
+        written = generate_dummy_pdfs(
+            _Path(str(profile.dummy_fixture_dir)), students
+        )
+        print(
+            f"[immersio email-init-test-fixtures] wrote {len(written)} dummy "
+            f"PDFs to {profile.dummy_fixture_dir}",
+            file=sys.stdout,
+        )
+        return 0
 
     if args.command == "combine":
         # T048 — INTEGRATION (RULE 4). Delegate to combine.cli.main with
