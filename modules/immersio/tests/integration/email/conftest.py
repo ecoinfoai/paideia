@@ -105,6 +105,24 @@ operational_defaults:
     return cfg
 
 
+def write_student_metrics_parquet(
+    silver_dir: Path,
+    rows: list[tuple[str, str, float | None]],
+) -> Path:
+    """Helper for cohort tests: write a 학생지표.parquet stub."""
+    silver_dir.mkdir(parents=True, exist_ok=True)
+    path = silver_dir / "학생지표.parquet"
+    table = pa.table(
+        {
+            "student_id": [r[0] for r in rows],
+            "name_kr": [r[1] for r in rows],
+            "score_percent": [r[2] for r in rows],
+        }
+    )
+    pq.write_table(table, path)
+    return path
+
+
 @pytest.fixture
 def email_fixture(tmp_path: Path, monkeypatch):
     """5-student end-to-end fixture in a tmp HOME with operator profile."""
