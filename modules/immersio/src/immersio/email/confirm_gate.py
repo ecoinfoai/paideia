@@ -9,7 +9,8 @@ careless automation cannot bypass the human review step (SC-004).
 from __future__ import annotations
 
 import sys
-from typing import IO, Sequence
+from collections.abc import Sequence
+from typing import IO
 
 from paideia_shared.schemas import EmailMessageDraft, StudentPDFBundle
 
@@ -49,9 +50,7 @@ def confirm_first_n(
     out = stdout if stdout is not None else sys.stdout
     in_ = stdin if stdin is not None else sys.stdin
 
-    print("[immersio email] 확인 게이트 — 첫 {} 건 표본:".format(
-        min(sample_size, len(drafts_with_pdfs))
-    ), file=out)
+    print(f"[immersio email] 확인 게이트 — 첫 {min(sample_size, len(drafts_with_pdfs))} 건 표본:", file=out)
     for draft, bundle in list(drafts_with_pdfs)[:sample_size]:
         print(
             f"  학번={draft.student_id} 이름={draft.name_kr} "

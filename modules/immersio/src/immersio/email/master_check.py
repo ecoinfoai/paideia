@@ -15,7 +15,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pyarrow.parquet as pq
-
 from paideia_shared.schemas import StudentPDFBundle
 
 

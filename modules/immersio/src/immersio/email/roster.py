@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import csv
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from paideia_shared.schemas import EmailMappingEntry
 
 from ..normalize.student_id import normalize_student_id

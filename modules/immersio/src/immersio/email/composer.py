@@ -16,13 +16,12 @@ allowed exception).
 
 from __future__ import annotations
 
-import base64
 import re
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from email.header import Header
 from email.message import EmailMessage
 from email.policy import SMTP
-from email.utils import formataddr, format_datetime
+from email.utils import format_datetime, formataddr
 
 from paideia_shared.schemas import (
     DispatchMode,

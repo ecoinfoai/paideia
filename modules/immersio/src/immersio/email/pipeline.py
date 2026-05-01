@@ -11,7 +11,7 @@ import argparse
 import csv
 import hashlib
 import sys
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from paideia_shared.schemas import (
@@ -32,7 +32,6 @@ from . import __version__ as EMAIL_VERSION
 from .archival import archive_previous_run
 from .cohort_filter import (
     CohortError,
-    CohortFilterResult,
     filter_by_cohort,
     write_cohort_md,
     write_cohort_silver,
@@ -710,7 +709,7 @@ def _skip_row(
 
 
 def _aggregate_counts(rows: list[DispatchLogRow]) -> EmailManifestCounts:
-    counts = {s: 0 for s in DispatchStatus}
+    counts = dict.fromkeys(DispatchStatus, 0)
     for row in rows:
         counts[row.status] += 1
     return EmailManifestCounts(

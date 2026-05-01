@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from google.oauth2.service_account import Credentials  # ALLOW_HARDCODING: SA imports
 from googleapiclient.discovery import build  # ALLOW_HARDCODING: live Gmail API
 from googleapiclient.errors import HttpError  # ALLOW_HARDCODING: error classifier
-
 from paideia_shared.schemas import (
     DispatchStatus,
     EmailMessageDraft,
@@ -119,7 +118,7 @@ class GmailAPIDispatcher:
         self._creds: Credentials | None = None
         self._rate_per_minute = rate_per_minute
 
-    def __enter__(self) -> "GmailAPIDispatcher":
+    def __enter__(self) -> GmailAPIDispatcher:
         self._creds = get_gmail_credentials(self._profile)
         self._service = build(
             "gmail",

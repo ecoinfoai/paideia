@@ -12,9 +12,9 @@ coded inside this module (FR-G04 / ADR-009).
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from reportlab.pdfgen import canvas
 

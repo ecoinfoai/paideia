@@ -13,7 +13,6 @@ from pathlib import Path
 
 from ..analyze.archival import ArchivalError, _archive_one, _detect_schema_version
 
-
 # Names that the email pipeline writes — archive these on re-run so
 # prior-run outputs are preserved losslessly. The Phase 6 PDF directory
 # (``이메일_발송용/``) is *not* in this set: it carries student PDFs

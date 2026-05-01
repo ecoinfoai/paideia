@@ -73,7 +73,7 @@ class _ProfileShape(Protocol):
 
 
 def get_gmail_credentials(
-    profile: "ProfessorProfile | TestProfile",
+    profile: ProfessorProfile | TestProfile,
 ) -> Credentials:
     """Resolve the Service Account credentials referenced by ``profile``.
 

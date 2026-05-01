@@ -105,6 +105,52 @@ operational_defaults:
     return cfg
 
 
+def make_test_profile(
+    home: Path,
+    fixture_dir: Path,
+    profile_name: str = "alpha-dev",
+) -> Path:
+    """Create an XDG-compliant TestProfile YAML at ``home``."""
+    cfg = home / ".config" / "paideia" / "immersio_email" / "test_profiles"
+    cfg.mkdir(parents=True, exist_ok=True)
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    yaml_text = f"""
+profile_kind: test
+profile_name: {profile_name}
+sender:
+  display_name: 알파교수
+  email: alpha@example.ac.kr
+send_account:
+  email: noreply@example.ac.kr
+institution:
+  university_name: 알파대학교
+  department_name: 알파학과
+booking:
+  google_calendar_url: https://calendar.google.com/calendar/u/0/appointments/abc
+gmail_api:
+  service_account_subject: noreply@example.ac.kr
+  scopes:
+    - https://www.googleapis.com/auth/gmail.send
+secrets_ref:
+  service_account_json_path_env: PAIDEIA_GCP_SA_JSON_PATH_ALPHA_DEV
+operational_defaults:
+  rate_per_minute: 20
+  confirm_sample_size: 1
+  attachment_max_bytes: 10485760
+recipient_pool:
+  - pool1@example.com
+  - pool2@example.com
+dummy_fixture_dir: {fixture_dir}
+dummy_students:
+  - student_id: '1234567990'
+    name_kr: 더미일
+  - student_id: '1234567991'
+    name_kr: 더미이
+"""
+    (cfg / f"{profile_name}.yaml").write_text(yaml_text, encoding="utf-8")
+    return cfg
+
+
 def write_student_metrics_parquet(
     silver_dir: Path,
     rows: list[tuple[str, str, float | None]],

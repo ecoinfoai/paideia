@@ -12,13 +12,12 @@ policy decision baked into v0.1.0. ADR-009 explicit allow-listed.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from paideia_shared.schemas import (
     CohortLabel,
     CohortRow,

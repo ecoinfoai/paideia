@@ -12,9 +12,8 @@ import hashlib
 import re
 from pathlib import Path
 
-from pypdf import PdfReader
-
 from paideia_shared.schemas import StudentPDFBundle
+from pypdf import PdfReader
 
 _FILENAME_RE = re.compile(r"^(\d{10})_(.+)\.pdf$")
 

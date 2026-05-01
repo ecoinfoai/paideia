@@ -24,11 +24,10 @@ import errno
 import fcntl
 import os
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
 from enum import StrEnum
-from io import StringIO
 from pathlib import Path
-from typing import Iterator
 
 from paideia_shared.schemas import DispatchLogRow, DispatchStatus
 

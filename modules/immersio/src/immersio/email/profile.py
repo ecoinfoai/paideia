@@ -8,16 +8,16 @@ fast on missing agenix env vars without writing a single byte to disk.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Callable, Union
+from typing import Annotated
 
 import yaml
+from paideia_shared.schemas import ProfessorProfile, TestProfile
 from pydantic import Discriminator, TypeAdapter, ValidationError
 
-from paideia_shared.schemas import ProfessorProfile, TestProfile
-
 ProfileUnion = Annotated[
-    Union[ProfessorProfile, TestProfile],
+    ProfessorProfile | TestProfile,
     Discriminator("profile_kind"),
 ]
 _PROFILE_ADAPTER: TypeAdapter[ProfessorProfile | TestProfile] = TypeAdapter(
