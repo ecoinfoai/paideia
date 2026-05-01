@@ -94,6 +94,28 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     "abc@example.com",
     "deterministic@example.ac.kr",
     "mixed.case@example.com",
+    "first@example.com",
+    "second@example.com",
+    "alice@example.com",
+    "bob@example.com",
+    "operator@example.ac.kr",
+    "hong@example.com",
+    "kim@example.com",
+    "lee@example.com",
+    "yoo@example.com",
+    "ahn@example.com",
+    "a@example.com",
+    "b@example.com",
+    # Deterministic Message-ID literal asserted in tests — same domain
+    # (example.ac.kr) prefixed with the synthetic message-id form
+    "1234567890.2026-05-01.anatomy.2026-1@example.ac.kr",
+    "Alice@Example.COM",  # case-variant for lowercase normalization test
+    # ADR-009 allowed exception #3 — operational labels in body template
+    # and report headings, not student/professor PII.
+    "필요한 학생",
+    "다른 학생",
+    "실패 학생",
+    "누락 학생",
     # Mock service-account placeholders (non-routable, fake-prefixed)
     "fake-sa@fake-project.iam.gserviceaccount.com",
     "x@y.com",
@@ -106,6 +128,12 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     "더미이",
     "홍길동",
     "김갑동",
+    "이순신",
+    "유관순",
+    "안중근",
+    "유령",
+    "다른이름",
+    "가짜이름",
 })
 
 # Files whose contents are domain-specific allowed (whole-file exemption).
