@@ -777,7 +777,13 @@ def _run_production_send(
 
                 idx = sid_to_log_idx.get(draft.student_id)
                 if idx is None:
-                    continue
+                    # M5: drafts ⊂ log_rows is an upstream invariant —
+                    # composer adds a placeholder row for every draft it
+                    # builds. Reaching here means the invariant broke.
+                    raise RuntimeError(
+                        f"invariant violation: draft for student_id "
+                        f"{draft.student_id!r} has no matching log row"
+                    )
                 old = log_rows[idx]
                 new_row = DispatchLogRow(
                     student_id=old.student_id,
@@ -866,7 +872,13 @@ def _run_self_test_send(
 
                 idx = sid_to_log_idx.get(draft.student_id)
                 if idx is None:
-                    continue
+                    # M5: drafts ⊂ log_rows is an upstream invariant —
+                    # composer adds a placeholder row for every draft it
+                    # builds. Reaching here means the invariant broke.
+                    raise RuntimeError(
+                        f"invariant violation: draft for student_id "
+                        f"{draft.student_id!r} has no matching log row"
+                    )
                 old = log_rows[idx]
                 # Self-test → log status TEST_DUMMY on success (FR-D08)
                 # so prod reports never count these as live sends.

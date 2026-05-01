@@ -119,6 +119,7 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
             try:
                 os.close(fd)
             except OSError:
+                # intentional-skip: idempotent fd cleanup, OS reclaims on process exit (M6)
                 pass
             if isinstance(exc, OSError) and exc.errno not in (
                 errno.EWOULDBLOCK,
@@ -135,10 +136,12 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
             try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
             except OSError:
+                # intentional-skip: idempotent flock release, OS reclaims (M6)
                 pass
             try:
                 os.close(fd)
             except OSError:
+                # intentional-skip: idempotent fd close, OS reclaims (M6)
                 pass
 
 

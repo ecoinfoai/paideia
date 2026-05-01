@@ -58,7 +58,9 @@ def confirm_first_n(
             file=out,
         )
     print(
-        "전체 발송을 진행하려면 'yes' 를 정확히 입력하세요 (yes 외 모든 입력은 중단):",
+        "위 표본의 학번/이메일/PDF 매칭이 정확합니까? 운영자 본인 받은 편지함에서 "
+        "self-test 메일을 먼저 확인하셨다면, 전체 발송을 진행하려면 'yes' 를 "
+        "정확히 입력하세요 (yes 외 모든 입력은 중단):",
         file=out,
         flush=True,
     )
