@@ -108,11 +108,19 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
     path.parent.mkdir(parents=True, exist_ok=True)
     # O_RDWR|O_CREAT — file exists or is created with default mode
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    locked = False
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
         except (BlockingIOError, OSError) as exc:
-            os.close(fd)
+            # Close fd before raising — the contextmanager finally
+            # block will skip unlock/close since ``locked`` is False
+            # and ``fd`` already closed here.
+            try:
+                os.close(fd)
+            except OSError:
+                pass
             if isinstance(exc, OSError) and exc.errno not in (
                 errno.EWOULDBLOCK,
                 errno.EAGAIN,
@@ -124,9 +132,11 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
             ) from exc
         yield fd
     finally:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        finally:
+        if locked:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
             try:
                 os.close(fd)
             except OSError:
