@@ -790,7 +790,11 @@ def _run_production_send(
         profile: ProfessorProfile or TestProfile carrying SA credentials.
         log_rows: Mutable list of DispatchLogRow rows. Each placeholder
             row is replaced in-place with the live send result; a copy
-            is also appended durably to ``log_csv_path``.
+            is also appended durably to ``log_csv_path``. On early-exit
+            (auth fail / dispatcher exception) any un-attempted SUCCESS
+            placeholder is rewritten to ``TEMPORARY_FAILURE`` with
+            ``error_kind="not_attempted_after_early_exit"`` so the
+            csv/manifest don't claim fake successes.
         log_csv_path: Path to ``메일_발송로그.csv`` (production gold dir).
 
     Returns:
@@ -807,7 +811,9 @@ def _run_production_send(
 
     failed_count = 0
     sid_to_log_idx = {row.student_id: i for i, row in enumerate(log_rows)}
+    attempted_sids: set[str] = set()
     log_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    rc: int | None = None
 
     try:
         with GmailAPIDispatcher(
@@ -815,6 +821,7 @@ def _run_production_send(
         ) as dispatcher:
             total = len(drafts_with_pdfs)
             for index, (draft, bundle) in enumerate(drafts_with_pdfs):
+                attempted_sids.add(draft.student_id)
                 pdf_bytes = bundle.pdf_path.read_bytes()
                 result = dispatcher.send_one(draft, pdf_bytes=pdf_bytes)
 
@@ -854,7 +861,8 @@ def _run_production_send(
                         f"{new_row.error_detail}",
                         file=sys.stderr,
                     )
-                    return 5
+                    rc = 5
+                    break
                 if result.status == DispatchStatus.FAILED:
                     failed_count += 1
                 # US5 / FR-E01: rate-limit sleep BETWEEN sends (skip
@@ -875,8 +883,29 @@ def _run_production_send(
             f"ERROR [immersio email]: dispatcher error — {exc}",
             file=sys.stderr,
         )
-        return 5
+        rc = 5
 
+    # Post-release bug fix: when the loop returns early (auth fail /
+    # dispatcher exception) any draft after the failure point still
+    # carries its SUCCESS placeholder — the manifest would lie about
+    # 'success' counts. Rewrite un-attempted SUCCESS rows to
+    # TEMPORARY_FAILURE and durably append them so the csv on disk
+    # matches the rewritten in-memory state. Idempotent re-run will
+    # then retry these rows correctly under RetryMode.DEFAULT.
+    rewritten = _rewrite_unattempted_success_rows(
+        log_rows,
+        attempted_sids=attempted_sids,
+        replacement_status=DispatchStatus.TEMPORARY_FAILURE,
+        error_kind="not_attempted_after_early_exit",
+        error_detail=(
+            "production-send loop returned early; this row was not attempted"
+        ),
+    )
+    for row in rewritten:
+        append_dispatch_log_row(log_csv_path, row)
+
+    if rc is not None:
+        return rc
     return 0 if failed_count == 0 else 8
 
 
@@ -895,6 +924,11 @@ def _run_self_test_send(
         profile: ProfessorProfile or TestProfile carrying SA credentials.
         log_rows: Mutable list of DispatchLogRow rows. Self-test rows are
             updated in-place with the actual send result + status.
+            Un-attempted SUCCESS placeholders (drafts NOT in the [:N]
+            slice, or attempts cut short by auth-fail / exception) are
+            rewritten to ``SKIPPED`` with ``error_kind=
+            "self_test_not_attempted"`` so the csv/manifest don't claim
+            fake successes for non-sent rows.
 
     Returns:
         ``0`` on full success; ``5`` on Gmail auth failure (FR-C07);
@@ -906,10 +940,13 @@ def _run_self_test_send(
 
     failed_count = 0
     sid_to_log_idx = {row.student_id: i for i, row in enumerate(log_rows)}
+    attempted_sids: set[str] = set()
+    rc: int | None = None
 
     try:
         with GmailAPIDispatcher(profile) as dispatcher:
             for draft, bundle in drafts_with_pdfs:
+                attempted_sids.add(draft.student_id)
                 pdf_bytes = bundle.pdf_path.read_bytes()
                 result = dispatcher.send_one(draft, pdf_bytes=pdf_bytes)
 
@@ -951,7 +988,8 @@ def _run_self_test_send(
                         f"{result.error_detail}",
                         file=sys.stderr,
                     )
-                    return 5
+                    rc = 5
+                    break
                 if result.status == DispatchStatus.FAILED:
                     failed_count += 1
     except Exception as exc:  # noqa: BLE001 — last-resort safety net
@@ -959,9 +997,78 @@ def _run_self_test_send(
             f"ERROR [immersio email]: dispatcher error — {exc}",
             file=sys.stderr,
         )
-        return 5
+        rc = 5
 
+    # Post-release bug fix: rewrite un-attempted SUCCESS placeholders so
+    # the csv/manifest don't show fake successes for drafts that were
+    # never actually sent (most common: M-N drafts outside the [:N]
+    # self-test slice). Two cases caught:
+    #   (a) drafts not in the [:N] slice — never targeted in this run;
+    #   (b) drafts inside [:N] but skipped because the loop broke after
+    #       gmail_api_auth_failed / dispatcher exception.
+    _rewrite_unattempted_success_rows(
+        log_rows,
+        attempted_sids=attempted_sids,
+        replacement_status=DispatchStatus.SKIPPED,
+        error_kind="self_test_not_attempted",
+        error_detail=(
+            "self-test sent only first N drafts; this row was not attempted"
+        ),
+    )
+
+    if rc is not None:
+        return rc
     return 0 if failed_count == 0 else 8
+
+
+def _rewrite_unattempted_success_rows(
+    log_rows: list[DispatchLogRow],
+    *,
+    attempted_sids: set[str],
+    replacement_status: DispatchStatus,
+    error_kind: str,
+    error_detail: str,
+) -> list[DispatchLogRow]:
+    """Convert SUCCESS placeholder rows for un-attempted drafts.
+
+    The per-bundle loop in ``run_email_dispatch`` pre-populates each
+    sendable draft's log row with ``status=SUCCESS`` (the optimistic
+    placeholder) before the actual send loop runs. When a send function
+    sends only a slice of drafts or returns early, the un-attempted
+    rows retain the SUCCESS placeholder — that lies to the operator.
+    This helper rewrites those leftover SUCCESS rows in-place.
+
+    Returns:
+        The list of newly-rewritten rows (post-fixup), in their
+        original ``log_rows`` index order. Callers that already
+        durably appended attempted rows to disk (production-send path)
+        use this list to append the rewritten rows so the csv on disk
+        matches in-memory state.
+    """
+    rewritten: list[DispatchLogRow] = []
+    for idx, row in enumerate(log_rows):
+        if row.status != DispatchStatus.SUCCESS:
+            continue
+        if row.student_id in attempted_sids:
+            continue
+        new_row = DispatchLogRow(
+            student_id=row.student_id,
+            name_kr=row.name_kr,
+            email=row.email,
+            pdf_filename=row.pdf_filename,
+            pdf_sha256=row.pdf_sha256,
+            attempt_at_kst=row.attempt_at_kst,
+            mode=row.mode,
+            status=replacement_status,
+            smtp_message_id="",
+            error_kind=error_kind,
+            error_detail=error_detail[:200],
+            exam_name=row.exam_name,
+            cohort=row.cohort,
+        )
+        log_rows[idx] = new_row
+        rewritten.append(new_row)
+    return rewritten
 
 
 def _write_log_csv(rows: list[DispatchLogRow], path: Path) -> None:

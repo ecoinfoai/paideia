@@ -66,6 +66,13 @@ _VALID_ERROR_KINDS: frozenset[str] = frozenset({
     "gmail_api_domain_policy",
     "network_timeout",
     "score_unavailable",
+    # Post-release fix: per-bundle loop pre-populates SUCCESS placeholder
+    # rows assuming each draft will be sent. When self-test mode sends
+    # only the first N drafts, or production-send returns early (auth
+    # fail / exception), the un-attempted rows must be rewritten so the
+    # csv/manifest don't report fake successes.
+    "self_test_not_attempted",
+    "not_attempted_after_early_exit",
 })
 
 
