@@ -1,0 +1,54 @@
+# immersio-email Test Profile — Example (placeholder values only)
+#
+# 사용법: 본 파일을 `~/.config/paideia/immersio_email/test_profiles/<NAME>.yaml` 로 복사하고
+# placeholder (`<...>`) 를 본인 값으로 치환. 운영자 프로파일 (`profile_kind: operator`) 와
+# 한 파일 형식을 공유하나 (discriminated union), test 전용 필드 3종 추가.
+#
+# Contract: specs/006-immersio-email-v0-1-0/contracts/email_profile_yaml.md (test 형식)
+# Discriminator: profile_kind == "test"
+#
+# 주의: 본 example 에 *실제* 이메일 주소·학번·이름 절대 금지 (SC-011 정적 검색 통과 필수).
+
+profile_kind: test
+profile_name: <profile-name-dev>
+
+sender:
+  display_name: "<교수명>"
+  email: "<your-email@example.ac.kr>"
+
+send_account:
+  email: "<noreply-account@example.ac.kr>"
+
+institution:
+  university_name: "<대학명 placeholder>"
+  department_name: "<학과명 placeholder>"
+
+booking:
+  google_calendar_url: "https://calendar.google.com/calendar/u/0/appointments/<APPT-ID>"
+
+gmail_api:
+  service_account_subject: "<noreply-account@example.ac.kr>"
+  scopes:
+    - "https://www.googleapis.com/auth/gmail.send"
+
+secrets_ref:
+  service_account_json_path_env: "<PAIDEIA_GCP_SA_JSON_PATH_PROFILE_NAME_DEV>"
+
+operational_defaults:
+  rate_per_minute: 20
+  confirm_sample_size: 1
+  attachment_max_bytes: 10485760    # 10 MB (더미 PDF 용)
+
+# === TestProfile 전용 필드 ===
+
+recipient_pool:
+  - "<test-pool-1@example.com>"
+  - "<test-pool-2@example.com>"
+
+dummy_fixture_dir: "<absolute/path/to/test_fixtures/immersio_email/이메일_발송용>"
+
+dummy_students:
+  - student_id: "<10-digit-id>"
+    name_kr: "<더미학생1>"
+  - student_id: "<10-digit-id>"
+    name_kr: "<더미학생2>"

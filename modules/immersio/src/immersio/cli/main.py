@@ -217,6 +217,55 @@ def _build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--include-subgroup", action="store_true")
     combine.add_argument("--verbose", action="store_true")
 
+    # T030 — spec 006 immersio-email subparser (Foundational stub).
+    # Body wiring lands in T049/T057/T073/T080/T083/T100l per phase.
+    email_p = sub.add_parser(
+        "email",
+        help="Send per-student PDF reports (spec 006 immersio-email v0.1.0)",
+    )
+    email_p.add_argument("--profile", required=True, type=str)
+    email_p.add_argument("--semester", required=True, type=str)
+    email_p.add_argument("--course", required=True, type=str)
+    email_p.add_argument("--exam-name", required=True, type=str)
+    email_p.add_argument("--sent-date", type=str, default=None)
+    email_p.add_argument("--send", action="store_true")
+    email_p.add_argument("--self-test", type=int, default=None)
+    retry_group = email_p.add_mutually_exclusive_group()
+    retry_group.add_argument("--retry-failed", action="store_true")
+    retry_group.add_argument("--retry-skipped", action="store_true")
+    email_p.add_argument("--rate-per-min", type=int, default=None)
+    email_p.add_argument(
+        "--cohort",
+        type=str,
+        choices=("low_score", "rest", "all"),
+        default="all",
+    )
+    email_p.add_argument("--confirm-sample", type=int, default=None)
+    email_p.add_argument("--bronze-csv", type=Path, default=None)
+    email_p.add_argument("--gold-pdf-dir", type=Path, default=None)
+    email_p.add_argument("--silver-master", type=Path, default=None)
+    email_p.add_argument("--silver-student-metrics", type=Path, default=None)
+    email_p.add_argument(
+        "--created-at-utc",
+        type=str,
+        default=None,
+        help=(
+            "UTC timestamp override (YYYY-MM-DDTHH:MM:SSZ) for manifest "
+            "started_at/completed_at — pins re-runs to a fixed timestamp "
+            "for byte-identical manifest output (M3 advisory)."
+        ),
+    )
+    e_verbosity = email_p.add_mutually_exclusive_group()
+    e_verbosity.add_argument("--quiet", action="store_true")
+    e_verbosity.add_argument("--verbose", action="store_true")
+
+    # T088 — Polish init-test-fixtures helper (TestProfile dummy PDFs).
+    init_p = sub.add_parser(
+        "email-init-test-fixtures",
+        help="Generate dummy PDFs into TestProfile.dummy_fixture_dir (spec 006 T088)",
+    )
+    init_p.add_argument("--profile", required=True, type=str)
+
     return parser
 
 
@@ -298,6 +347,76 @@ def app(argv: list[str] | None = None) -> int:
 
     if args.command == "analyze":
         return _run_analyze(args)
+
+    if args.command == "email":
+        # Foundational stub (T030). Actual orchestration wires in via
+        # T049 (US1 dry-run), T057 (US2 self-test), T073 (US3 send).
+        # FR-F03: validate semester / course / exam-name format at CLI entry
+        # (mirror of `analyze` pattern at L430-444). Without this guard,
+        # malformed --semester values surface as Phase B "directory not
+        # found" with a misleading error message (post-release smoke).
+        if not _SEMESTER_PATTERN.match(args.semester):
+            print(
+                f"ERROR [immersio email]: invalid_semester — "
+                f"--semester must match YYYY-N (1/2/S/W), got {args.semester!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if not _COURSE_SLUG_PATTERN.match(args.course):
+            print(
+                f"ERROR [immersio email]: invalid_course — "
+                f"--course must match {_COURSE_SLUG_PATTERN.pattern}, "
+                f"got {args.course!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if not args.exam_name.strip():
+            print(
+                "ERROR [immersio email]: invalid_exam_name — "
+                "--exam-name must be non-empty (FR-B04)",
+                file=sys.stderr,
+            )
+            return 1
+
+        from immersio.email.pipeline import run_email_dispatch
+
+        return run_email_dispatch(args)
+
+    if args.command == "email-init-test-fixtures":
+        # T088 — generate dummy PDFs into TestProfile.dummy_fixture_dir.
+        from immersio.email.dummy_fixture import generate_dummy_pdfs
+        from immersio.email.profile import ProfileError, ProfileLoader
+        from paideia_shared.schemas import TestProfile
+
+        try:
+            profile = ProfileLoader().load(args.profile)
+        except ProfileError as exc:
+            print(
+                f"ERROR [immersio email-init-test-fixtures]: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        if not isinstance(profile, TestProfile):
+            print(
+                f"ERROR [immersio email-init-test-fixtures]: profile "
+                f"{args.profile!r} is not a TestProfile (got "
+                f"{profile.profile_kind}). This subcommand only works "
+                f"with profile_kind: test.",
+                file=sys.stderr,
+            )
+            return 1
+        students = [(d.student_id, d.name_kr) for d in profile.dummy_students]
+        from pathlib import Path as _Path
+
+        written = generate_dummy_pdfs(
+            _Path(str(profile.dummy_fixture_dir)), students
+        )
+        print(
+            f"[immersio email-init-test-fixtures] wrote {len(written)} dummy "
+            f"PDFs to {profile.dummy_fixture_dir}",
+            file=sys.stdout,
+        )
+        return 0
 
     if args.command == "combine":
         # T048 — INTEGRATION (RULE 4). Delegate to combine.cli.main with

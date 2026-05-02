@@ -42,3 +42,6 @@ _workspace/
 .idea/
 .vscode/
 
+# immersio-email dry-run preview output (FR — preview directory not tracked)
+tmp/immersio_email_preview/
+

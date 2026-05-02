@@ -28,9 +28,28 @@ from .cluster_score_comparison import (
     ClusterRow,
     ClusterScoreComparison,
 )
+from .cohort_row import CohortRow
 from .combined_analysis_manifest import CombinedAnalysisManifest
 from .combined_analysis_row import CombinedAnalysisRow
 from .correlation_cell import CorrelationCell
+from .email_dispatch_log_row import (
+    CohortLabel,
+    DispatchLogRow,
+    DispatchMode,
+    DispatchStatus,
+)
+from .email_dispatch_manifest import (
+    EmailManifest,
+    EmailManifestCounts,
+    EmailManifestInputs,
+    EmailManifestOutputs,
+)
+from .email_dispatch_report import DispatchReportData
+from .email_mapping_entry import EmailMappingEntry
+from .email_message_draft import EmailMessageDraft
+from .professor_profile import ProfessorProfile
+from .student_pdf_bundle import StudentPDFBundle
+from .test_profile import DummyStudent, TestProfile
 from .diagnostic_response import DiagnosticResponse
 from .exam_item import ExamItem
 from .exam_result import ExamResult
@@ -119,4 +138,21 @@ __all__ = [
     "ClusterRow",
     "SubgroupScoreComparison",
     "CombinedAnalysisManifest",
+    # spec 006 immersio-email v0.1.0 — 8 models + 3 enums
+    "DispatchStatus",
+    "DispatchMode",
+    "CohortLabel",
+    "CohortRow",
+    "DispatchLogRow",
+    "EmailManifest",
+    "EmailManifestInputs",
+    "EmailManifestOutputs",
+    "EmailManifestCounts",
+    "DispatchReportData",
+    "EmailMappingEntry",
+    "EmailMessageDraft",
+    "ProfessorProfile",
+    "StudentPDFBundle",
+    "DummyStudent",
+    "TestProfile",
 ]
