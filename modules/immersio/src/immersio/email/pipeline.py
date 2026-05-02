@@ -80,7 +80,13 @@ def _default_paths(args: argparse.Namespace) -> dict[str, Path]:
         "silver_master": (
             Path(args.silver_master)
             if args.silver_master is not None
-            else Path("data/silver/immersio/학생마스터.parquet")
+            else Path(
+                # post-release fix: paideia immersio Phase 0 ingest writes
+                # `student_master.parquet` (English filename, course-scoped),
+                # not `학생마스터.parquet` (Korean, course-agnostic) which
+                # spec mistakenly assumed.
+                f"data/silver/immersio/{semester}-{course}/student_master.parquet"
+            )
         ),
         "silver_email_dir": Path(f"data/silver/immersio/{semester}-{course}"),
         "gold_email_dir": Path(f"data/gold/immersio/{semester}-{course}"),
@@ -239,11 +245,18 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # Writes 2 silver parquets + 3 cohort 명단 md (regardless of dry-run
     # / send mode), then narrows ``entries`` to the requested cohort.
     cohort_score_unavailable_sids: set[str] = set()
-    student_metrics_path: Path | None = (
-        Path(args.silver_student_metrics)
-        if getattr(args, "silver_student_metrics", None) is not None
-        else paths["silver_email_dir"] / "학생지표.parquet"
-    )
+    # T089 post-release fix: TestProfile mode skips cohort filter entirely.
+    # Dummy students are synthetic and have no entry in production
+    # 학생지표.parquet — running cohort_filter would classify them as
+    # score_unavailable and block dispatch (FR-G07 + TC-003 intent:
+    # cohort分類 is for real students; test profile validates rendering only).
+    student_metrics_path: Path | None = None
+    if profile.profile_kind != "test":
+        student_metrics_path = (
+            Path(args.silver_student_metrics)
+            if getattr(args, "silver_student_metrics", None) is not None
+            else paths["silver_email_dir"] / "학생지표.parquet"
+        )
     if (
         student_metrics_path is not None
         and not student_metrics_path.is_file()

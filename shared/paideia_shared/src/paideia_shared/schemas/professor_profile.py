@@ -56,10 +56,15 @@ class _Booking(BaseModel):
     @model_validator(mode="after")
     def _v_calendar_host(self) -> Self:
         host = self.google_calendar_url.host or ""
-        if host != "calendar.google.com":
+        # Google publishes appointment URLs under two distinct hosts:
+        # - calendar.google.com — long form (/calendar/u/0/appointments/AcZssZ...)
+        # - calendar.app.google — short share URL (e.g. /PXSBa7JhMqKssi846)
+        # Both are first-party Google. Reject anything else.
+        allowed_hosts = ("calendar.google.com", "calendar.app.google")
+        if host not in allowed_hosts:
             raise ValueError(
-                f"booking.google_calendar_url host must be 'calendar.google.com' "
-                f"(got {host!r})"
+                f"booking.google_calendar_url host must be one of "
+                f"{allowed_hosts} (got {host!r})"
             )
         return self
 

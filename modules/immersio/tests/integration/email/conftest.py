@@ -50,9 +50,11 @@ def make_fixture(
     for sid, name, _email in students:
         _make_pdf(pdf_dir / f"{sid}_{name}.pdf", body_text=f"학번 {sid} 결과")
 
-    silver_dir = base_dir / "data" / "silver" / "immersio"
+    # post-release fix: paideia immersio Phase 0 ingest writes
+    # `student_master.parquet` (English filename, course-scoped).
+    silver_dir = base_dir / "data" / "silver" / "immersio" / "2026-1-anatomy"
     silver_dir.mkdir(parents=True)
-    master_path = silver_dir / "학생마스터.parquet"
+    master_path = silver_dir / "student_master.parquet"
     pq.write_table(
         pa.table(
             {
