@@ -110,7 +110,7 @@ def test_pre_send_summary_raises_on_self_test_false_with_operator_email() -> Non
             cohort_outside_count=3,
             total_targets=15,
             is_self_test=False,
-            operator_email="op@example.ac.kr",
+            operator_email="op@example.ac.kr",  # ALLOW_HARDCODING: RFC 2606 example domain (synthetic operator placeholder)
         )
     assert "XOR" in str(excinfo.value)
 

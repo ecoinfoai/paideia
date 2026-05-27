@@ -107,9 +107,9 @@ def test_dry_run_does_not_touch_send_mode_log_csv(email_fixture) -> None:
     baseline = (
         "student_id,name_kr,email,pdf_filename,pdf_sha256,attempt_at_kst,"
         "mode,status,smtp_message_id,error_kind,error_detail,exam_name,cohort\n"
-        f"9999999999,베이스라인,baseline@example.com,baseline.pdf,"
+        f"9999999999,베이스라인,baseline@example.com,baseline.pdf,"  # ALLOW_HARDCODING: RFC 2606 example domain in csv baseline fixture
         f"{baseline_sha256},2026-04-01T10:00:00+09:00,production,success,"
-        "<base-id@example.com>,,,중간고사,all\n"
+        "<base-id@example.com>,,,중간고사,all\n"  # ALLOW_HARDCODING: RFC 2606 example domain in message-id fixture
     )
     send_log.write_bytes(baseline.encode("utf-8"))
     pre_mtime, pre_sha = _stat_pair(send_log)

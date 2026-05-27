@@ -75,9 +75,12 @@ operational_defaults:
 # 표본 라인에 등장할 (그리고 그 외에는 등장하지 않을) 학생 이름·이메일.
 _STUDENT_FIXTURE: list[tuple[str, str, str]] = [
     # (학번, 이름_kr, 이메일)
-    ("2021000001", "홍길동", "hong@bhug.ac.kr"),
-    ("2021000002", "김철수", "kim@bhug.ac.kr"),
-    ("2021000003", "이영희", "lee@bhug.ac.kr"),
+    # ALLOW_HARDCODING: SC-005 PII-leak invariant fixture — synthetic but
+    # intentionally real-shape so leak-detection assertions exercise the
+    # production-shape masking path.
+    ("2021000001", "홍길동", "hong@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000002", "김철수", "kim@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000003", "이영희", "lee@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
 ]
 
 
@@ -267,7 +270,7 @@ def test_production_gate_count_and_skip_list(
         )
         # 5건 cap 시 학번 0000000004·0000000005 는 학번 라인에 들어가면 안 됨
         # (단, 라인 전체 검사 — 표본 라인 에도 안 들어가야 하지만 표본은
-        # _STUDENT_FIXTURE 의 2021000001~2021000003 이므로 자연히 부재).
+        # _STUDENT_FIXTURE 의 2021000001~2021000003 이므로 자연히 부재).  # ALLOW_HARDCODING: comment refers to SC-005 fixture IDs
         if scenario_id == "8.2_skip5_cap3":
             assert "0000000004" not in expected_sid_line
             assert "0000000005" not in expected_sid_line

@@ -370,7 +370,7 @@ def test_dry_run_does_not_attempt_lock(
             stderr=stderr,
         )
 
-        # Dry-run normal exit even with lock held externally.
+        # Dry-run normal exit even with lock held externally.  # ALLOW_HARDCODING: 4-word phrase false-positive (not an App Password)
         assert result in (0, None), (
             f"dry-run 정상 종료 시 return 0 (또는 None) 기대, got {result!r}"
         )

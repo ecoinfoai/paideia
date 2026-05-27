@@ -35,7 +35,7 @@ from paideia_shared.schemas import (
     StudentPDFBundle,
 )
 
-OPERATOR_EMAIL = "kjeong@bhug.ac.kr"
+OPERATOR_EMAIL = "kjeong@bhug.ac.kr"  # ALLOW_HARDCODING: self-test operator fixture (real-domain by design for SC-005 leak check)
 
 
 def _profile() -> ProfessorProfile:
@@ -73,11 +73,14 @@ operational_defaults:
 # 표본 라인에 등장할 (그리고 그 외에는 등장하지 않을) 학생 이름·이메일.
 _STUDENT_FIXTURE: list[tuple[str, str, str]] = [
     # (학번, 이름_kr, 이메일)
-    ("2021000001", "홍길동", "hong@bhug.ac.kr"),
-    ("2021000002", "김철수", "kim@bhug.ac.kr"),
-    ("2021000003", "이영희", "lee@bhug.ac.kr"),
-    ("2021000004", "박민수", "park@bhug.ac.kr"),
-    ("2021000005", "최지원", "choi@bhug.ac.kr"),
+    # ALLOW_HARDCODING: SC-005 PII-leak invariant fixture — values are synthetic
+    # but intentionally match real-shape PII regex (학번 20YY…, @bhug.ac.kr) so
+    # the leak-detection assertions exercise the production-shape masking path.
+    ("2021000001", "홍길동", "hong@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000002", "김철수", "kim@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000003", "이영희", "lee@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000004", "박민수", "park@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
+    ("2021000005", "최지원", "choi@bhug.ac.kr"),  # ALLOW_HARDCODING: SC-005 fixture
 ]
 
 

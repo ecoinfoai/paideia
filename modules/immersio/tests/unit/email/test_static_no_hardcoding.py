@@ -120,6 +120,10 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     "해당 학생",  # cohort 명단 md placeholder for empty partition
     "더미 학생",  # dummy_fixture body operational marker
     "테스트학생",  # test fixture name placeholder (no role suffix)
+    "상태인 학생",  # v0.1.1 retry-mode notice phrase (FR-G; operational status descriptor)
+    "에서 학생",  # docstring connective fragment ("…줄에서 학생 이름…")
+    "라인은 학생",  # assertion-context connective ("표본 라인은 학생 이름·이메일…")
+    "라인에 학생",  # assertion-context connective ("표본 외 라인에 학생 이름 노출…")
     # Mock service-account placeholders (non-routable, fake-prefixed)
     "fake-sa@fake-project.iam.gserviceaccount.com",
     "x@y.com",
