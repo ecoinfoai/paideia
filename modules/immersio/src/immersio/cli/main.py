@@ -228,7 +228,14 @@ def _build_parser() -> argparse.ArgumentParser:
     email_p.add_argument("--course", required=True, type=str)
     email_p.add_argument("--exam-name", required=True, type=str)
     email_p.add_argument("--sent-date", type=str, default=None)
-    email_p.add_argument("--send", action="store_true")
+    email_p.add_argument(
+        "--send",
+        action="store_true",
+        help=(
+            "실제 발송 트리거 — 미지정 시 dry-run "
+            "(메일_발송로그_dryrun.csv·eml preview 만 생성, 학생/본인 메일함 도달 0)"
+        ),
+    )
     email_p.add_argument(
         "--self-test",
         type=int,
