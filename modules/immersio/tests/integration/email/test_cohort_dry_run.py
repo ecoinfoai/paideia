@@ -74,14 +74,16 @@ def test_cohort_low_score_dry_run_emits_artefacts(email_fixture) -> None:
     # (3) No Gmail API HTTP calls
     assert len(responses.calls) == 0
 
-    # (4) Dispatch log: 2 dry_run rows with cohort=low_score
-    log_text = (gold / "메일_발송로그.csv").read_text(encoding="utf-8")
+    # (4) Dispatch log: 2 dry_run rows with cohort=low_score, in dryrun csv only
+    log_text = (gold / "메일_발송로그_dryrun.csv").read_text(encoding="utf-8")
     dry_run_low_score = [
         line
         for line in log_text.splitlines()
         if "dry_run" in line and "low_score" in line
     ]
     assert len(dry_run_low_score) == 2
+    send_csv = gold / "메일_발송로그.csv"
+    assert not send_csv.exists() or "dry_run" not in send_csv.read_text(encoding="utf-8")
 
 
 def test_cohort_silver_parquets_written(email_fixture) -> None:
