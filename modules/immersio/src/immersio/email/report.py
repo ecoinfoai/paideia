@@ -33,13 +33,21 @@ COHORT_KR: dict[CohortLabel, str] = {
 
 
 def write_dispatch_report_md(
-    report_data: DispatchReportData, gold_dir: Path
+    report_data: DispatchReportData,
+    gold_dir: Path,
+    *,
+    filename: str = "메일_발송보고서.md",
 ) -> Path:
     """Write a Korean Markdown summary of the dispatch run.
 
     Args:
         report_data: Aggregated dispatch state.
-        gold_dir: Output directory for ``메일_발송보고서.md``.
+        gold_dir: Output directory for the report file.
+        filename: Report filename within ``gold_dir``. Defaults to
+            ``메일_발송보고서.md`` (send-mode). v0.1.1 dry-run callers pass
+            ``메일_발송보고서_dryrun.md`` so the send-mode report file is
+            never overwritten by a dry-run (contracts/dry_run_outputs.md §2,
+            FR-C03b/c).
 
     Returns:
         Path to the written report.
@@ -94,7 +102,7 @@ def write_dispatch_report_md(
             )
         lines.append("")
 
-    out = gold_dir / "메일_발송보고서.md"
+    out = gold_dir / filename
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
 

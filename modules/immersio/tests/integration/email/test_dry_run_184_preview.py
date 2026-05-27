@@ -67,9 +67,15 @@ def test_dry_run_eml_each_student_matches_correct_pdf(email_fixture) -> None:
 
 @responses.activate
 def test_dry_run_writes_manifest_log_report(email_fixture) -> None:
+    """v0.1.1 (T014, FR-C03a/b/c): dry-run writes ``_dryrun`` suffixed files
+    only; the send-mode log/report files are NOT touched by a dry-run.
+    """
     rc = run_email_dispatch(_args())
     assert rc == 0
     gold_dir = email_fixture["gold_email_dir"]
     assert (gold_dir / "manifest_email.json").is_file()
-    assert (gold_dir / "메일_발송로그.csv").is_file()
-    assert (gold_dir / "메일_발송보고서.md").is_file()
+    assert (gold_dir / "메일_발송로그_dryrun.csv").is_file()
+    assert (gold_dir / "메일_발송보고서_dryrun.md").is_file()
+    # Send-mode paths must NOT be created by a dry-run (FR-C03c).
+    assert not (gold_dir / "메일_발송로그.csv").exists()
+    assert not (gold_dir / "메일_발송보고서.md").exists()

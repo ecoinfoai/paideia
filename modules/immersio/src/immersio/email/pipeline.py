@@ -166,6 +166,13 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         CohortLabel(args.cohort) if getattr(args, "cohort", None) else CohortLabel.ALL
     )
 
+    # v0.1.1 (T014): dry-run vs send 산출 파일 분리 (FR-C03a/b/c).
+    # Dry-run 은 ``메일_발송로그_dryrun.csv`` + ``메일_발송보고서_dryrun.md``
+    # 만 truncate-write 하고 send-mode 파일 (``메일_발송로그.csv`` 등) 은
+    # 미터치. Idempotent skip 판정 용 *읽기* path 는 항상 send-mode csv
+    # (dry-run 도 prior --send 의 결과를 봐야 함, contracts/dry_run_outputs.md §2).
+    is_dry_run = not args.send
+
     # Read the prior dispatch log BEFORE archival moves it (US4 idempotent
     # re-run depends on knowing which students already succeeded).
     prior_log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
@@ -353,9 +360,23 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     # Phase D.5 — idempotent skip (US3 / US4 production re-runs).
     is_self_test = bool(args.send and args.self_test is not None)
-    log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
+    # v0.1.1 (T014): dry-run 은 write 만 ``_dryrun.csv`` 로 분기, *읽기*
+    # (idempotent skip prior log 조회) 는 항상 send-mode csv. send 모드는
+    # v0.1.0 그대로 — 같은 path 로 읽고 append.
+    send_log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
+    dryrun_log_csv_path = (
+        paths["gold_email_dir"] / "메일_발송로그_dryrun.csv"
+    )
     if profile.profile_kind == "test":
-        log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
+        send_log_csv_path = (
+            paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
+        )
+        dryrun_log_csv_path = (
+            paths["gold_email_dir"] / "_test" / "메일_발송로그_dryrun.csv"
+        )
+    log_csv_path = (
+        dryrun_log_csv_path if is_dry_run else send_log_csv_path
+    )
 
     retry_mode = _resolve_retry_mode(args)
     if args.send and not is_self_test:
@@ -395,11 +416,20 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-    started_at = (
-        created_at_override
-        if created_at_override is not None
-        else datetime.now(tz=KST)
-    )
+    # v0.1.1 (T014, FR-C03a + contracts/dry_run_outputs.md §8): dry-run
+    # csv 의 truncate-write 는 *결정적* 이어야 — 같은 input + 같은
+    # ``--sent-date`` → byte-identical csv. 따라서 dry-run 에서
+    # ``--created-at-utc`` 가 없으면 ``sent_date`` 자정(KST)을 사용하여
+    # ``attempt_at_kst`` 컬럼을 안정화. send 모드는 v0.1.0 그대로 — 실
+    # 발송 시각이 기록되어야 audit 의미가 있으므로 wall clock 유지.
+    if created_at_override is not None:
+        started_at = created_at_override
+    elif is_dry_run:
+        started_at = datetime.combine(
+            sent_date, datetime.min.time(), tzinfo=KST
+        )
+    else:
+        started_at = datetime.now(tz=KST)
     log_rows: list[DispatchLogRow] = []
     drafts_with_pdfs: list[tuple] = []
     entries_by_sid: dict[str, EmailMappingEntry] = {
@@ -595,11 +625,17 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     # Manifest + log + report
     counts = _aggregate_counts(log_rows)
-    completed_at = (
-        created_at_override
-        if created_at_override is not None
-        else datetime.now(tz=KST)
-    )
+    # v0.1.1 (T014): mirror started_at — dry-run + no ``--created-at-utc``
+    # uses sent_date 자정(KST) so the manifest/csv stay byte-identical
+    # across re-runs of the same input.
+    if created_at_override is not None:
+        completed_at = created_at_override
+    elif is_dry_run:
+        completed_at = datetime.combine(
+            sent_date, datetime.min.time(), tzinfo=KST
+        )
+    else:
+        completed_at = datetime.now(tz=KST)
     bronze_sha = _sha256_file(paths["bronze_csv"])
     master_sha = (
         _sha256_file(paths["silver_master"])
@@ -646,12 +682,19 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     # Production-send mode already appended rows durably (per-row flock
     # + fsync via append_dispatch_log_row). Other modes write the bulk
-    # log here.
+    # log here. v0.1.1 (T014): dry-run uses ``메일_발송로그_dryrun.csv``
+    # truncate-write so re-running dry-run is byte-identical for the
+    # same input and the send-mode csv is *never touched*.
     if not (args.send and not is_self_test):
         log_csv_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_log_csv(log_rows, log_csv_path)
+        _write_log_csv(log_rows, log_csv_path, truncate=is_dry_run)
 
     summary = {s: counts.model_dump()[s.value] for s in DispatchStatus}
+    # v0.1.1 (T014): dry-run report md → ``메일_발송보고서_dryrun.md`` so
+    # the send-mode report is not overwritten by a dry-run preview.
+    report_md_filename = (
+        "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
+    )
     write_dispatch_report_md(
         DispatchReportData(
             manifest=manifest,
@@ -665,6 +708,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             report_generated_at_kst=completed_at,
         ),
         paths["gold_email_dir"],
+        filename=report_md_filename,
     )
 
     if getattr(args, "verbose", False):
@@ -1071,8 +1115,32 @@ def _rewrite_unattempted_success_rows(
     return rewritten
 
 
-def _write_log_csv(rows: list[DispatchLogRow], path: Path) -> None:
-    """Append-only csv write with the locked 13-column header."""
+def _write_log_csv(
+    rows: list[DispatchLogRow], path: Path, *, truncate: bool = False
+) -> None:
+    """Write rows to the dispatch log csv with the locked 13-column header.
+
+    Args:
+        rows: DispatchLogRow rows to write.
+        path: Target csv path.
+        truncate: When ``True`` (v0.1.1 dry-run mode), open in ``"w"`` mode
+            so the file is overwritten — header always emitted and no
+            prior contents preserved (FR-C03a, contracts/dry_run_outputs.md §2).
+            Default ``False`` matches v0.1.0 append-mode behaviour for the
+            send-mode log csv.
+    """
+    if truncate:
+        with path.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=list(DispatchLogRow.COLUMN_ORDER)
+            )
+            writer.writeheader()
+            for row in rows:
+                dump = row.model_dump(mode="json")
+                writer.writerow(
+                    {c: dump[c] for c in DispatchLogRow.COLUMN_ORDER}
+                )
+        return
     is_new = not path.is_file()
     with path.open("a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
