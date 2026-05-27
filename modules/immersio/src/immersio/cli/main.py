@@ -274,6 +274,25 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     init_p.add_argument("--profile", required=True, type=str)
 
+    # T029 — v0.1.1 email-cleanup-log top-level helper (FR-C05a).
+    # Sibling of ``email`` and ``email-init-test-fixtures``. Nested form
+    # ``immersio email cleanup-log ...`` is intentionally NOT supported —
+    # argparse rejects it via the ``email`` subparser's unknown-arg path
+    # (contracts/cli_email_cleanup_log.md §1).
+    cleanup_p = sub.add_parser(
+        "email-cleanup-log",
+        help="발송 로그 csv 정리 (FR-C05, top-level helper)",
+    )
+    cleanup_p.add_argument("--semester", required=True, type=str)
+    cleanup_p.add_argument("--course", required=True, type=str)
+    cleanup_p.add_argument(
+        "--keep",
+        required=True,
+        type=str,
+        help="보존할 status — comma-separated (DispatchStatus enum 6종)",
+    )
+    cleanup_p.add_argument("--dry-run", action="store_true")
+
     return parser
 
 
@@ -425,6 +444,53 @@ def app(argv: list[str] | None = None) -> int:
             file=sys.stdout,
         )
         return 0
+
+    if args.command == "email-cleanup-log":
+        # T029 — FR-C05a · contracts/cli_email_cleanup_log.md §3.
+        # cleanup_log raises ValueError / FileNotFoundError /
+        # ExamNameInvariantError / DispatchLockError; this handler maps
+        # each to the exit code table in contract §3 (3/4/5/6/7) and
+        # returns 0 on normal completion (real mode or dry-run).
+        from immersio.email.cleanup import cleanup_log
+        from immersio.email.log import DispatchLockError, ExamNameInvariantError
+
+        log_csv_path = (
+            Path("data/gold/immersio")
+            / f"{args.semester}-{args.course}"
+            / "메일_발송로그.csv"
+        )
+        keep_tokens = args.keep.split(",")
+
+        try:
+            rc = cleanup_log(
+                log_csv_path,
+                keep_tokens,
+                dry_run=args.dry_run,
+            )
+            return rc or 0
+        except ExamNameInvariantError:
+            # contract §3 exit 6 — multi exam_name csv (FR-C02a-1).
+            # cleanup.py's read_dispatch_log writes its own stderr inside
+            # read_dispatch_log; CLI handler just maps the code.
+            return 6
+        except DispatchLockError:
+            # contract §3 exit 7 — concurrent cleanup-log or email --send
+            # holds the flock on the csv. Dry-run never raises this.
+            return 7
+        except FileNotFoundError:
+            # contract §3 exit 5 — csv missing or empty (header-only).
+            # cleanup.py emits its own stderr (§5.3); CLI maps to 5.
+            return 5
+        except ValueError as exc:
+            # cleanup.py raises ValueError for two distinct cases:
+            #   - exit 3: unknown / empty --keep token (§5.1)
+            #   - exit 4: real-mode 0-data-row result (§5.2)
+            # cleanup.py prefixes the §5.2 message with
+            # "정리 결과가 0 데이터행입니다", which is the disambiguator.
+            msg = str(exc)
+            if "정리 결과가 0 데이터행" in msg:
+                return 4
+            return 3
 
     if args.command == "combine":
         # T048 — INTEGRATION (RULE 4). Delegate to combine.cli.main with
