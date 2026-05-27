@@ -110,13 +110,12 @@ def _parse_sent_date(arg: str | None) -> date:
 
 def run_email_dispatch(args: argparse.Namespace) -> int:
     """Drive Phase A→E orchestration end-to-end (T048)."""
-    if args.self_test is not None and not args.send:
-        print(
-            "ERROR [immersio email]: --self-test requires --send "
-            "(self-test mode only meaningful when actually sending).",
-            file=sys.stderr,
-        )
-        return 2
+    # v0.1.1 hotfix (Decision 1, spec.md Edge Cases line 114): ``--self-test``
+    # without ``--send`` is honoured as dry-run + self-test combo. dry-run
+    # wins (no Gmail API call, no send-mode log touched) while self-test
+    # semantics (FR-C04d/e — operator-only) propagates into the preview
+    # composer so each .eml's ``To`` header is the operator. v0.1.0
+    # rejected this combination with rc=2; v0.1.1 supersedes that.
 
     try:
         loader = ProfileLoader()
@@ -367,7 +366,10 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     missing_sids = {b.student_id for b in missing_in_master}
 
     # Phase D.5 — idempotent skip (US3 / US4 production re-runs).
-    is_self_test = bool(args.send and args.self_test is not None)
+    # v0.1.1 hotfix (Decision 2): ``is_self_test`` reflects operator
+    # intent regardless of ``--send`` so the operator-To override
+    # propagates into the dry-run preview composer too (FR-C04d/e).
+    is_self_test = args.self_test is not None
     # v0.1.1 (T014): dry-run 은 write 만 ``_dryrun.csv`` 로 분기, *읽기*
     # (idempotent skip prior log 조회) 는 항상 send-mode csv. send 모드는
     # v0.1.0 그대로 — 같은 path 로 읽고 append.
@@ -564,10 +566,24 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             override_to=operator_to,
         )
         drafts_with_pdfs.append((draft, bundle))
+        # v0.1.1 hotfix (Decision 2 + contracts/dry_run_outputs.md §5):
+        # Under dry-run + self-test, the preview .eml To header is the
+        # operator (FR-C04d/e), but the csv ``email`` column records the
+        # student's *real* address — the csv is an operational record of
+        # what the production send would target, not the envelope. In
+        # plain dry-run (no self-test) the two agree. In send-mode
+        # self-test we keep v0.1.0 behaviour (``draft.to_header`` =
+        # operator, since that's the address that actually received).
+        csv_email = (
+            str(entry.email)
+            if (not args.send and is_self_test)
+            else draft.to_header
+        )
         log_rows.append(
             _ok_row(
                 draft=draft,
                 bundle=bundle,
+                email=csv_email,
                 started_at=started_at,
                 mode=mode,
                 status=DispatchStatus.DRY_RUN
@@ -852,6 +868,7 @@ def _ok_row(
     *,
     draft,
     bundle: StudentPDFBundle,
+    email: str | None = None,
     started_at: datetime,
     mode: DispatchMode,
     status: DispatchStatus,
@@ -861,7 +878,7 @@ def _ok_row(
     return DispatchLogRow(
         student_id=draft.student_id,
         name_kr=draft.name_kr,
-        email=draft.to_header,
+        email=email if email is not None else draft.to_header,
         pdf_filename=bundle.pdf_filename,
         pdf_sha256=bundle.pdf_sha256,
         attempt_at_kst=started_at,

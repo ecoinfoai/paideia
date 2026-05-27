@@ -31,7 +31,6 @@ import io
 import json
 from pathlib import Path
 
-import pytest
 import responses
 
 from .conftest import write_student_metrics_parquet
@@ -87,21 +86,6 @@ def _sha256(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "v0.1.1 pipeline.py (line ~113) still rejects ``--self-test`` without "
-        "``--send`` with rc=2; T014/T015/T019 only branched dry-run csv/md/"
-        "manifest paths and added PreSendSummary self-test fields, but did "
-        "NOT lift the early rejection of the dry-run + self-test combo. "
-        "Spec.md Edge Cases requires dry-run to win and produce preview "
-        "files with operator-To headers; that branch is pending a follow-up "
-        "(allow self_test under dry-run + propagate operator override into "
-        "preview composition). Strict=False: this xfail unlocks when the "
-        "pipeline grows the dry-run + self-test path; until then the test "
-        "stays the source-of-truth fixture for the spec edge case."
-    ),
-    strict=False,
-)
 @responses.activate
 def test_dry_run_plus_self_test_combined(email_fixture) -> None:
     """spec.md Edge Cases: dry-run + self-test → dry-run 우선, 5 단언 GREEN."""

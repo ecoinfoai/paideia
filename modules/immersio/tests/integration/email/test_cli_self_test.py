@@ -35,10 +35,18 @@ def _args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
-def test_self_test_without_send_rejected(email_fixture) -> None:
-    """--self-test 5 without --send → exit 2."""
+def test_self_test_without_send_allowed_as_dry_run(email_fixture) -> None:
+    """v0.1.1 hotfix (spec.md Edge Cases): ``--self-test`` without ``--send``
+    is no longer rejected — dry-run wins, self-test semantics applies to the
+    preview composer (operator-To). Detailed assertions on csv/preview/manifest
+    live in ``test_dry_run_self_test_combined.py`` (T035); this test merely
+    guards the rejection lift: rc should be 0 (dry-run path), not 2 (old
+    v0.1.0 rejection)."""
     rc = run_email_dispatch(_args(self_test=5, send=False))
-    assert rc == 2
+    assert rc == 0, (
+        f"dry-run + self-test should exit 0 (v0.1.1 spec.md Edge Cases — "
+        f"dry-run wins); got rc={rc}"
+    )
 
 
 def test_dry_run_default_no_self_test(email_fixture) -> None:
