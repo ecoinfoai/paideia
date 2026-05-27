@@ -47,6 +47,7 @@ from .email_dispatch_manifest import (
 from .email_dispatch_report import DispatchReportData
 from .email_mapping_entry import EmailMappingEntry
 from .email_message_draft import EmailMessageDraft
+from .pre_send_summary import PreSendSummary
 from .professor_profile import ProfessorProfile
 from .student_pdf_bundle import StudentPDFBundle
 from .test_profile import DummyStudent, TestProfile
@@ -155,4 +156,6 @@ __all__ = [
     "StudentPDFBundle",
     "DummyStudent",
     "TestProfile",
+    # spec 007 immersio-email v0.1.1 — 1 new model
+    "PreSendSummary",
 ]
