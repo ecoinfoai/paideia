@@ -25,6 +25,7 @@ from paideia_shared.schemas import (
     EmailManifestInputs,
     EmailManifestOutputs,
     EmailMappingEntry,
+    PreSendSummary,
     StudentPDFBundle,
 )
 
@@ -575,6 +576,43 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
                 f"sendable drafts available — cannot satisfy --self-test "
                 f"{n}.",
                 file=sys.stderr,
+            )
+            return 2
+        # v0.1.1 (T019) — confirm gate with self-test PreSendSummary.
+        # Count fields are placeholders (sendable=n, others=0); T024
+        # will recompute these from real roster/cohort/skip state. The
+        # bucket sum invariant (sendable+skipped+outside==total_targets)
+        # still holds with sendable=n, total=n, others=0.
+        sample_size = (
+            args.confirm_sample
+            if args.confirm_sample is not None
+            else profile.operational_defaults.confirm_sample_size
+        )
+        self_test_summary = PreSendSummary(
+            sendable_count=n,
+            idempotent_skipped_sids=[],
+            cohort_outside_count=0,
+            total_targets=n,
+            is_self_test=True,
+            operator_email=profile.sender.email,
+        )
+        try:
+            confirm_first_n(
+                drafts_with_pdfs[:n],
+                sample_size=sample_size,
+                summary=self_test_summary,
+                stdin=getattr(args, "_stdin", None),
+                stdout=getattr(args, "_stdout", None),
+            )
+        except ConfirmGateAborted as exc:
+            print(
+                f"[immersio email] 운영자 중단 — {exc}. 본인 도달 0.",
+                file=sys.stderr,
+            )
+            return 0
+        except ValueError as exc:
+            print(
+                f"ERROR [immersio email]: {exc}", file=sys.stderr
             )
             return 2
         rc = _run_self_test_send(
