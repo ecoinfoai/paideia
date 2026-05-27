@@ -124,6 +124,8 @@ _ALLOWED_LITERALS: frozenset[str] = frozenset({
     "에서 학생",  # docstring connective fragment ("…줄에서 학생 이름…")
     "라인은 학생",  # assertion-context connective ("표본 라인은 학생 이름·이메일…")
     "라인에 학생",  # assertion-context connective ("표본 외 라인에 학생 이름 노출…")
+    "선이므로 학생",  # T035 docstring connective ("dry-run 이 우선이므로 학생/본인…")
+    "저득점 학생",  # T035 docstring cohort descriptor ("저득점 학생만 대상")
     # Mock service-account placeholders (non-routable, fake-prefixed)
     "fake-sa@fake-project.iam.gserviceaccount.com",
     "x@y.com",
