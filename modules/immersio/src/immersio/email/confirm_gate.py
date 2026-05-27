@@ -12,7 +12,7 @@ import sys
 from collections.abc import Sequence
 from typing import IO
 
-from paideia_shared.schemas import EmailMessageDraft, StudentPDFBundle
+from paideia_shared.schemas import EmailMessageDraft, PreSendSummary, StudentPDFBundle
 
 
 class ConfirmGateAborted(Exception):
@@ -22,7 +22,8 @@ class ConfirmGateAborted(Exception):
 def confirm_first_n(
     drafts_with_pdfs: Sequence[tuple[EmailMessageDraft, StudentPDFBundle]],
     *,
-    sample_size: int,
+    sample_size: int = 3,
+    summary: PreSendSummary | None = None,
     stdin: IO[str] | None = None,
     stdout: IO[str] | None = None,
 ) -> None:
@@ -31,6 +32,10 @@ def confirm_first_n(
     Args:
         drafts_with_pdfs: Pairs ``(draft, bundle)`` ready for send.
         sample_size: 1 ≤ N ≤ 10 (FR-C04 + clarification Q3 default 3).
+        summary: v0.1.1 pre-send summary (self-test vs production banner).
+            ``None`` (default) preserves v0.1.0 output exactly.
+            v0.1.1 T018/T023 will consume this to emit the appropriate
+            self-test / production banner before the sample list.
         stdin: Optional override (test injection). Defaults to
             ``sys.stdin`` so production reads from the operator's
             terminal.
