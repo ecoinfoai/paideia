@@ -241,6 +241,14 @@ def read_dispatch_log(log_path: Path) -> list[DispatchLogRow]:
         reader = csv.DictReader(fh)
         for raw in reader:
             rows.append(DispatchLogRow.model_validate(raw))
+    distinct_exams = {r.exam_name for r in rows}
+    if len(distinct_exams) >= 2:
+        raise ExamNameInvariantError(
+            f"운영 invariant 위반: csv 에 2종 이상의 exam_name 이 "
+            f"발견되었습니다 ({sorted(distinct_exams)}). "
+            f"v0.1.1 은 한 학기·과목당 단일 exam_name 만 지원합니다. "
+            f"해당 csv 정리 후 재실행하세요. ({log_path})"
+        )
     return rows
 
 
