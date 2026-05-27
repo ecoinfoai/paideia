@@ -36,6 +36,15 @@ class DispatchLockError(RuntimeError):
     """Raised when the per-run flock cannot be acquired (FR-D02 / R6)."""
 
 
+class ExamNameInvariantError(ValueError):
+    """csv 에 2종 이상의 exam_name 이 발견됨 (FR-C02a-1).
+
+    v0.1.1 의 운영 invariant — csv per (semester, course) 는
+    단일 exam_name 만 보유. 위반 시 idempotent skip 키 (학번 단독) 의
+    안전성이 무너지므로 boundary 에서 fail-fast.
+    """
+
+
 class RetryMode(StrEnum):
     """Retry semantics for ``idempotent_skip_filter`` (FR-D03 a/b/c)."""
 
@@ -296,6 +305,10 @@ def idempotent_skip_filter(
 # report markdown summary.
 # ---------------------------------------------------------------------------
 
+# STATUS_KR — v0.1.0 보고서 md용.
+# STATUS_KR_GATE — v0.1.1 확인 게이트/cleanup-log stdout용 (한글(영어) 병기).
+# 두 매핑은 양립 — STATUS_KR 은 변경 금지.
+
 STATUS_KR: dict[DispatchStatus, str] = {
     DispatchStatus.SUCCESS: "성공",
     DispatchStatus.SKIPPED: "누락",
@@ -305,11 +318,36 @@ STATUS_KR: dict[DispatchStatus, str] = {
     DispatchStatus.TEST_DUMMY: "테스트",
 }
 
+STATUS_KR_GATE: dict[DispatchStatus, str] = {
+    DispatchStatus.SUCCESS: "성공(success)",
+    DispatchStatus.SKIPPED: "건너뜀(skipped)",
+    DispatchStatus.FAILED: "발송 실패(failed)",
+    DispatchStatus.TEMPORARY_FAILURE: "일시 실패(temporary_failure)",
+    DispatchStatus.DRY_RUN: "미리보기(dry_run)",
+    DispatchStatus.TEST_DUMMY: "본인-테스트(test_dummy)",
+}
+
+# Priority for collapsing multiple dispatch log rows per student_id —
+# v0.1.1 FR-D03 / data-model.md §2. Lower value = stronger; the final
+# status reported for an sid is the row with the minimum value across
+# all attempts. success=0 (가장 강함) … dry_run=5 (가장 약함).
+_STATUS_PRIORITY: dict[DispatchStatus, int] = {
+    DispatchStatus.SUCCESS: 0,            # 가장 강함
+    DispatchStatus.TEST_DUMMY: 1,
+    DispatchStatus.FAILED: 2,
+    DispatchStatus.TEMPORARY_FAILURE: 3,
+    DispatchStatus.SKIPPED: 4,
+    DispatchStatus.DRY_RUN: 5,            # 가장 약함
+}
+
 
 __all__ = [
     "DispatchLockError",
+    "ExamNameInvariantError",
     "RetryMode",
     "STATUS_KR",
+    "STATUS_KR_GATE",
+    "_STATUS_PRIORITY",
     "append_dispatch_log_row",
     "append_dispatch_log_rows",
     "idempotent_skip_filter",
