@@ -110,11 +110,19 @@ def _sha256_of(path: Path) -> str:
 
 
 def _no_lock_or_backup_artifacts(csv_path: Path) -> None:
-    """Assert that no lock or .bak-* sibling files exist next to csv."""
+    """Assert that no stray lock or .bak-* sibling files exist next to csv.
+
+    cleanup-log (post-unification) locks the csv path itself, NOT a
+    separate ``.dispatch.lock`` file — so the latter should never be
+    created. Validation-failure paths additionally must not produce
+    backup or temp artifacts.
+    """
     parent = csv_path.parent
-    # No .dispatch.lock sibling
+    # No .dispatch.lock sibling — cleanup-log no longer uses this path;
+    # if it exists, an older / divergent code path is leaking artifacts.
     assert not (parent / ".dispatch.lock").exists(), (
-        "FR-C05a-1 violation: lock file was created during validation failure"
+        "lock-target divergence: .dispatch.lock should not exist "
+        "(cleanup-log locks the csv path itself, matching email --send)"
     )
     # No backup files
     bak_files = list(parent.glob(f"{csv_path.name}.bak-*"))

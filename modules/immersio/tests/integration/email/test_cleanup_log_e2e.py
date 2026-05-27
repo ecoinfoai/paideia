@@ -10,12 +10,14 @@
   ``제거(removed)``) 을 포함 (FR-C04f · 계약 §4.1),
   임시 파일 (``*.tmp-*``) 잔존 없음.
 
-- (b) 실 모드 도중 lock 충돌 — 별도 process 가 ``.dispatch.lock`` 을
-  ``LOCK_EX`` 로 보유 중일 때 cleanup_log 호출 → ``DispatchLockError`` raise
-  (CLI 핸들러는 exit 7 으로 매핑). 백업 미생성, csv 무변경 (FR-C05d).
+- (b) 실 모드 도중 lock 충돌 — 별도 fd 가 *csv 파일 자체* 를 ``LOCK_EX`` 로
+  보유 중일 때 cleanup_log 호출 → ``DispatchLockError`` raise (CLI 핸들러는
+  exit 7 으로 매핑). 백업 미생성, csv 무변경 (FR-C05d). lock 대상이 csv 파일
+  자체이므로 ``email --send`` (v0.1.0) 와 cleanup-log 가 같은 inode 에 대해
+  mutually exclusive — US4-3 / contracts §6/§7.
 
-- (c) dry-run 모드는 lock 미시도 — 위 (b) 와 동일하게 lock 을 외부에서
-  보유 중이어도 ``--dry-run`` 은 정상 완료 (FR-C05e). csv 무변경.
+- (c) dry-run 모드는 lock 미시도 — 위 (b) 와 동일하게 csv 파일에 lock 을
+  외부에서 보유 중이어도 ``--dry-run`` 은 정상 완료 (FR-C05e). csv 무변경.
 
 - (d) nested subcommand ``immersio email cleanup-log ...`` → argparse 가
   unknown subcommand 로 거부 (FR-C05a). T029 가 ``email-cleanup-log`` 를
@@ -35,9 +37,10 @@
         stderr: IO[str] | None = None,
     ) -> int:
 
-lock 파일은 ``log_csv_path.parent / ".dispatch.lock"`` 로 가정 (계약 §6 ·
-research.md R4 · spec data-model.md §10). T028 이 다른 경로를 택하면 본
-테스트의 ``lock_path`` 계산만 조정한다.
+lock 대상은 *csv 파일 자체* (계약 §6 · research.md R4 · spec data-model.md §10 ·
+v0.1.0 ``_exclusive_lock`` 동작과 통일됨 — US4-3). ``email --send`` 와
+cleanup-log 가 같은 flock target 을 사용하므로 두 명령이 kernel-level 로
+mutually exclusive.
 
 RED 상태
 --------
@@ -275,10 +278,14 @@ def test_real_mode_lock_conflict_raises(
 ) -> None:
     """실 모드 도중 다른 process 가 lock 보유 → ``DispatchLockError`` (exit 7).
 
-    Test mechanism: 본 process 안에서 lock 파일 fd 를 직접 ``LOCK_EX | LOCK_NB``
-    로 잡고 cleanup_log 를 호출. cleanup_log 의 동일 ``LOCK_EX | LOCK_NB`` 시도가
-    ``EWOULDBLOCK`` 로 실패 → ``DispatchLockError`` raise. 백업/임시 파일 미생성,
-    csv 무변경 단언.
+    Test mechanism: 본 process 안에서 *csv 파일* 의 fd 를 직접 ``LOCK_EX |
+    LOCK_NB`` 로 잡고 cleanup_log 를 호출. cleanup_log 의 동일 ``LOCK_EX |
+    LOCK_NB`` 시도가 ``EWOULDBLOCK`` 로 실패 → ``DispatchLockError`` raise.
+    백업/임시 파일 미생성, csv 무변경 단언.
+
+    lock 대상이 *csv 파일 자체* 이므로 v0.1.0 ``email --send`` 가 보유 중인
+    flock 과 동일 inode — 두 명령이 kernel-level 로 mutually exclusive
+    (US4-3 · contracts §6/§7).
 
     참고: POSIX flock 은 *process 단위* 가 아니라 *fd 단위* 잠금이지만, 같은
     process 안에서도 별도 fd 가 ``LOCK_EX`` 를 시도하면 첫 fd 의 잠금이 우선이며
@@ -294,11 +301,12 @@ def test_real_mode_lock_conflict_raises(
         ],
     )
     sha_before = _sha256_of(log)
-    lock_path = log.parent / ".dispatch.lock"
 
-    # Pre-acquire the lock from an external fd (simulates another process).
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    # Pre-acquire the flock on the csv file itself (simulates another
+    # process running ``email --send`` or another cleanup-log run).
+    # csv exists from append_dispatch_log_rows above, so O_RDWR succeeds
+    # without creating a fresh inode.
+    fd = os.open(log, os.O_RDWR, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
@@ -333,8 +341,8 @@ def test_dry_run_does_not_attempt_lock(
     """``--dry-run`` 은 lock 미시도 → 다른 명령이 lock 을 보유 중이어도 정상 실행.
 
     (FR-C05e · 계약 §6/§7) dry-run 은 csv 미터치이므로 lock 을 잡지 않아야 한다.
-    외부에서 ``.dispatch.lock`` 을 ``LOCK_EX`` 로 보유 중일 때도 dry-run 은 정상
-    완료해야 함.
+    외부에서 *csv 파일* 을 ``LOCK_EX`` 로 보유 중일 때도 (예: 동시에 실행 중인
+    ``email --send``) dry-run 은 정상 완료해야 함.
     """
     log = tmp_path / "메일_발송로그.csv"
     append_dispatch_log_rows(
@@ -345,10 +353,10 @@ def test_dry_run_does_not_attempt_lock(
         ],
     )
     sha_before = _sha256_of(log)
-    lock_path = log.parent / ".dispatch.lock"
 
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    # External holder takes flock on the csv file itself — same target
+    # email --send uses; dry-run cleanup-log must not contend for it.
+    fd = os.open(log, os.O_RDWR, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
@@ -448,3 +456,89 @@ def test_nested_subcommand_rejected(tmp_path: Path) -> None:
         f"nested subcommand 거부 시 stderr 에 argparse 거부 메시지 기대, "
         f"got stderr={completed.stderr!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# (e) Cross-command mutex regression — cleanup-log ↔ email --send share
+#     the same flock target (csv path), so they are mutually exclusive.
+# ---------------------------------------------------------------------------
+
+
+def test_cross_command_mutex_with_send(
+    tmp_path: Path, cleanup_log_fn, dispatch_lock_error_cls
+) -> None:
+    """cleanup-log 와 ``email --send`` 가 *같은 csv 파일* 을 lock target 으로
+    공유하므로 두 명령이 kernel-level 로 mutually exclusive (US4-3 · contracts
+    §6/§7).
+
+    T028 followup 이전: cleanup-log 가 별도 ``.dispatch.lock`` 을 lock 했으므로
+    이 단언이 실패했을 수 있다 (두 명령이 동시 실행되어 csv 가 race condition
+    으로 손상될 위험). 본 회귀 테스트는 lock target 통일을 항구적으로 단언한다.
+
+    Test 두 방향
+    ------------
+    1. ``email --send`` 가 lock 보유 중 → cleanup-log 실 모드 ``DispatchLockError``.
+    2. cleanup-log 가 lock 보유 중 → ``append_dispatch_log_row`` (send 의
+       writer) ``DispatchLockError``.
+
+    두 방향 모두 csv 파일 path 에 flock 을 외부 fd 가 보유 중인 상태를
+    *직접* 시뮬레이션 — send 와 cleanup-log 의 lock helper 가 같은 inode
+    에 대해 ``LOCK_EX | LOCK_NB`` 를 시도하므로 둘 다 ``EWOULDBLOCK`` 에
+    걸린다.
+    """
+    from immersio.email.log import append_dispatch_log_row
+
+    log = tmp_path / "메일_발송로그.csv"
+    # Seed csv so flock has an existing inode to lock.
+    append_dispatch_log_rows(
+        log,
+        [
+            _row("1234567001", status=DispatchStatus.SUCCESS),
+            _row("1234567002", status=DispatchStatus.TEST_DUMMY, minute=1),
+        ],
+    )
+    sha_before = _sha256_of(log)
+
+    # ── Direction 1: external send-side lock blocks cleanup-log ─────────────
+    fd_send = os.open(log, os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd_send, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        stderr = io.StringIO()
+        with pytest.raises(dispatch_lock_error_cls):
+            cleanup_log_fn(
+                log,
+                ["success", "test_dummy"],
+                dry_run=False,
+                stderr=stderr,
+            )
+
+        # cleanup-log must not have produced any side-effects
+        _no_lock_or_backup_artifacts(log)
+        assert _sha256_of(log) == sha_before, (
+            "send 가 lock 보유 중인데 cleanup-log 가 csv 를 변경함 — "
+            "kernel-level mutex 위반"
+        )
+    finally:
+        with contextlib.suppress(OSError):
+            fcntl.flock(fd_send, fcntl.LOCK_UN)
+        os.close(fd_send)
+
+    # ── Direction 2: external cleanup-log-side lock blocks send writer ──────
+    fd_cleanup = os.open(log, os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd_cleanup, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        row = _row("1234567099", status=DispatchStatus.SUCCESS, minute=9)
+        with pytest.raises(dispatch_lock_error_cls):
+            append_dispatch_log_row(log, row)
+
+        # send writer must not have appended (csv unchanged).
+        assert _sha256_of(log) == sha_before, (
+            "cleanup-log 가 lock 보유 중인데 send 가 csv 에 append — "
+            "kernel-level mutex 위반"
+        )
+    finally:
+        with contextlib.suppress(OSError):
+            fcntl.flock(fd_cleanup, fcntl.LOCK_UN)
+        os.close(fd_cleanup)

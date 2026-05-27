@@ -7,9 +7,12 @@ top-level helper command ``immersio email-cleanup-log`` (v0.1.1 spec
   1. ``--keep`` token validation (DispatchStatus enum exact match, empty
      tokens rejected) — happens *before* any I/O so a typo never even
      touches the lock file.
-  2. Lock acquisition (real mode only) on ``log_csv_path.parent /
-     ".dispatch.lock"`` with ``LOCK_EX | LOCK_NB`` — dry-run skips the
-     lock so a concurrent ``email --send`` does not block previews.
+  2. Lock acquisition (real mode only) on the *csv file itself* via
+     :func:`immersio.email.log._exclusive_lock` (``LOCK_EX | LOCK_NB``)
+     — this is the *same* lock target that ``email --send`` uses, so
+     cleanup-log and send are kernel-level mutually exclusive
+     (contracts/cli_email_cleanup_log.md §6/§7, US4-3). Dry-run skips
+     the lock so a concurrent ``email --send`` does not block previews.
   3. CSV load via :func:`immersio.email.log.read_dispatch_log` so the
      ``exam_name`` invariant (T005 / FR-C02a-1) is enforced on every
      entry point.
@@ -26,23 +29,18 @@ top-level helper command ``immersio email-cleanup-log`` (v0.1.1 spec
      (FR-C04f) plus a separate ``제거(removed)`` label for the row
      count that did *not* match ``--keep``.
 
-Lock-target divergence (vs. contracts/cli_email_cleanup_log.md §6 /
-research.md R4): the contract says cleanup-log shares the *same* lock
-target as ``email --send`` so the two are mutually exclusive. However
-v0.1.0's ``_exclusive_lock`` uses the csv file itself as the lock
-target (``modules/immersio/src/immersio/email/log.py``), and tests
-T026/T027 already commit to the separate ``.dispatch.lock`` file. We
-follow the test contract here (separate ``.dispatch.lock`` next to the
-csv) so the implementation matches what was RED. Operators should
-serialize cleanup-log with ``email --send`` manually until a follow-up
-refactor unifies the lock targets.
+Note: ``os.replace(tmp, csv)`` swaps the *inode* of the csv path. The
+``_exclusive_lock`` fd holds flock on the *pre-replace* inode; that's
+fine because (a) the lock is released on context exit, and (b) any
+concurrent contender opens the csv *path* and would acquire flock on
+the *new* inode after replace — so the mutex semantics across runs are
+still correct (each run holds flock on whatever inode the path
+resolves to at open-time).
 """
 
 from __future__ import annotations
 
 import csv
-import errno
-import fcntl
 import hashlib
 import io
 import os
@@ -50,8 +48,6 @@ import sys
 import tempfile
 import time
 from collections import Counter
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import IO
 
@@ -59,7 +55,7 @@ from paideia_shared.schemas import DispatchLogRow, DispatchStatus
 
 from .log import (
     STATUS_KR_GATE,
-    DispatchLockError,
+    _exclusive_lock,
     read_dispatch_log,
 )
 
@@ -135,73 +131,6 @@ def _validate_keep_statuses(
             )
         parsed.append(DispatchStatus(token))
     return parsed
-
-
-# ---------------------------------------------------------------------------
-# Internal: cleanup-log lock helper (separate `.dispatch.lock` file).
-# ---------------------------------------------------------------------------
-
-
-@contextmanager
-def _acquire_cleanup_lock(lock_path: Path) -> Iterator[int]:
-    """Acquire LOCK_EX|LOCK_NB on ``lock_path`` for cleanup-log mutex.
-
-    Mirrors :func:`immersio.email.log._exclusive_lock` but targets a
-    *separate* ``.dispatch.lock`` file (see module docstring on lock-
-    target divergence). Yields the open fd; releases the lock on context
-    exit even when the caller raises.
-
-    Raises:
-        DispatchLockError: When the lock is held by another process. The
-            CLI handler maps this to exit 7 (FR-C05d).
-    """
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
-    locked = False
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            locked = True
-        except (BlockingIOError, OSError) as exc:
-            try:
-                os.close(fd)
-            except OSError:
-                # intentional-skip: idempotent fd cleanup
-                pass
-            if isinstance(exc, OSError) and exc.errno not in (
-                errno.EWOULDBLOCK,
-                errno.EAGAIN,
-            ):
-                raise
-            raise DispatchLockError(
-                f"FR-C05d: cleanup-log lock {lock_path} is held by "
-                f"another run (LOCK_EX|LOCK_NB). exit 7."
-            ) from exc
-        yield fd
-    finally:
-        if locked:
-            # Unlink the lock file *while still holding* the lock so that
-            # validation failures (e.g. empty-result abort) leave no
-            # ``.dispatch.lock`` artifact in the gold dir (FR-C05a-2 test
-            # invariant in test_cleanup_validation.py). Any concurrent
-            # contender already failed at our flock acquisition; new
-            # contenders after unlink will create a fresh inode and the
-            # mutex remains correct.
-            try:
-                os.unlink(lock_path)
-            except OSError:
-                # intentional-skip: lock file may already be gone
-                pass
-            try:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError:
-                # intentional-skip: idempotent flock release
-                pass
-            try:
-                os.close(fd)
-            except OSError:
-                # intentional-skip: idempotent fd close
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +275,9 @@ def cleanup_log(
 
     Args:
         log_csv_path: Absolute or cwd-relative path to
-            ``메일_발송로그.csv``. Lock file is ``.dispatch.lock`` next to
-            it (real mode only).
+            ``메일_발송로그.csv``. The csv path itself is the flock target
+            (real mode only) — same as ``email --send`` so the two
+            commands are mutually exclusive at the kernel level.
         keep_statuses: Raw string tokens, e.g. ``["success",
             "test_dummy"]``. Whitespace stripped; empty tokens rejected.
         dry_run: When True, no lock is taken, no file is written, but a
@@ -450,8 +380,10 @@ def _cleanup_log_real(
     err: IO[str],
 ) -> int:
     """Real-mode path — lock, load, filter, backup, atomic replace, report."""
-    # Pre-check csv presence (exit 5) before grabbing the lock so a
-    # missing csv doesn't leave a stray .dispatch.lock file.
+    # Pre-check csv presence (exit 5) before grabbing the lock. Without
+    # this, ``_exclusive_lock`` would ``O_CREAT`` an empty csv as a
+    # side-effect (v0.1.0 first-run semantics) — not what cleanup-log
+    # wants for a missing-csv error path.
     if not log_csv_path.is_file():
         err.write(
             f"오류: 발송 로그 csv 가 존재하지 않거나 빈 파일입니다: "
@@ -464,8 +396,10 @@ def _cleanup_log_real(
             f"발송 로그 csv 가 존재하지 않습니다: {log_csv_path}"
         )
 
-    lock_path = log_csv_path.parent / ".dispatch.lock"
-    with _acquire_cleanup_lock(lock_path):
+    # Lock the csv file itself — same target as ``email --send``'s
+    # ``_exclusive_lock``, so the two commands are mutually exclusive
+    # at the kernel level (US4-3, contracts §6/§7).
+    with _exclusive_lock(log_csv_path):
         # Step 3: csv load + exam_name invariant (delegated to read_dispatch_log).
         rows = read_dispatch_log(log_csv_path)
         if not rows:
