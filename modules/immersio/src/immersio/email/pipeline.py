@@ -377,6 +377,14 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     log_csv_path = (
         dryrun_log_csv_path if is_dry_run else send_log_csv_path
     )
+    # v0.1.1 (T015, FR-C03d + contracts/dry_run_outputs.md §3): dry-run
+    # report md → ``메일_발송보고서_dryrun.md`` so the send-mode report is
+    # never overwritten by a dry-run preview. Resolved early so the
+    # manifest's ``outputs.report_md_path`` (below) can point at the same
+    # file the report writer (further down) emits.
+    report_md_filename = (
+        "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
+    )
 
     retry_mode = _resolve_retry_mode(args)
     if args.send and not is_self_test:
@@ -663,11 +671,14 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         outputs=EmailManifestOutputs(
             silver_mapping_path=str(silver_mapping_path.resolve()),
             silver_mapping_rows=len(entries),
-            dispatch_log_path=str(
-                (paths["gold_email_dir"] / "메일_발송로그.csv").resolve()
-            ),
+            # v0.1.1 (T015, FR-C03d): manifest paths follow the mode —
+            # dry-run → ``_dryrun`` suffix variants, send → unsuffixed
+            # production paths. Resolved via the same ``log_csv_path`` /
+            # ``report_md_filename`` used by the csv writer + report
+            # writer so manifest always points at the actual file emitted.
+            dispatch_log_path=str(log_csv_path.resolve()),
             report_md_path=str(
-                (paths["gold_email_dir"] / "메일_발송보고서.md").resolve()
+                (paths["gold_email_dir"] / report_md_filename).resolve()
             ),
             preview_dir_path=str(paths["preview_dir"].resolve())
             if not args.send
@@ -690,11 +701,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         _write_log_csv(log_rows, log_csv_path, truncate=is_dry_run)
 
     summary = {s: counts.model_dump()[s.value] for s in DispatchStatus}
-    # v0.1.1 (T014): dry-run report md → ``메일_발송보고서_dryrun.md`` so
-    # the send-mode report is not overwritten by a dry-run preview.
-    report_md_filename = (
-        "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
-    )
+    # v0.1.1 (T015): ``report_md_filename`` resolved earlier (alongside
+    # ``log_csv_path``) so manifest + report writer agree on path.
     write_dispatch_report_md(
         DispatchReportData(
             manifest=manifest,
