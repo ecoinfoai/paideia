@@ -55,13 +55,47 @@ def confirm_first_n(
     out = stdout if stdout is not None else sys.stdout
     in_ = stdin if stdin is not None else sys.stdin
 
-    print(f"[immersio email] 확인 게이트 — 첫 {min(sample_size, len(drafts_with_pdfs))} 건 표본:", file=out)
-    for draft, bundle in list(drafts_with_pdfs)[:sample_size]:
+    sample_n = min(sample_size, len(drafts_with_pdfs))
+
+    if summary is not None and summary.is_self_test:
+        # v0.1.1 self-test branch (T018) — contracts/confirm_gate_output.md §4.
+        # 강조 라인 2 줄 + 3-bucket 카운트 줄 + 표본 prefix/suffix 변경.
+        print("[immersio email] 확인 게이트", file=out)
         print(
-            f"  학번={draft.student_id} 이름={draft.name_kr} "
-            f"이메일={draft.to_header} pdf={bundle.pdf_path}",
+            "*** 주의: 현재 본인 테스트(SELF-TEST) 모드입니다. "
+            "학생 메일함 도달 0건. ***",
             file=out,
         )
+        print(
+            f"*** 본인({summary.operator_email}) 메일함으로만 발송됩니다. ***",
+            file=out,
+        )
+        print(
+            f"  본인 발송 예정: {summary.sendable_count}건 / "
+            f"코호트 범위 밖: {summary.cohort_outside_count}건 / "
+            f"합계: {summary.total_targets}건",
+            file=out,
+        )
+        print(f"첫 {sample_n} 건 표본 (수신자=본인):", file=out)
+        for draft, _bundle in list(drafts_with_pdfs)[:sample_size]:
+            print(
+                f"  학번={draft.student_id} 이름={draft.name_kr} "
+                f"이메일={draft.to_header} (수신자={summary.operator_email})",
+                file=out,
+            )
+    else:
+        # v0.1.0 backward-compat (summary is None) — T023 will add the
+        # production-mode (`summary is not None and not is_self_test`) branch.
+        print(
+            f"[immersio email] 확인 게이트 — 첫 {sample_n} 건 표본:",
+            file=out,
+        )
+        for draft, bundle in list(drafts_with_pdfs)[:sample_size]:
+            print(
+                f"  학번={draft.student_id} 이름={draft.name_kr} "
+                f"이메일={draft.to_header} pdf={bundle.pdf_path}",
+                file=out,
+            )
     print(
         "위 표본의 (학번, 이름, 이메일, PDF) 매칭이 정확합니까? "
         "이 시점 이전에는 어느 메일함에도 발송되지 않았습니다 — "
