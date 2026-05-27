@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +14,7 @@ from paideia_shared.schemas import DispatchStatus
 
 
 def _args(self_test: int = 5) -> argparse.Namespace:
-    return argparse.Namespace(
+    args = argparse.Namespace(
         profile="alpha-prof",
         semester="2026-1",
         course="anatomy",
@@ -33,6 +34,8 @@ def _args(self_test: int = 5) -> argparse.Namespace:
         quiet=False,
         verbose=False,
     )
+    args._stdin = io.StringIO("yes\n")
+    return args
 
 
 def test_self_test_sends_to_operator_only(email_fixture, monkeypatch) -> None:

@@ -18,13 +18,14 @@ honest counts and idempotent re-runs target the un-sent rows.
 from __future__ import annotations
 
 import argparse
+import io as _io
 
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
 
 
 def _args(self_test: int | None = None) -> argparse.Namespace:
-    return argparse.Namespace(
+    args = argparse.Namespace(
         profile="alpha-prof",
         semester="2026-1",
         course="anatomy",
@@ -45,6 +46,8 @@ def _args(self_test: int | None = None) -> argparse.Namespace:
         verbose=False,
         created_at_utc=None,
     )
+    args._stdin = _io.StringIO("yes\n")
+    return args
 
 
 def test_self_test_unattempted_rows_marked_skipped(
