@@ -229,7 +229,15 @@ def _build_parser() -> argparse.ArgumentParser:
     email_p.add_argument("--exam-name", required=True, type=str)
     email_p.add_argument("--sent-date", type=str, default=None)
     email_p.add_argument("--send", action="store_true")
-    email_p.add_argument("--self-test", type=int, default=None)
+    email_p.add_argument(
+        "--self-test",
+        type=int,
+        default=None,
+        help=(
+            "본인 메일함으로만 발송, 학생 메일함 도달 0 — N 명을 본인에게 "
+            "test_dummy 로 미리 발송 (FR-C01b · v0.1.1)"
+        ),
+    )
     retry_group = email_p.add_mutually_exclusive_group()
     retry_group.add_argument("--retry-failed", action="store_true")
     retry_group.add_argument("--retry-skipped", action="store_true")
