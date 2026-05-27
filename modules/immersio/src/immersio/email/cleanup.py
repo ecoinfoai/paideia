@@ -173,7 +173,10 @@ def _atomic_write_csv(target: Path, content: bytes) -> None:
     (research.md R3 — orphan tmp explicitly allowed).
     """
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = tempfile.NamedTemporaryFile(
+    # SIM115 noqa: intentional manual-lifetime — `delete=False` + manual close + `os.replace`
+    # is research.md R3 sketch; context-manager would auto-delete on exception which we want
+    # the operator to inspect post-mortem.
+    tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115
         dir=target.parent,
         prefix=f"{target.name}.tmp-",
         suffix="",

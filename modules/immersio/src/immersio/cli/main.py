@@ -411,9 +411,10 @@ def app(argv: list[str] | None = None) -> int:
 
     if args.command == "email-init-test-fixtures":
         # T088 — generate dummy PDFs into TestProfile.dummy_fixture_dir.
+        from paideia_shared.schemas import TestProfile
+
         from immersio.email.dummy_fixture import generate_dummy_pdfs
         from immersio.email.profile import ProfileError, ProfileLoader
-        from paideia_shared.schemas import TestProfile
 
         try:
             profile = ProfileLoader().load(args.profile)
