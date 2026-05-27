@@ -243,6 +243,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         )
         return 3 if "not found" in str(exc) else 1
 
+    # v0.1.1 (T024) — total_roster is cohort-agnostic full roster size,
+    # captured BEFORE Phase A.5 narrows ``entries`` to the requested cohort.
+    # Used by the production PreSendSummary (FR-C04a) to compute
+    # cohort_outside_count = total_roster − cohort_target_set.
+    total_roster = len({e.student_id for e in entries})
+
     paths["silver_email_dir"].mkdir(parents=True, exist_ok=True)
     silver_mapping_path = (
         paths["silver_email_dir"] / "학번_이메일_매핑.parquet"
@@ -387,6 +393,28 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     report_md_filename = (
         "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
     )
+
+    # v0.1.1 (T024) — capture cohort_target_set BEFORE idempotent skip
+    # narrows ``bundles``. A student belongs to cohort_target_set iff they
+    # passed every eligibility gate: cohort filter (via ``entries_by_sid``
+    # built from cohort-narrowed ``entries``) + master cross-check
+    # (``sid not in missing_sids``) + PDF body verify (``verify_result.ok``).
+    # The 4-bucket invariant (sendable + skipped + outside == total_targets)
+    # holds because cohort_target_set is partitioned by idempotent skip
+    # into (sendable_drafts, idempotent_skipped_set), and the complement
+    # (total_roster − cohort_target_set) is cohort_outside_count.
+    entries_sid_set = {e.student_id for e in entries}
+    cohort_target_set: set[str] = set()
+    for bundle in bundles:
+        sid = bundle.student_id
+        if sid in missing_sids:
+            continue
+        vr = verify_by_sid.get(sid)
+        if vr is None or not vr.ok:
+            continue
+        if sid not in entries_sid_set:
+            continue
+        cohort_target_set.add(sid)
 
     retry_mode = _resolve_retry_mode(args)
     if args.send and not is_self_test:
@@ -630,11 +658,29 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             if args.confirm_sample is not None
             else profile.operational_defaults.confirm_sample_size
         )
+        # v0.1.1 (T024) — production gate PreSendSummary (FR-C04a /
+        # data-model.md §1 "Usage in pipeline"). 4-bucket count:
+        #   sendable  = drafts surviving idempotent skip (about to send)
+        #   skipped   = cohort_target_set − sendable (학번 ASC 명단 포함)
+        #   outside   = total_roster − cohort_target_set
+        #   total     = total_roster (full original CSV)
+        # Invariant: sendable + len(skipped) + outside == total.
+        sendable_sid_set = {d.student_id for d, _ in drafts_with_pdfs}
+        idempotent_skipped_set = cohort_target_set - sendable_sid_set
+        production_summary = PreSendSummary(
+            sendable_count=len(drafts_with_pdfs),
+            idempotent_skipped_sids=sorted(idempotent_skipped_set),
+            cohort_outside_count=total_roster - len(cohort_target_set),
+            total_targets=total_roster,
+            is_self_test=False,
+            operator_email=None,
+        )
         if drafts_with_pdfs:
             try:
                 confirm_first_n(
                     drafts_with_pdfs,
                     sample_size=sample_size,
+                    summary=production_summary,
                     stdin=getattr(args, "_stdin", None),
                     stdout=getattr(args, "_stdout", None),
                 )
