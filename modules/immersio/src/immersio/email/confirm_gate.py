@@ -34,8 +34,9 @@ def confirm_first_n(
         sample_size: 1 ≤ N ≤ 10 (FR-C04 + clarification Q3 default 3).
         summary: v0.1.1 pre-send summary (self-test vs production banner).
             ``None`` (default) preserves v0.1.0 output exactly.
-            v0.1.1 T018/T023 will consume this to emit the appropriate
-            self-test / production banner before the sample list.
+            When provided, ``is_self_test=True`` emits the self-test
+            banner (T018); otherwise the production 4-bucket count +
+            optional 학번 명단 (cap 3) banner is emitted (T023).
         stdin: Optional override (test injection). Defaults to
             ``sys.stdin`` so production reads from the operator's
             terminal.
@@ -83,9 +84,32 @@ def confirm_first_n(
                 f"이메일={draft.to_header} (수신자={summary.operator_email})",
                 file=out,
             )
+    elif summary is not None:
+        # v0.1.1 production branch (T023) — contracts/confirm_gate_output.md §3.
+        # 4-bucket 카운트 줄 + (skip > 0 일 때) 학번 명단 줄 cap 3 + v0.1.0 표본 형식.
+        print("[immersio email] 확인 게이트", file=out)
+        print(
+            f"  발송 예정: {summary.sendable_count}건 / "
+            f"이미 발송됨(skip): {len(summary.idempotent_skipped_sids)}건 / "
+            f"코호트 범위 밖: {summary.cohort_outside_count}건 / "
+            f"합계: {summary.total_targets}건",
+            file=out,
+        )
+        if len(summary.idempotent_skipped_sids) > 0:
+            first_three = summary.idempotent_skipped_sids[:3]
+            print(
+                f"  이미 발송된 첫 3 학번: {', '.join(first_three)}",
+                file=out,
+            )
+        print(f"첫 {sample_n} 건 표본:", file=out)
+        for draft, bundle in list(drafts_with_pdfs)[:sample_size]:
+            print(
+                f"  학번={draft.student_id} 이름={draft.name_kr} "
+                f"이메일={draft.to_header} pdf={bundle.pdf_path}",
+                file=out,
+            )
     else:
-        # v0.1.0 backward-compat (summary is None) — T023 will add the
-        # production-mode (`summary is not None and not is_self_test`) branch.
+        # v0.1.0 backward-compat (summary is None) — preserve exactly.
         print(
             f"[immersio email] 확인 게이트 — 첫 {sample_n} 건 표본:",
             file=out,
