@@ -252,14 +252,31 @@ def read_dispatch_log(log_path: Path) -> list[DispatchLogRow]:
     return rows
 
 
+def _row_key(row: DispatchLogRow) -> tuple[int, float]:
+    """Return the collapse key ``(status_priority, -timestamp_epoch)``.
+
+    Lower ``_STATUS_PRIORITY[row.status]`` wins (SUCCESS=0 is strongest);
+    on a tie, the LATER ``attempt_at_kst`` wins — negative epoch makes a
+    larger timestamp produce a smaller key, so ``min()`` picks it.
+    """
+    return (_STATUS_PRIORITY[row.status], -row.attempt_at_kst.timestamp())
+
+
 def _latest_status_by_sid(
     log: list[DispatchLogRow],
 ) -> dict[str, DispatchStatus]:
-    """Group ``log`` by ``student_id`` and pick the latest ``attempt_at_kst``."""
+    """Collapse ``log`` to one status per ``student_id`` (FR-C02a).
+
+    v0.1.1: priority+timestamp key per FR-C02a — winner is the row with
+    the smallest ``(status_priority, -timestamp_epoch)`` tuple, i.e.
+    strongest status first, latest attempt on a tie. Replaces the v0.1.0
+    timestamp-only semantics so that an earlier ``success`` is not
+    overwritten by a later ``skipped`` / ``dry_run`` row (research.md R1).
+    """
     latest: dict[str, DispatchLogRow] = {}
     for row in log:
         prev = latest.get(row.student_id)
-        if prev is None or row.attempt_at_kst > prev.attempt_at_kst:
+        if prev is None or _row_key(row) < _row_key(prev):
             latest[row.student_id] = row
     return {sid: r.status for sid, r in latest.items()}
 
