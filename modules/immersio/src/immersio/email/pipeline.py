@@ -41,6 +41,7 @@ from .confirm_gate import ConfirmGateAborted, confirm_first_n
 from .log import (
     DispatchLockError,
     RetryMode,
+    _latest_status_by_sid,
     append_dispatch_log_row,
     idempotent_skip_filter,
     mask_secrets_in_error_detail,
@@ -701,6 +702,20 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         _write_log_csv(log_rows, log_csv_path, truncate=is_dry_run)
 
     summary = {s: counts.model_dump()[s.value] for s in DispatchStatus}
+    # v0.1.1 (T016, SC-008 / FR-C04f): ``--retry-skipped`` 모드에서 우선순위
+    # ALLOW_HARDCODING: operational notice computation, no PII
+    # 결정 결과 ``failed`` 상태인 학번 수. 보고서 md 안내 1줄에 명시되어
+    # 운영자가 ``--retry-failed`` 로 명시 재시도해야 함을 인지하도록.
+    # 다른 mode 에서는 0 — 안내가 emit 되지 않음. ``prior_log_rows`` 는
+    # archival 이전에 캡처되어 있으므로 send/dry-run 모드 모두 안전.
+    failed_skipped_count = 0
+    if retry_mode == RetryMode.RETRY_SKIPPED and prior_log_rows:
+        latest_status = _latest_status_by_sid(prior_log_rows)
+        failed_skipped_count = sum(
+            1
+            for status in latest_status.values()
+            if status == DispatchStatus.FAILED
+        )
     # v0.1.1 (T015): ``report_md_filename`` resolved earlier (alongside
     # ``log_csv_path``) so manifest + report writer agree on path.
     write_dispatch_report_md(
@@ -717,6 +732,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         ),
         paths["gold_email_dir"],
         filename=report_md_filename,
+        retry_mode=retry_mode,
+        failed_skipped_count=failed_skipped_count,
     )
 
     if getattr(args, "verbose", False):
