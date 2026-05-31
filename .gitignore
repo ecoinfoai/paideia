@@ -4,6 +4,9 @@ results/
 projects/
 input/
 output/
+# but DO track module source packages named output/ (e.g. examen)
+!modules/**/src/**/output/
+!modules/**/src/**/output/**
 
 # documents for development
 # idea/
