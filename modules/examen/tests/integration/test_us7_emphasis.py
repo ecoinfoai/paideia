@@ -337,6 +337,22 @@ class TestDegradeNoStt:
         silver = tmp_path / "data" / "silver" / "examen" / f"{_SEMESTER}-{_COURSE}"
         assert not (silver / "emphasis.yaml").exists()
 
+    def test_manifest_emphasis_summary_zero_on_degrade(self, tmp_path: Path) -> None:
+        """manifest carries a first-class emphasis_summary; on degrade it's all-zeros."""
+        _, run_dir = _run_build(tmp_path, stt_dir=None)
+        manifest = json.loads(
+            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
+        )
+        assert "emphasis_summary" in manifest, (
+            "emphasis_summary must be a top-level manifest field (immersio SC-9 seam)"
+        )
+        summary = manifest["emphasis_summary"]
+        assert summary["sections_total"] == 0
+        assert summary["emphasized"] == 0
+        assert summary["by_chapter"] == {}
+        # And it must NOT pollute targets_vs_actual.
+        assert "emphasis_summary" not in manifest["targets_vs_actual"]
+
 
 # ---------------------------------------------------------------------------
 # Scenario 2 — intersection with a missing session
@@ -400,6 +416,17 @@ class TestIntersectionMissingSession:
             f"1C/8주차/2차시 not in missing: {missing}"
         )
         assert report["stt"]["found"] > 0
+
+        # With present STT, the manifest emphasis_summary is populated (non-degrade).
+        manifest = json.loads(
+            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
+        )
+        summary = manifest["emphasis_summary"]
+        assert summary["sections_total"] > 0
+        assert summary["emphasized"] >= 1, (
+            f"expected ≥1 emphasized section in {summary}"
+        )
+        assert summary["by_chapter"], "by_chapter must be populated when emphasis present"
 
     def test_missing_class_excluded_not_counted_as_unemphasized(
         self, tmp_path: Path

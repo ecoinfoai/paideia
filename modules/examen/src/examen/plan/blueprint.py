@@ -417,6 +417,26 @@ def solve(
                 )
             )
 
+    # 조용한 누락 금지(헌장 III): 챕터별 정수 출처 배분이 source_mix 를
+    # 챕터-균등으로 정확히 실현하지 못하는 경우(예: textbook 이 챕터 수보다
+    # 적어 per-chapter truncation 이 선언된 quiz/formative 슬롯을 textbook 으로
+    # 대체) 실측 출처 수가 선언과 어긋난다. 이를 ⚠️ 리포트로만 흘리지 않고
+    # located 실패로 표면화한다(textbook-light blueprint 한정 발생).
+    realized: dict[str, int] = dict.fromkeys(_SOURCE_ORDER, 0)
+    for slot in slots:
+        realized[slot.source] = realized.get(slot.source, 0) + 1
+    for src in _SOURCE_ORDER:
+        declared = blueprint.source_mix.get(src, 0)
+        if realized.get(src, 0) != declared:
+            raise ValueError(
+                f"solve: source_mix 를 챕터-균등으로 실현할 수 없습니다 — "
+                f"출처 '{src}' 선언={declared} 실측={realized.get(src, 0)}. "
+                "원인: textbook 슬롯 수가 챕터 수에 비해 적어 일부 챕터의 "
+                "정수 배분이 선언된 quiz/formative 슬롯을 밀어냅니다. "
+                "blueprint.source_mix(특히 textbook 분)·total_items·chapters 를 "
+                "재조정하세요(조용한 누락 금지)."
+            )
+
     return slots
 
 

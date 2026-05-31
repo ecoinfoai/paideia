@@ -369,3 +369,61 @@ class TestSolveWithQuizSlots:
         assert counts["textbook"] == n_textbook
         assert counts["formative"] == n_formative
         assert counts["quiz"] == n_quiz
+
+    def test_textbook_light_unrealizable_mix_fails_loud(self) -> None:
+        """T064 regression: a textbook-light mix that can't be realized chapter-evenly
+        must raise a located ValueError instead of silently dropping quiz/formative slots.
+
+        Adversary repro: 4 chapters, total=40, source_mix={textbook:1, formative:6,
+        quiz:33}.  Per-chapter integer distribution over-fills chapter 0
+        (formative2+quiz9+textbook1=12 > 10), and the old code truncated — silently
+        replacing a declared quiz slot with a phantom textbook slot.  The solver must
+        now surface this as a fail-fast (헌장: 조용한 누락 금지).
+        """
+        from examen.plan.blueprint import solve
+
+        chapters = ["8장 호흡계통", "9장 근육계통", "10장 소화계통", "11장 순환계통"]
+        chapter_nos = [8, 9, 10, 11]
+        weeks = [8, 9, 10, 11]
+        blueprint = ExamenBlueprint(
+            semester=_SEMESTER,
+            course_slug=_COURSE,
+            exam_name="기말고사",
+            total_items=40,
+            chapters=chapters,
+            difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
+            source_mix={"textbook": 1, "formative": 6, "quiz": 33},
+        )
+        curriculum_map = _make_curriculum_map(
+            chapters=chapters, chapter_nos=chapter_nos, weeks=weeks
+        )
+        with pytest.raises(ValueError, match="챕터-균등으로 실현할 수 없습니다"):
+            solve(blueprint, curriculum_map)
+
+    def test_typical_textbook_heavy_mix_is_realized(self) -> None:
+        """The typical operating range (textbook fills the rest) realizes exactly —
+        the new fail-fast must NOT fire for normal blueprints."""
+        from collections import Counter
+
+        from examen.plan.blueprint import solve
+
+        chapters = ["8장 호흡계통", "9장 근육계통", "10장 소화계통", "11장 순환계통"]
+        chapter_nos = [8, 9, 10, 11]
+        weeks = [8, 9, 10, 11]
+        blueprint = ExamenBlueprint(
+            semester=_SEMESTER,
+            course_slug=_COURSE,
+            exam_name="기말고사",
+            total_items=40,
+            chapters=chapters,
+            difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
+            source_mix={"textbook": 13, "formative": 12, "quiz": 15},
+        )
+        curriculum_map = _make_curriculum_map(
+            chapters=chapters, chapter_nos=chapter_nos, weeks=weeks
+        )
+        slots = solve(blueprint, curriculum_map)
+        counts = Counter(s.source for s in slots)
+        assert counts["textbook"] == 13
+        assert counts["formative"] == 12
+        assert counts["quiz"] == 15
