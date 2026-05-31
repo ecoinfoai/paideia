@@ -32,6 +32,17 @@ All-or-nothing guarantee
 Items are collected in memory.  Gold files are written ONLY after all
 items pass the verify pass.  If any step raises, the Gold dir is either
 not created or not populated (atomic writes ensure no partial files).
+
+Determinism scope
+-----------------
+The PRIMARY Gold artefacts — ``기말출제초안.xlsx`` and ``기말출제초안.yaml`` —
+are byte-identical across identical-input re-runs (xlsx via ``finalize_xlsx``
+pinning ``<dcterms:modified>``; yaml via ``dump_yaml`` ``sort_keys`` +
+``allow_unicode``).  The manifest deliberately carries the ONE
+non-deterministic field ``generated_at`` (constitution V: 산출 결정론 — the
+timestamp lives in the manifest only so the primary artefacts stay
+reproducible).  "byte-identical" therefore applies to xlsx + yaml, NOT to
+``manifest_examen.json``.
 """
 
 from __future__ import annotations
@@ -45,7 +56,12 @@ from typing import Any
 
 from paideia_shared.schemas import CurriculumMap, ExamenBlueprint, ExamItemDraft
 
-from examen.generate.backend import InputHashCache, LLMBackend
+from examen.generate.backend import (
+    ApiBackend,
+    InputHashCache,
+    LLMBackend,
+    SubscriptionBackend,
+)
 from examen.generate.item_gen import generate_item
 from examen.ingest.report import write_ingest_report
 from examen.ingest.textbook import load_chapter, verify_chapter_files
@@ -162,6 +178,27 @@ def _build_config_ids(
     if curriculum_map_path is not None and curriculum_map_path.exists():
         ids["curriculum_map"] = _file_sha256(curriculum_map_path)
     return ids
+
+
+def _backend_label(backend: LLMBackend) -> str:
+    """Infer the manifest ``llm_backend`` label from the backend instance.
+
+    Maps the concrete backend type to one of the schema-permitted labels:
+    - ``SubscriptionBackend`` → ``"subscription"``
+    - ``ApiBackend`` → ``"api"``
+    - anything else (e.g. a test FakeBackend / dry-run path) → ``"none(dry-run)"``
+
+    Args:
+        backend: The LLM backend instance used to generate the items.
+
+    Returns:
+        One of ``"subscription"``, ``"api"``, ``"none(dry-run)"``.
+    """
+    if isinstance(backend, SubscriptionBackend):
+        return "subscription"
+    if isinstance(backend, ApiBackend):
+        return "api"
+    return "none(dry-run)"
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +333,9 @@ def build_exam(
                 f"build_exam: slot '{slot.slot_id}' chapter_no={ch_no} "
                 "has no chapter data — check curriculum_map coverage"
             )
-        chunks_for_ch, evidence_index = chapter_data[ch_no]
+        # generate_item filters all_chunks by chapter_no internally, so we only
+        # need the chapter-scoped evidence_index here (chunks slice not needed).
+        _chunks_for_ch, evidence_index = chapter_data[ch_no]
 
         # generate_item raises NotImplementedError for non-textbook (US2/US3)
         item = generate_item(
@@ -317,6 +356,8 @@ def build_exam(
 
     # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output
+    # xlsx + yaml are byte-identical across identical-input re-runs; the
+    # manifest carries the only non-deterministic field (generated_at).
     # ----------------------------------------------------------------
     run_id = _compute_run_id(blueprint, curriculum_map, bronze_dir)
     run_dir = _run_gold_dir(
@@ -378,6 +419,11 @@ def build_exam(
         "chapter_even_maxdiff": (max(ch_counts) - min(ch_counts)) if ch_counts else 0,
     }
 
+    # llm_backend reflects the ACTUAL backend that generated the items
+    # (subscription / api / none(dry-run) for tests' FakeBackend).
+    llm_backend_label = _backend_label(backend)
+    # ApiBackend carries a concrete model id; other backends have no model name.
+    llm_model = getattr(backend, "_model", None) if isinstance(backend, ApiBackend) else None
     manifest = build_manifest(
         semester=blueprint.semester,
         course_slug=blueprint.course_slug,
@@ -385,8 +431,8 @@ def build_exam(
         input_hashes=input_hashes,
         config_ids=config_ids,
         generated_at=generated_at,
-        llm_backend="none(dry-run)",  # FakeBackend / no real LLM for US1
-        llm_model="fake-model",
+        llm_backend=llm_backend_label,
+        llm_model=llm_model,
         cache_hit_rate=cache.cache_hit_rate(),
         item_count=total,
         source_breakdown=src_breakdown,

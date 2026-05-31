@@ -382,6 +382,12 @@ def _run_build(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         print(f"ERROR [examen]: missing input file — {exc}", file=sys.stderr)
         return 2
+    except ValueError as exc:
+        # Pipeline config/coverage errors (e.g. a slot chapter_no with no matching
+        # chapter data) are input/config faults → exit 2.  A bare ValueError is NOT
+        # a RuntimeError, so the app() trap would otherwise let it escape to exit 1.
+        print(f"ERROR [examen]: pipeline config/coverage error — {exc}", file=sys.stderr)
+        return 2
 
     print(
         f"[examen build] done: {len(items)} items → {run_dir}",

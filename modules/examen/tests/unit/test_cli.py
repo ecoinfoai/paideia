@@ -250,3 +250,67 @@ class TestPipelineExceptionTrap:
         monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _boom)
         code = _invoke(["generate", "--semester", "2026-1", "--course", "anatomy"])
         assert code == 3
+
+
+# ---------------------------------------------------------------------------
+# build: pipeline ValueError → exit 2 (config/coverage fault, NOT a RuntimeError)
+# ---------------------------------------------------------------------------
+
+def _write_valid_curriculum_map(tmp_path: Path, name: str = "curriculum_map.yaml") -> Path:
+    """Write a valid curriculum_map.yaml matching the valid blueprint chapters."""
+    content = textwrap.dedent("""\
+        semester: "2026-1"
+        course_slug: "anatomy"
+        entries:
+          - week: 1
+            chapter: "8장. 호흡계통"
+            chapter_no: 8
+            subtopic: null
+            sections: ["1. 기도", "2. 폐"]
+          - week: 2
+            chapter: "9장. 근육계통"
+            chapter_no: 9
+            subtopic: null
+            sections: ["1. 골격근", "2. 평활근"]
+    """)
+    p = tmp_path / name
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+class TestBuildPipelineValueError:
+    """A ValueError raised inside build_exam must map to exit 2, not escape to 1.
+
+    A bare ValueError is NOT a RuntimeError, so the app() trap would otherwise
+    let it bubble up to exit 1, violating the CLI contract (config/coverage
+    faults are exit 2).
+    """
+
+    def test_build_pipeline_value_error_returns_exit2(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """build_exam raising ValueError (e.g. coverage gap) → CLI exit 2."""
+        import examen.cli.main as cli_main
+
+        valid_bp = _write_valid_blueprint(tmp_path)
+        valid_cm = _write_valid_curriculum_map(tmp_path)
+
+        def _boom(**_kwargs: object) -> tuple[list, Path]:
+            raise ValueError(
+                "build_exam: slot 'slot-001' chapter_no=99 has no chapter data"
+            )
+
+        # Patch build_exam where _run_build imports it (examen.pipeline).
+        import examen.pipeline as pipeline_mod
+        monkeypatch.setattr(pipeline_mod, "build_exam", _boom)
+        # _run_build does `from examen.pipeline import build_exam`, so patching
+        # the module attribute is sufficient (import happens at call time).
+
+        code = cli_main.app([
+            "build",
+            "--semester", "2026-1",
+            "--course", "anatomy",
+            "--blueprint", str(valid_bp),
+            "--curriculum-map", str(valid_cm),
+        ])
+        assert code == 2

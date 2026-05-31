@@ -320,6 +320,63 @@ class TestUS1TextbookBuild:
         assert "8장 호흡계통" in breakdown
         assert "9장 근육계통" in breakdown
 
+    def test_manifest_backend_label_for_fake_backend(self, tmp_path: Path) -> None:
+        """FakeBackend (no real LLM) → manifest llm_backend == 'none(dry-run)'."""
+        _, run_dir = self._run_build(tmp_path)
+        manifest_path = run_dir / "manifest_examen.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["llm_backend"] == "none(dry-run)", (
+            f"FakeBackend should map to 'none(dry-run)', got {manifest['llm_backend']!r}"
+        )
+
+    def test_manifest_backend_label_reflects_subscription(self, tmp_path: Path) -> None:
+        """A SubscriptionBackend → manifest llm_backend == 'subscription'.
+
+        Locks the backend-label inference: the manifest reflects the ACTUAL
+        backend used.  We pre-fill the responses dir so the SubscriptionBackend
+        resolves every slot without raising.
+        """
+        import json as _json
+
+        from examen.generate.backend import SubscriptionBackend
+        from examen.pipeline import build_exam
+
+        bronze_dir = tmp_path / "data" / "bronze" / "examen" / f"{_SEMESTER}-{_COURSE}"
+        _setup_bronze(bronze_dir)
+
+        blueprint = _make_blueprint()
+        curriculum_map = _make_curriculum_map()
+
+        # Pre-fill responses for every slot the solver will produce.
+        from examen.plan.blueprint import solve
+        slots = solve(blueprint, curriculum_map)
+        staging_dir = tmp_path / "staging"
+        responses_dir = tmp_path / "responses"
+        responses_dir.mkdir(parents=True, exist_ok=True)
+        for slot in slots:
+            resp = {
+                "slot_id": slot.slot_id,
+                "raw_text": _json.dumps(_CANNED_ITEM_JSON, ensure_ascii=False),
+                "model": "claude-subscription",
+            }
+            (responses_dir / f"{slot.slot_id}.json").write_text(
+                _json.dumps(resp, ensure_ascii=False), encoding="utf-8"
+            )
+
+        backend = SubscriptionBackend(staging_dir=staging_dir, responses_dir=responses_dir)
+        _, run_dir = build_exam(
+            blueprint=blueprint,
+            curriculum_map=curriculum_map,
+            bronze_dir=bronze_dir,
+            data_root=tmp_path / "data",
+            backend=backend,
+        )
+        manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
+        assert manifest["llm_backend"] == "subscription", (
+            f"SubscriptionBackend should map to 'subscription', "
+            f"got {manifest['llm_backend']!r}"
+        )
+
     # --- Run isolation ---
 
     def test_run_dir_is_under_gold_runs(self, tmp_path: Path) -> None:
@@ -357,8 +414,10 @@ class TestUS1TextbookBuild:
             data_root=tmp_path / "data",
             backend=be1,
         )
+        xlsx_path = list(run_dir1.glob("*.xlsx"))[0]
+        bytes_run1 = xlsx_path.read_bytes()
 
-        # Second run (different tmp sub-dir but same data_root → same run_id → same dir)
+        # Second run (same data_root → same run_id → same dir, overwrites in place)
         be2 = FakeBackend()
         _, run_dir2 = build_exam(
             blueprint=blueprint,
@@ -367,14 +426,14 @@ class TestUS1TextbookBuild:
             data_root=tmp_path / "data",
             backend=be2,
         )
+        bytes_run2 = xlsx_path.read_bytes()
 
         # Same run_id → same run_dir
         assert run_dir1 == run_dir2, (
             f"Different run dirs: {run_dir1} vs {run_dir2}"
         )
-
-        xlsx1 = list(run_dir1.glob("*.xlsx"))[0]
-        assert xlsx1.read_bytes() == xlsx1.read_bytes(), "xlsx not byte-identical"
+        # Real cross-run byte comparison (run 1 bytes vs run 2 bytes)
+        assert bytes_run1 == bytes_run2, "xlsx not byte-identical across re-runs"
 
     def test_rerun_yaml_byte_identical(self, tmp_path: Path) -> None:
         """Two separate build_exam calls produce identical yaml (same run_dir)."""
