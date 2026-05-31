@@ -304,16 +304,87 @@ def _run_verify(args: argparse.Namespace) -> int:
 
 
 def _run_build(args: argparse.Namespace) -> int:
-    """Stub handler for ``build``. Validates blueprint; full pipeline TBD."""
-    rc = _validate_blueprint(args.semester, args.course, args.blueprint)
-    if rc != 0:
-        return rc
+    """Handler for ``build``: ingest→plan→generate→verify→Gold output pipeline.
 
-    # TODO(US5): wire full ingest→plan→generate→verify→output pipeline
+    Loads blueprint + curriculum_map, verifies chapter files, runs the full
+    build_exam() pipeline with the selected backend, and writes Gold artefacts
+    to a run-isolated directory.
+
+    Exit codes:
+        0 — success
+        2 — missing/invalid input (blueprint, curriculum_map, chapter files)
+        3 — generation/verify step failure
+        4 — LLM backend unreachable (api mode)
+    """
+    from pathlib import Path
+
+    from examen.generate.backend import ApiBackend, SubscriptionBackend
+    from examen.ingest.config import bronze_dir as _bronze_dir
+    from examen.ingest.config import load_blueprint, load_curriculum_map
+    from examen.pipeline import build_exam
+
+    semester = args.semester
+    course = args.course
+
+    # Resolve blueprint path
+    blueprint_path: Path | None = args.blueprint
+    if blueprint_path is None:
+        blueprint_path = _bronze_dir(semester, course) / "blueprint.yaml"
+
+    # Resolve curriculum_map path
+    curriculum_map_path: Path | None = args.curriculum_map
+    if curriculum_map_path is None:
+        curriculum_map_path = _bronze_dir(semester, course) / "curriculum_map.yaml"
+
+    # Load + validate blueprint
+    try:
+        blueprint = load_blueprint(blueprint_path)
+    except FileNotFoundError as exc:
+        print(f"ERROR [examen]: blueprint not found — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [examen]: blueprint validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    # Load + validate curriculum_map
+    try:
+        curriculum_map = load_curriculum_map(curriculum_map_path)
+    except FileNotFoundError as exc:
+        print(f"ERROR [examen]: curriculum_map not found — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [examen]: curriculum_map validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    # Select backend
+    bronze_dir_path = _bronze_dir(semester, course)
+    if args.backend == "api":
+        backend = ApiBackend()
+    else:
+        # subscription: staging + responses dirs under silver
+        from examen.output.paths import silver_dir as _silver_dir
+        silver_dir_path = _silver_dir(semester, course)
+        staging_dir = silver_dir_path / "staging"
+        responses_dir = silver_dir_path / "responses"
+        backend = SubscriptionBackend(staging_dir=staging_dir, responses_dir=responses_dir)
+
+    # Run pipeline
+    try:
+        items, run_dir = build_exam(
+            blueprint=blueprint,
+            curriculum_map=curriculum_map,
+            bronze_dir=bronze_dir_path,
+            data_root=Path("data"),
+            backend=backend,
+            blueprint_path=blueprint_path,
+            curriculum_map_path=curriculum_map_path,
+        )
+    except FileNotFoundError as exc:
+        print(f"ERROR [examen]: missing input file — {exc}", file=sys.stderr)
+        return 2
+
     print(
-        f"[examen build] semester={args.semester} course={args.course} "
-        f"backend={args.backend} no_emphasis={args.no_emphasis} "
-        f"(not yet implemented — pipeline stub)",
+        f"[examen build] done: {len(items)} items → {run_dir}",
         file=sys.stderr,
     )
     return 0

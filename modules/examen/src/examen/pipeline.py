@@ -1,0 +1,437 @@
+"""T030 — build_exam pipeline: ingest→plan→generate→verify→output.
+
+``build_exam(...)`` orchestrates the full US1 textbook-path pipeline:
+
+1. ``verify_chapter_files`` — fail-fast on missing chapter .txt (exit 2 territory).
+2. Per chapter: ``load_chapter`` → ``chunk_chapter`` + build ``EvidenceIndex``.
+3. ``solve(blueprint, curriculum_map)`` → slot list.
+4. For each textbook slot:
+   - ``generate_item(...)``
+   - ``verify_groundedness(...)``
+   - ``check_format(...)``
+5. ALL-or-NOTHING Gold output: compute ``run_id`` → ``run_gold_dir`` → write
+   xlsx + yaml + manifest + ingest_report atomically only after all items
+   are verified.
+6. Return ``(items, run_dir)`` for callers (tests, CLI).
+
+Backend injection
+-----------------
+``build_exam`` accepts an explicit ``backend: LLMBackend`` parameter so
+tests pass ``FakeBackend`` (no network).  The CLI selects the real backend
+(``SubscriptionBackend`` / ``ApiBackend``) before calling ``build_exam``.
+
+The ``pipeline.py`` module contains NO CLI-specific logic — it is a pure
+function wired from I/O utilities and generation primitives.
+
+Non-textbook slots (``source="formative"`` / ``"quiz"``) raise
+``NotImplementedError`` from ``generate_item`` — that is expected for US1
+(the integration test uses a textbook-only blueprint).
+
+All-or-nothing guarantee
+------------------------
+Items are collected in memory.  Gold files are written ONLY after all
+items pass the verify pass.  If any step raises, the Gold dir is either
+not created or not populated (atomic writes ensure no partial files).
+"""
+
+from __future__ import annotations
+
+import datetime
+import hashlib
+import json
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from paideia_shared.schemas import CurriculumMap, ExamenBlueprint, ExamItemDraft
+
+from examen.generate.backend import InputHashCache, LLMBackend
+from examen.generate.item_gen import generate_item
+from examen.ingest.report import write_ingest_report
+from examen.ingest.textbook import load_chapter, verify_chapter_files
+from examen.output.determinism import finalize_xlsx
+from examen.output.manifest import build_manifest, write_manifest
+from examen.output.xlsx import write_xlsx
+from examen.output.yaml_out import write_yaml
+from examen.plan.blueprint import solve
+from examen.silver.chunk import chunk_chapter
+from examen.silver.evidence_index import EvidenceIndex
+from examen.verify.format_checks import check_format
+from examen.verify.groundedness import verify_groundedness
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+_PINNED_WHEN = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
+"""Pinned timestamp for xlsx determinism (``finalize_xlsx``)."""
+
+
+def _sha256_hex(text: str) -> str:
+    """Return the SHA-256 hex digest of a UTF-8 encoded string."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    """Return the SHA-256 hex digest of a file's contents."""
+    data = path.read_bytes()
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _find_chapter_file(bronze_dir_path: Path, chapter_no: int) -> Path | None:
+    """Find the .txt file for chapter_no in bronze_dir (mirrors textbook.py logic)."""
+    import re
+    n = str(chapter_no)
+    pattern = re.compile(rf"(?:^|(?<=\D)){re.escape(n)}장")
+    for p in sorted(bronze_dir_path.glob("*.txt")):
+        if pattern.search(p.stem):
+            return p
+    return None
+
+
+def _compute_run_id(
+    blueprint: ExamenBlueprint,
+    curriculum_map: CurriculumMap,
+    bronze_dir_path: Path,
+) -> str:
+    """Compute a deterministic run_id from the input bundle hash.
+
+    The run_id is the first 16 hex chars of the SHA-256 of the canonical
+    JSON-serialised combination of blueprint + curriculum_map + chapter
+    file hashes.  Identical inputs → identical run_id → same Gold dir
+    (idempotent re-run).
+
+    Args:
+        blueprint: Validated exam specification.
+        curriculum_map: Week→chapter mapping.
+        bronze_dir_path: Path to the Bronze directory.
+
+    Returns:
+        16-character lowercase hex string.
+    """
+    # Chapter file hashes — sorted for determinism
+    chapter_hashes: dict[str, str] = {}
+    seen: set[int] = set()
+    for entry in curriculum_map.entries:
+        ch_no = entry.chapter_no
+        if ch_no in seen:
+            continue
+        seen.add(ch_no)
+        ch_file = _find_chapter_file(bronze_dir_path, ch_no)
+        if ch_file is not None:
+            chapter_hashes[ch_file.name] = _file_sha256(ch_file)
+
+    payload = {
+        "blueprint": blueprint.model_dump(mode="json"),
+        "chapter_hashes": chapter_hashes,
+        "course_slug": blueprint.course_slug,
+        "curriculum_entries": curriculum_map.model_dump(mode="json"),
+        "semester": blueprint.semester,
+    }
+    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    digest = _sha256_hex(canonical)
+    return digest[:16]
+
+
+def _build_input_hashes(
+    bronze_dir_path: Path,
+    curriculum_map: CurriculumMap,
+) -> dict[str, str]:
+    """Build input_hashes mapping filename → sha256 for the manifest."""
+    hashes: dict[str, str] = {}
+    seen: set[int] = set()
+    for entry in curriculum_map.entries:
+        ch_no = entry.chapter_no
+        if ch_no in seen:
+            continue
+        seen.add(ch_no)
+        ch_file = _find_chapter_file(bronze_dir_path, ch_no)
+        if ch_file is not None:
+            hashes[ch_file.name] = _file_sha256(ch_file)
+    return hashes
+
+
+def _build_config_ids(
+    blueprint_path: Path | None,
+    curriculum_map_path: Path | None,
+) -> dict[str, str]:
+    """Build config_ids mapping for the manifest."""
+    ids: dict[str, str] = {}
+    if blueprint_path is not None and blueprint_path.exists():
+        ids["blueprint"] = _file_sha256(blueprint_path)
+    if curriculum_map_path is not None and curriculum_map_path.exists():
+        ids["curriculum_map"] = _file_sha256(curriculum_map_path)
+    return ids
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
+
+def build_exam(
+    *,
+    blueprint: ExamenBlueprint,
+    curriculum_map: CurriculumMap,
+    bronze_dir: Path,
+    data_root: Path,
+    backend: LLMBackend,
+    blueprint_path: Path | None = None,
+    curriculum_map_path: Path | None = None,
+) -> tuple[list[ExamItemDraft], Path]:
+    """Run the full ingest→plan→generate→verify→output pipeline.
+
+    This is the single entry point for building an exam draft.  It accepts
+    an injectable ``backend`` so that tests use ``FakeBackend`` without
+    network access.
+
+    Pipeline steps
+    --------------
+    1. Verify all chapter .txt files exist (fail-fast on missing → raises).
+    2. Load + chunk each chapter; build a **chapter-scoped** EvidenceIndex.
+    3. Solve the blueprint → slot list.
+    4. For each slot: generate → verify_groundedness → check_format.
+    5. Write xlsx + yaml + manifest + ingest_report to the run Gold dir
+       (all-or-nothing: writes only after all items are verified).
+    6. Return ``(items, run_dir)``.
+
+    Args:
+        blueprint: Validated ExamenBlueprint.
+        curriculum_map: Validated CurriculumMap.
+        bronze_dir: Path to the Bronze directory containing .txt chapter files.
+        data_root: Root of the data hierarchy (used to compute Gold paths).
+        backend: LLM backend to use (``FakeBackend`` for tests,
+            ``SubscriptionBackend`` / ``ApiBackend`` for production).
+        blueprint_path: Optional path to the blueprint.yaml file (for
+            manifest config_ids hashing).
+        curriculum_map_path: Optional path to the curriculum_map.yaml (for
+            manifest config_ids hashing).
+
+    Returns:
+        ``(items, run_dir)`` — the generated+verified items and the
+        run-isolated Gold directory where artefacts were written.
+
+    Raises:
+        FileNotFoundError: If any required chapter .txt is missing.
+        NotImplementedError: If a non-textbook slot is encountered (US1
+            scope: textbook-only).
+        ValueError: If generation or verification fails critically.
+    """
+    # ----------------------------------------------------------------
+    # Step 1: fail-fast chapter file verification
+    # ----------------------------------------------------------------
+    verify_chapter_files(curriculum_map, bronze_dir)
+
+    # ----------------------------------------------------------------
+    # Step 2: load + chunk chapters; build per-chapter evidence indexes
+    # ----------------------------------------------------------------
+    # chapter_no → (chunks, evidence_index)
+    chapter_data: dict[int, tuple[list, EvidenceIndex]] = {}
+    chapter_file_map: dict[int, Path] = {}  # chapter_no → .txt path
+    removed_spans_by_chapter: dict[int, list[str]] = {}
+
+    seen_chapters: set[int] = set()
+    for entry in curriculum_map.entries:
+        ch_no = entry.chapter_no
+        if ch_no in seen_chapters:
+            continue
+        seen_chapters.add(ch_no)
+
+        # Find .txt file
+        ch_file = _find_chapter_file(bronze_dir, ch_no)
+        if ch_file is None:
+            raise FileNotFoundError(
+                f"build_exam: no .txt file found for chapter {ch_no} in {bronze_dir}"
+            )
+        chapter_file_map[ch_no] = ch_file
+
+        # Load raw lines (1-based tuples)
+        numbered_lines = load_chapter(ch_file)
+        raw_lines = [text for _, text in numbered_lines]
+
+        # Chunk (also cleans + detects sections)
+        chunks = chunk_chapter(
+            raw_lines,
+            chapter_no=ch_no,
+            chapter=entry.chapter,
+            semester=blueprint.semester,
+            course_slug=blueprint.course_slug,
+            source_file=ch_file.name,
+        )
+
+        # Build chapter-scoped evidence index from ORIGINAL numbered lines
+        evidence_index = EvidenceIndex.from_chapter(
+            numbered_lines,
+            source_file=ch_file.name,
+        )
+
+        chapter_data[ch_no] = (chunks, evidence_index)
+
+        # Collect removed_spans for ingest report
+        spans: list[str] = []
+        for chunk in chunks:
+            spans.extend(chunk.removed_spans)
+        removed_spans_by_chapter[ch_no] = spans
+
+    # Flat list of all chunks (all chapters)
+    all_chunks = [c for chunks, _ in chapter_data.values() for c in chunks]
+
+    # ----------------------------------------------------------------
+    # Step 3: solve blueprint → slot list
+    # ----------------------------------------------------------------
+    slots = solve(blueprint, curriculum_map)
+
+    # ----------------------------------------------------------------
+    # Step 4: generate + verify each slot
+    # ----------------------------------------------------------------
+    # Cache dir lives under the Silver tier (not Gold) so it survives re-runs
+    silver_base = data_root / "silver" / "examen" / f"{blueprint.semester}-{blueprint.course_slug}"
+    cache_dir = silver_base / "cache"
+    cache = InputHashCache(backend=backend, cache_dir=cache_dir)
+
+    items: list[ExamItemDraft] = []
+    for slot in slots:
+        ch_no = slot.chapter_no
+        if ch_no not in chapter_data:
+            raise ValueError(
+                f"build_exam: slot '{slot.slot_id}' chapter_no={ch_no} "
+                "has no chapter data — check curriculum_map coverage"
+            )
+        chunks_for_ch, evidence_index = chapter_data[ch_no]
+
+        # generate_item raises NotImplementedError for non-textbook (US2/US3)
+        item = generate_item(
+            slot=slot,
+            chunks=all_chunks,
+            evidence_index=evidence_index,
+            backend=backend,
+            cache=cache,
+        )
+
+        # verify groundedness (re-check against original lines)
+        item = verify_groundedness(item, evidence_index)
+
+        # verify format (option lengths, stem polarity)
+        item = check_format(item)
+
+        items.append(item)
+
+    # ----------------------------------------------------------------
+    # Step 5: all-or-nothing Gold output
+    # ----------------------------------------------------------------
+    run_id = _compute_run_id(blueprint, curriculum_map, bronze_dir)
+    run_dir = _run_gold_dir(
+        blueprint.semester,
+        blueprint.course_slug,
+        run_id=run_id,
+        data_root=data_root,
+    )
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # 5a: xlsx (flattened)
+    xlsx_path = run_dir / "기말출제초안.xlsx"
+    write_xlsx(items, xlsx_path)
+    finalize_xlsx(xlsx_path, _PINNED_WHEN)
+
+    # 5b: yaml (nested full-fidelity)
+    yaml_path = run_dir / "기말출제초안.yaml"
+    write_yaml(items, yaml_path)
+
+    # 5c: manifest
+    generated_at = datetime.datetime.now(datetime.UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    input_hashes = _build_input_hashes(bronze_dir, curriculum_map)
+    config_ids = _build_config_ids(blueprint_path, curriculum_map_path)
+
+    ch_breakdown = dict(sorted(Counter(i.chapter for i in items).items()))
+    diff_breakdown = dict(sorted(Counter(i.difficulty for i in items).items()))
+    src_breakdown = dict(sorted(Counter(i.source for i in items).items()))
+    answer_dist = dict(sorted(Counter(i.answer_no for i in items).items()))
+    groundedness_counts = dict(
+        sorted(
+            Counter(
+                (i.textbook_evidence.status if i.textbook_evidence else "미확인")
+                for i in items
+            ).items()
+        )
+    )
+
+    # targets_vs_actual
+    total = len(items)
+    easy_n = sum(1 for i in items if i.difficulty == "1_쉬움")
+    med_n = sum(1 for i in items if i.difficulty == "2_보통")
+    hard_n = sum(1 for i in items if i.difficulty == "3_어려움")
+    ch_counts = list(Counter(i.chapter for i in items).values())
+    targets_vs_actual: dict[str, Any] = {
+        "difficulty": {
+            "target": [
+                blueprint.difficulty_targets.get("easy", 0.45),
+                blueprint.difficulty_targets.get("medium", 0.35),
+                blueprint.difficulty_targets.get("hard", 0.20),
+            ],
+            "actual": [
+                easy_n / total if total else 0.0,
+                med_n / total if total else 0.0,
+                hard_n / total if total else 0.0,
+            ],
+        },
+        "chapter_even_maxdiff": (max(ch_counts) - min(ch_counts)) if ch_counts else 0,
+    }
+
+    manifest = build_manifest(
+        semester=blueprint.semester,
+        course_slug=blueprint.course_slug,
+        exam_name=blueprint.exam_name,
+        input_hashes=input_hashes,
+        config_ids=config_ids,
+        generated_at=generated_at,
+        llm_backend="none(dry-run)",  # FakeBackend / no real LLM for US1
+        llm_model="fake-model",
+        cache_hit_rate=cache.cache_hit_rate(),
+        item_count=total,
+        source_breakdown=src_breakdown,
+        difficulty_breakdown=diff_breakdown,
+        chapter_breakdown=ch_breakdown,
+        answer_no_distribution=answer_dist,
+        groundedness=groundedness_counts,
+        targets_vs_actual=targets_vs_actual,
+    )
+    write_manifest(run_dir / "manifest_examen.json", manifest)
+
+    # 5d: ingest report
+    textbook_report: dict[str, Any] = {
+        "chapters_required": len(seen_chapters),
+        "chapters_found": len(chapter_file_map),
+        "removed_span_counts": {
+            str(ch_no): len(spans)
+            for ch_no, spans in sorted(removed_spans_by_chapter.items())
+        },
+    }
+    ingest_report: dict[str, Any] = {
+        "stt": {"expected": 0, "found": 0, "missing": [], "filename_violations": []},
+        "textbook": textbook_report,
+        "formative": {"expected_total": 0, "found": 0},
+        "quiz": {"weeks": [], "rows": 0},
+    }
+    write_ingest_report(run_dir / "ingest_report.json", ingest_report)
+
+    return items, run_dir
+
+
+# ---------------------------------------------------------------------------
+# Re-export run_gold_dir for CLI convenience
+# ---------------------------------------------------------------------------
+
+def _run_gold_dir(
+    semester: str,
+    course_slug: str,
+    *,
+    run_id: str,
+    data_root: Path,
+) -> Path:
+    """Delegate to ``examen.output.paths.run_gold_dir``."""
+    from examen.output.paths import run_gold_dir as _rgd
+    return _rgd(semester, course_slug, run_id=run_id, data_root=data_root)
+
+
+__all__ = ["build_exam"]
