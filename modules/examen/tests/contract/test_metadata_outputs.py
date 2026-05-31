@@ -291,8 +291,8 @@ class TestLengthVerification:
             intent="가" * 50,
         )
         result = check_explanation_lengths(item)
-        # No length_check flag for intent
-        assert "intent" not in result.review_note or "[length_check]" not in result.review_note
+        # No length_check flag added when all fields are in range
+        assert "[length_check]" not in result.review_note
 
     def test_too_short_intent_flagged(self) -> None:
         """intent < 40 codepoints: flagged in review_note."""

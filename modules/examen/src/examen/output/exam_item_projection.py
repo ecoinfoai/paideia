@@ -73,7 +73,10 @@ def project_to_exam_item(
         A valid :class:`~paideia_shared.schemas.ExamItem` that immersio can
         join against exam result data by ``(semester, course_slug, item_no)``.
     """
-    expected_difficulty = _DIFFICULTY_MAP.get(draft.difficulty)
+    # dict-index (NOT .get) so an unexpected difficulty value (future schema
+    # extension / typo) fails LOUD with KeyError instead of silently
+    # projecting expected_difficulty=None.
+    expected_difficulty = _DIFFICULTY_MAP[draft.difficulty]
 
     return ExamItem(
         semester=semester,  # type: ignore[arg-type]
