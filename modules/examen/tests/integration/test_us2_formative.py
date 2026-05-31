@@ -411,3 +411,114 @@ class TestUS2GroundednessScope:
                 assert isinstance(item.review_note, str), (
                     f"review_note should be str, got {type(item.review_note)}"
                 )
+
+
+class TestUS2ItemNoUniqueness:
+    """item_no must be globally unique across textbook + formative (T036 review fix)."""
+
+    def test_all_item_no_unique(self, tmp_path: Path) -> None:
+        """No two items (textbook or formative) share an item_no (번호 collision)."""
+        items, _ = _run_build(tmp_path)
+        item_nos = [i.item_no for i in items]
+        assert len(item_nos) == len(set(item_nos)), (
+            f"duplicate item_no found: "
+            f"{[n for n in item_nos if item_nos.count(n) > 1]}"
+        )
+
+    def test_item_no_covers_all_slots(self, tmp_path: Path) -> None:
+        """item_no values span the global slot positions 1..total_items."""
+        items, _ = _run_build(tmp_path)
+        item_nos = sorted(i.item_no for i in items)
+        assert item_nos == list(range(1, 41)), (
+            f"item_no should be 1..40 globally, got {item_nos[:5]}...{item_nos[-5:]}"
+        )
+
+    def test_formative_item_no_matches_global_slot(self, tmp_path: Path) -> None:
+        """Formative items use the GLOBAL slot position as item_no, not the source_ref tail."""
+        items, _ = _run_build(tmp_path)
+        formative = [i for i in items if i.source == "formative"]
+        # All formative item_no must be within the global range and unique vs textbook
+        textbook_nos = {i.item_no for i in items if i.source == "textbook"}
+        for f in formative:
+            assert f.item_no not in textbook_nos, (
+                f"formative item_no={f.item_no} collides with a textbook item_no"
+            )
+
+
+class TestUS2OutOfOrderChapterBinding:
+    """Inventory file order may differ from blueprint/solver chapter order."""
+
+    def test_inventory_out_of_blueprint_chapter_order(self, tmp_path: Path) -> None:
+        """An inventory whose file order interleaves chapters still binds correctly.
+
+        The solver places formative slots chapter-major (8장 ×2, then 9장 ×1).
+        We pass inventory in a DIFFERENT order (9장 first, then 8장 entries) and
+        assert each emitted formative item's source_ref chapter matches its
+        item.chapter_no (no source_ref↔chapter divergence).
+        """
+        # inventory deliberately out of order: ch9 first, then two ch8
+        inventory = [
+            SourceInventoryEntry(
+                semester=_SEMESTER, course_slug=_COURSE, source="formative",
+                source_ref="형성평가:9장#1", chapter_no=9, week=9,
+                stem="근육 질문.", model_answer="근육 모범답안. " * 5,
+                keywords=["근육"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+            ),
+            SourceInventoryEntry(
+                semester=_SEMESTER, course_slug=_COURSE, source="formative",
+                source_ref="형성평가:8장#1", chapter_no=8, week=8,
+                stem="호흡 질문1.", model_answer="호흡 모범답안1. " * 5,
+                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+            ),
+            SourceInventoryEntry(
+                semester=_SEMESTER, course_slug=_COURSE, source="formative",
+                source_ref="형성평가:8장#2", chapter_no=8, week=8,
+                stem="호흡 질문2.", model_answer="호흡 모범답안2. " * 5,
+                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+            ),
+        ]
+        items, _ = _run_build(tmp_path, formative_inventory=inventory)
+        formative = [i for i in items if i.source == "formative"]
+        assert len(formative) == 3
+
+        # Each formative item: the chapter_no in its source_ref must equal item.chapter_no
+        for f in formative:
+            # source_ref is "형성평가:{N}장#{k}" → parse the chapter number
+            ref = f.source_ref or ""
+            assert ref.startswith("형성평가:")
+            ch_in_ref = int(ref.split(":")[1].split("장")[0])
+            assert ch_in_ref == f.chapter_no, (
+                f"source_ref {ref!r} chapter {ch_in_ref} != item.chapter_no {f.chapter_no} "
+                "(source_ref↔chapter divergence!)"
+            )
+
+    def test_mismatched_chapter_distribution_raises(self, tmp_path: Path) -> None:
+        """Inventory chapter distribution differing from solver slots → located error.
+
+        Solver gives 8장 ×2 + 9장 ×1.  We pass an inventory of all-8장 (3 items)
+        — counts match (3==3) so validate_formative_count passes, but the per-slot
+        chapter assertion must catch the divergence and raise.
+        """
+        inventory = [
+            SourceInventoryEntry(
+                semester=_SEMESTER, course_slug=_COURSE, source="formative",
+                source_ref=f"형성평가:8장#{k}", chapter_no=8, week=8,
+                stem=f"호흡 질문{k}.", model_answer="모범답안. " * 5,
+                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+            )
+            for k in range(1, 4)  # 3 items, ALL chapter 8
+        ]
+        from examen.pipeline import build_exam
+
+        bronze_dir = tmp_path / "data" / "bronze" / "examen" / f"{_SEMESTER}-{_COURSE}"
+        _setup_bronze(bronze_dir)
+
+        with pytest.raises(ValueError, match="일치하지 않습니다"):
+            build_exam(
+                blueprint=_make_blueprint(),
+                curriculum_map=_make_curriculum_map(),
+                bronze_dir=bronze_dir,
+                data_root=tmp_path / "data",
+                backend=FakeUS2Backend(),
+                formative_inventory=inventory,
+            )

@@ -53,6 +53,11 @@ _POSITIVE_STEM_CUES = ("옳은", "맞는", "해당하는", "올바른")
 _OPTION_MIN_LEN = 30
 _OPTION_MAX_LEN = 40
 
+# 형성 변환 프롬프트 계약: 틀린 보기(=정답)의 근거는 "틀린" 마커로 시작한다.
+# convert_formative 프롬프트가 LLM 에게 "틀린 진술:" 접두사를 요구하므로
+# answer_no 가 가리키는 근거에 이 마커가 있는지 검증한다.
+_WRONG_RATIONALE_MARKER = "틀린"
+
 
 def _compute_option_length_ok(options: list[str]) -> bool:
     """Check that all options are within 30–40 codepoints.
@@ -146,7 +151,12 @@ def check_formative(item: ExamItemDraft) -> ExamItemDraft:
     Checks (non-raising — violations recorded in review_note):
     1. stem_polarity declared as ``"부정형"`` — if not, record in review_note.
     2. stem text contains 부정형 keyword — if not, record in review_note.
-    3. Best-effort groundedness scope flag: if ``textbook_evidence`` is None
+    3. Answer-marker contract: the ``distractor_rationale`` entry at
+       ``answer_no`` must carry the agreed "틀린" marker (the prompt asks the
+       LLM to prefix the wrong option's rationale with "틀린 진술:").  This
+       proves the option at ``answer_no`` is actually the FALSE one rather than
+       trusting ``stem_polarity`` alone.  Missing/misplaced marker → violation.
+    4. Best-effort groundedness scope flag: if ``textbook_evidence`` is None
        (expected for formative), record informational note.
 
     Args:
@@ -186,7 +196,40 @@ def check_formative(item: ExamItemDraft) -> ExamItemDraft:
             f"(text: {item.text[:40]!r}) — 교수 검토 필요"
         )
 
-    # Check 3: textbook_evidence 없음 → 범위 근거 앵커 미보유 (informational)
+    # Check 3: answer-marker 계약 — answer_no 근거가 "틀린" 마커를 가졌는지.
+    # 부정형 문항이므로 정답은 '틀린 보기'여야 하고, 프롬프트는 그 근거에
+    # "틀린 진술:" 접두사를 요구한다. answer_no 가 가리키는 근거에 마커가 없으면
+    # 정답이 실제로 틀린 보기인지 확신할 수 없다 → 검토 필요.
+    rationales = list(item.distractor_rationale)
+    idx = item.answer_no - 1
+    if 0 <= idx < len(rationales):
+        answer_rationale = rationales[idx]
+        if _WRONG_RATIONALE_MARKER not in answer_rationale:
+            notes.append(
+                f"[formative_check] 정답({item.answer_no}번) 보기 근거에 "
+                f"'{_WRONG_RATIONALE_MARKER}' 마커가 없습니다 — "
+                f"정답이 실제 틀린 보기인지 확인 필요 "
+                f"(근거: {answer_rationale[:40]!r})"
+            )
+        # 추가: 정답이 아닌 보기에 "틀린" 마커가 있으면 정답 지정 오류 의심
+        other_wrong = [
+            i + 1
+            for i, r in enumerate(rationales)
+            if i != idx and _WRONG_RATIONALE_MARKER in r
+        ]
+        if other_wrong:
+            notes.append(
+                f"[formative_check] 정답이 아닌 보기 {other_wrong} 에 "
+                f"'{_WRONG_RATIONALE_MARKER}' 마커가 있습니다 — "
+                "정답 번호 지정 오류 가능성 검토 필요"
+            )
+    else:
+        notes.append(
+            f"[formative_check] answer_no={item.answer_no} 가 "
+            f"distractor_rationale 범위(1~{len(rationales)})를 벗어남"
+        )
+
+    # Check 4: textbook_evidence 없음 → 범위 근거 앵커 미보유 (informational)
     if item.textbook_evidence is None:
         notes.append(
             "[formative_check] textbook_evidence=None — "

@@ -48,32 +48,49 @@ _MODIFIED_RE = re.compile(
     r"(<dcterms:modified[^>]*>)([^<]+)(</dcterms:modified>)",
     re.DOTALL,
 )
+# openpyxl 은 ``<dcterms:created>`` 도 datetime.now() 로 스탬프한다.
+# ``<dcterms:modified>`` 만 핀하면 두 빌드가 wall-clock 초 경계를 넘을 때
+# ``created`` 값이 갈려 xlsx 바이트가 비결정적이 된다 → 둘 다 핀한다.
+_CREATED_RE = re.compile(
+    r"(<dcterms:created[^>]*>)([^<]+)(</dcterms:created>)",
+    re.DOTALL,
+)
 # openpyxl이 내부적으로 사용하는 고정 mtime — 여기에도 동일하게 적용
 _FIXED_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+# zip 압축 레벨 고정 — zlib 기본값이 플랫폼/버전 따라 달라질 수 있어 명시한다.
+_FIXED_COMPRESSLEVEL = 6
 
 
 def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
-    """Repack ``path`` with a pinned ``<dcterms:modified>`` value.
+    """Repack ``path`` with pinned ``<dcterms:modified>`` and ``<dcterms:created>``.
 
-    openpyxl's ``save()`` stamps ``<dcterms:modified>`` with ``datetime.now()``,
-    causing byte-level non-determinism across runs.  This function rewrites
-    the value to ``when`` formatted as ISO8601 UTC after ``save()`` has landed.
+    openpyxl's ``save()`` stamps BOTH ``<dcterms:modified>`` and
+    ``<dcterms:created>`` with ``datetime.now()``, causing byte-level
+    non-determinism across runs.  This function rewrites both values to
+    ``when`` formatted as ISO8601 UTC after ``save()`` has landed.
+
+    Why both: two ``build_exam`` runs separated by enough work to cross a
+    wall-clock SECOND boundary would otherwise produce different
+    ``<dcterms:created>`` strings → divergent xlsx bytes (the intermittent
+    full-suite ``test_rerun_xlsx_byte_identical`` flake).
 
     All zip entries are repacked with ``ZipInfo(date_time=(1980,1,1,0,0,0))``
-    so the resulting archive is byte-identical for identical inputs regardless
-    of the host filesystem's mtime precision.
+    and a FIXED ``compresslevel`` so the resulting archive is byte-identical
+    for identical inputs regardless of the host filesystem's mtime precision
+    or the platform zlib default level.
 
     Technique mirrors ``rewrite_modified_in_zip`` in
     ``modules/immersio/src/immersio/report/xlsx_writer.py``.
 
     Args:
         path: Path to the xlsx file to finalise (modified in-place).
-        when: The datetime to embed as ``<dcterms:modified>`` (treated as UTC).
+        when: The datetime to embed as ``<dcterms:modified>`` and
+            ``<dcterms:created>`` (treated as UTC).
     """
     iso = when.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # openpyxl 이 생성한 xlsx 를 가정한다. ``<dcterms:modified>`` 가 없으면
-    # regex 가 매치 0개로 조용히 통과(no-op) — immersio 와 동일 동작.
+    # openpyxl 이 생성한 xlsx 를 가정한다. 두 dcterms 요소가 없으면 regex 가
+    # 매치 0개로 조용히 통과(no-op) — immersio 와 동일 동작.
     with zipfile.ZipFile(path, "r") as src:
         members: list[tuple[str, bytes, int]] = []
         for info in src.infolist():
@@ -81,11 +98,14 @@ def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
             if info.filename == _CORE_XML_PATH:
                 text = data.decode("utf-8")
                 text = _MODIFIED_RE.sub(rf"\g<1>{iso}\g<3>", text, count=1)
+                text = _CREATED_RE.sub(rf"\g<1>{iso}\g<3>", text, count=1)
                 data = text.encode("utf-8")
             members.append((info.filename, data, info.compress_type))
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as dst:
+    with zipfile.ZipFile(
+        buf, "w", zipfile.ZIP_DEFLATED, compresslevel=_FIXED_COMPRESSLEVEL
+    ) as dst:
         for name, data, compress_type in members:
             zi = zipfile.ZipInfo(filename=name, date_time=_FIXED_ZIP_DATE)
             # 원본 압축 방식 유지 (openpyxl 선택 압축 호환)

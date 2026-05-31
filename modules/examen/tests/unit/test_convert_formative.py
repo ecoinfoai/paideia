@@ -198,13 +198,29 @@ class TestConvertFormativeInvariants:
     def test_answer_no_is_wrong_option(self, tmp_path: Path) -> None:
         """For 부정형 formative, answer_no points to the WRONG (false) option.
 
-        The canned response sets answer_no=5, and the wrong_option_no=5,
-        so the item's answer_no must equal 5 (the 틀린 보기).
+        Strengthened: instead of trivially asserting ``answer_no == 5`` (which
+        the FakeBackend hardcodes), assert the prompt-contract RELATIONSHIP —
+        the distractor_rationale entry at answer_no carries the "틀린" marker,
+        and NO other rationale carries it.  This proves the answer is the false
+        statement, not just a fixed index.
         """
         item = self._convert(tmp_path)
-        # The canned JSON has answer_no=5 (틀린 보기)
-        assert item.answer_no == 5, (
-            f"answer_no should be 5 (wrong option), got {item.answer_no}"
+        idx = item.answer_no - 1
+        assert 0 <= idx < len(item.distractor_rationale), (
+            f"answer_no {item.answer_no} out of rationale range"
+        )
+        answer_rationale = item.distractor_rationale[idx]
+        assert "틀린" in answer_rationale, (
+            f"answer_no={item.answer_no} rationale must carry the '틀린' marker "
+            f"(the false statement), got {answer_rationale!r}"
+        )
+        # The other 4 rationales must NOT carry the 틀린 marker (they are 옳은)
+        others = [
+            r for i, r in enumerate(item.distractor_rationale) if i != idx
+        ]
+        assert all("틀린" not in r for r in others), (
+            "only the answer's rationale should be marked '틀린'; "
+            f"found a non-answer rationale also marked: {others!r}"
         )
 
     def test_week_copied(self, tmp_path: Path) -> None:

@@ -432,3 +432,119 @@ class TestCheckFormat:
         result = self._check(item=item)
         # Must recalculate to False (overrides the prior True)
         assert result.option_length_ok is False
+
+
+# ---------------------------------------------------------------------------
+# T035 — check_formative (answer-marker contract + 부정형 enforcement)
+# ---------------------------------------------------------------------------
+
+
+def _make_formative_item(
+    *,
+    answer_no: int = 5,
+    stem_polarity: str = "부정형",
+    text: str = "다음 중 허파꽈리 세포에 대한 설명으로 가장 옳지 않은 것은?",
+    distractor_rationale: list[str] | None = None,
+    review_note: str = "",
+) -> ExamItemDraft:
+    """Build a minimal formative ExamItemDraft for check_formative tests."""
+    if distractor_rationale is None:
+        distractor_rationale = [
+            "옳은 진술: 제1형 허파세포는 가스 교환에 적합하다.",
+            "옳은 진술: 제2형 허파세포는 표면활성제를 분비한다.",
+            "옳은 진술: 표면활성제는 표면장력을 낮춘다.",
+            "옳은 진술: 허파꽈리는 두 종류 세포로 구성된다.",
+            "틀린 진술: 제2형 허파세포는 섬모를 보유한다.",
+        ]
+    return ExamItemDraft(
+        semester="2026-1",
+        course_slug="anatomy",
+        item_no=1,
+        source="formative",
+        source_ref="형성평가:8장#1",
+        chapter="8장 호흡계통",
+        chapter_no=8,
+        section=None,
+        week=8,
+        key_concept="제2형 허파세포",
+        is_emphasized=None,
+        emphasis_class_count=None,
+        question_type="지식축적",
+        bloom=None,
+        difficulty="2_보통",
+        stem_polarity=stem_polarity,
+        text=text,
+        options=_BASE_OPTIONS_30,
+        answer_no=answer_no,
+        distractor_rationale=distractor_rationale,
+        wrong_explanation="오답 설명 테스트." * 20,
+        leap_explanation="도약 설명 테스트." * 20,
+        textbook_evidence=None,
+        intent="허파꽈리 세포 기능을 정확히 이해하는지 확인한다.",
+        option_length_ok=True,
+        duplicate_flag=False,
+        review_note=review_note,
+        adoption_status="생성",
+        note=None,
+    )
+
+
+class TestCheckFormative:
+    """Unit tests for check_formative (T035)."""
+
+    def _check(self, item: ExamItemDraft) -> ExamItemDraft:
+        from examen.verify.format_checks import check_formative
+        return check_formative(item)
+
+    def test_non_formative_passthrough(self) -> None:
+        """check_formative returns non-formative items unchanged."""
+        from examen.verify.format_checks import check_formative
+        textbook_item = _make_item()  # source="textbook"
+        result = check_formative(textbook_item)
+        assert result is textbook_item, "non-formative items must pass through unchanged"
+
+    def test_marker_present_no_violation(self) -> None:
+        """When answer_no rationale carries '틀린', no marker violation is recorded."""
+        item = self._make_clean()
+        result = self._check(item)
+        assert "마커가 없습니다" not in result.review_note
+
+    def _make_clean(self) -> ExamItemDraft:
+        # answer_no=5 → rationale[4] carries '틀린', others do not
+        return _make_formative_item(answer_no=5)
+
+    def test_marker_missing_records_violation(self) -> None:
+        """When answer_no rationale LACKS '틀린', a violation is recorded."""
+        # answer_no=1 but rationale[0] is "옳은 진술" (no 틀린 marker)
+        item = _make_formative_item(answer_no=1)
+        result = self._check(item)
+        assert "마커가 없습니다" in result.review_note, (
+            "missing 틀린 marker on the answer rationale must be flagged"
+        )
+
+    def test_marker_on_non_answer_records_violation(self) -> None:
+        """If a non-answer rationale carries '틀린', flag a possible answer mis-index."""
+        rationales = [
+            "틀린 진술: 잘못된 설명1.",   # idx0 carries marker but is NOT the answer
+            "옳은 진술2.",
+            "옳은 진술3.",
+            "옳은 진술4.",
+            "틀린 진술: 제2형 허파세포는 섬모를 보유한다.",  # idx4 is the answer
+        ]
+        item = _make_formative_item(answer_no=5, distractor_rationale=rationales)
+        result = self._check(item)
+        assert "정답 번호 지정 오류" in result.review_note, (
+            "a 틀린 marker on a non-answer option must be flagged"
+        )
+
+    def test_non_negative_stem_polarity_flagged(self) -> None:
+        """A formative item declared 긍정형 is flagged (must be 부정형)."""
+        item = _make_formative_item(stem_polarity="긍정형")
+        result = self._check(item)
+        assert "stem_polarity 오류" in result.review_note
+
+    def test_does_not_raise(self) -> None:
+        """check_formative never raises — it only records review_note violations."""
+        item = _make_formative_item(answer_no=1)  # marker mismatch
+        result = self._check(item)  # must not raise
+        assert isinstance(result, ExamItemDraft)

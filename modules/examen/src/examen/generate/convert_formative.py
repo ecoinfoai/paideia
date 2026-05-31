@@ -44,6 +44,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import re
 
 from paideia_shared.schemas import ExamItemDraft, SourceInventoryEntry
 
@@ -221,7 +222,6 @@ def _source_ref_to_slot_id(source_ref: str) -> str:
     # 형성평가:8장#1 → formative-8-1
     clean = source_ref.replace("형성평가:", "formative-").replace("장#", "-").replace("장", "")
     # Remove any remaining non-alphanumeric chars except hyphen
-    import re
     clean = re.sub(r"[^a-zA-Z0-9\-]", "", clean)
     return clean or "formative-unknown"
 

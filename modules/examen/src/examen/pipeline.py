@@ -89,6 +89,28 @@ _PINNED_WHEN = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 """Pinned timestamp for xlsx determinism (``finalize_xlsx``)."""
 
 
+def _slot_position(slot_id: str) -> int:
+    """Extract the global 1-based slot position from a slot_id.
+
+    The solver emits slot_ids as ``"slot-NNN"`` in global order.  This position
+    is used as ``item_no`` so that formative and textbook items never collide on
+    번호 (textbook ``generate_item`` already derives item_no the same way).
+
+    Args:
+        slot_id: Slot identifier (e.g. ``"slot-007"``).
+
+    Returns:
+        Positive integer position (falls back to 1 for unknown formats).
+    """
+    parts = slot_id.rsplit("-", 1)
+    if len(parts) == 2:
+        try:
+            return max(1, int(parts[1]))
+        except ValueError:
+            pass
+    return 1
+
+
 def _sha256_hex(text: str) -> str:
     """Return the SHA-256 hex digest of a UTF-8 encoded string."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -342,16 +364,16 @@ def build_exam(
     cache_dir = silver_base / "cache"
     cache = InputHashCache(backend=backend, cache_dir=cache_dir)
 
-    # 형성 인벤토리를 source_ref 로 색인 (formative 슬롯 디스패치용)
-    formative_by_ref: dict[str, SourceInventoryEntry] = {}
-    if formative_inventory:
-        for inv_entry in formative_inventory:
-            formative_by_ref[inv_entry.source_ref] = inv_entry
-
-    # 형성 슬롯에 인벤토리를 순서대로 할당
-    # (blueprint solver 는 formative 슬롯을 chapter-even 으로 분배하므로
-    #  인벤토리를 순서대로 슬롯에 매핑한다)
-    formative_iter = iter(formative_inventory or [])
+    # 형성 슬롯에 인벤토리를 chapter-major 순서로 할당한다.
+    # solver 는 formative 슬롯을 chapter-major(장 오름차순) 로 배치하므로
+    # 인벤토리도 chapter_no 로 정렬해야 슬롯-인벤토리 장이 일치한다.
+    # (인벤토리 파일 순서가 blueprint 장 순서와 다를 수 있으므로 정렬 필수.)
+    # 동일 장 내부는 원래 순서를 보존(stable sort)한다.
+    sorted_formative = sorted(
+        formative_inventory or [],
+        key=lambda e: (e.chapter_no if e.chapter_no is not None else 0),
+    )
+    formative_iter = iter(sorted_formative)
 
     items: list[ExamItemDraft] = []
     for slot in slots:
@@ -387,15 +409,28 @@ def build_exam(
                     "source_mix.formative 와 formative_inventory 크기가 불일치합니다."
                 ) from exc
 
+            # 슬롯 장과 인벤토리 장이 일치하는지 확인 (source_ref↔chapter 정합성).
+            # 정렬 후에도 어긋나면 인벤토리 장 분포가 solver 슬롯 장 분포와
+            # 다르다는 뜻 → 조용한 불일치 금지(located error).
+            if inv_entry.chapter_no != slot.chapter_no:
+                raise ValueError(
+                    f"build_exam: formative slot '{slot.slot_id}' "
+                    f"(chapter_no={slot.chapter_no}) 와 인벤토리 항목 "
+                    f"{inv_entry.source_ref!r} (chapter_no={inv_entry.chapter_no}) 의 "
+                    "장이 일치하지 않습니다. 형성 인벤토리의 장 분포가 blueprint "
+                    "source_mix 의 장-균등 형성 슬롯 분포와 어긋납니다."
+                )
+
             item = convert_formative(
                 entry=inv_entry,
                 backend=backend,
                 cache=cache,
             )
-            # chapter 필드를 실제 장 이름으로 보정 (curriculum_map 에서 조회)
-            ch_name = slot.chapter
+            # chapter 필드를 실제 장 이름으로 보정 (slot 에서 조회).
+            # item_no 는 GLOBAL 슬롯 위치를 사용해야 교과서 item_no 와 충돌하지 않는다.
             item = item.model_copy(update={
-                "chapter": ch_name,
+                "item_no": _slot_position(slot.slot_id),
+                "chapter": slot.chapter,
                 "chapter_no": slot.chapter_no,
                 "difficulty": slot.difficulty,
             })

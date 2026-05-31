@@ -227,16 +227,40 @@ def _find_matching_question(
 
     questions: list[dict[str, Any]] = yaml_data.get("questions", [])
 
-    # 전략 1: sn == ordinal 으로 직접 매핑
+    # 전략 1: sn == ordinal 으로 직접 매핑.
+    # 단, sn 이 일치해도 stem 이 호환되지 않으면(교수가 순서를 바꿔 출제한 경우)
+    # 잘못된 문제에 바인딩될 수 있으므로 stem 호환성을 추가로 검증한다.
+    # 호환되지 않으면 전략 2(stem 매칭)로 폴백한다.
     for q in questions:
         if q.get("sn") == ordinal:
-            return q
+            yaml_stem = str(q.get("question", ""))
+            if _stem_matches(administered_stem, yaml_stem):
+                return q
+            # sn 은 맞지만 stem 불일치 → 폴백 (조용히 잘못 바인딩 금지)
+            break
 
-    # 전략 2: stem 유사 매칭 (ordinal 불일치 허용)
+    # 전략 2: stem 유사 매칭 (ordinal 불일치 허용).
+    # 모호성 방지: 동일 administered stem 에 둘 이상의 yaml 문제가 매칭되면
+    # 어떤 것을 바인딩할지 확정할 수 없으므로 located error 를 던진다.
+    matches: list[dict[str, Any]] = []
     for q in questions:
         yaml_stem = str(q.get("question", ""))
         if _stem_matches(administered_stem, yaml_stem):
-            return q
+            matches.append(q)
+
+    if len(matches) == 1:
+        return matches[0]
+
+    if len(matches) > 1:
+        matched_sns = [q.get("sn") for q in matches]
+        raise ValueError(
+            f"load_formative_inventory: 실제 출제 형성평가 문제가 YAML 의 여러 문제와 "
+            f"모호하게 매칭됩니다(매칭 sn={matched_sns}). "
+            f"week={week}, ordinal={ordinal}, chapter_no={chapter_no}, "
+            f"stem={administered_stem!r}. "
+            "Ch{chapter}_FormativeTest.yaml 의 중복 stem 을 확인하거나 stem 을 더 "
+            "구체적으로 기재하세요(모호한 자동 바인딩 금지)."
+        )
 
     # 매칭 실패 → fail-fast (조용한 누락 금지)
     raise ValueError(
