@@ -1,4 +1,4 @@
-"""T024 — Blueprint solver: total_items → chapter-even slot list.
+"""T024 / T036 — Blueprint solver: total_items → chapter-even slot list.
 
 Deterministic greedy allocation:
 1. Distribute total_items evenly across chapters (max diff ≤ 1).
@@ -6,13 +6,19 @@ Deterministic greedy allocation:
 3. Assign difficulty labels so the whole-exam distribution approximates
    difficulty_targets (45/35/20 default).
 
+T036 addition: ``validate_formative_count`` checks that
+``blueprint.source_mix['formative'] == len(formative_inventory)`` before the
+solver runs.  ``solve`` accepts an optional ``formative_inventory`` parameter
+and calls the validator automatically when provided.
+
 No ILP, no external dependencies — pure Python.
 
 Usage::
 
-    from examen.plan.blueprint import solve, Slot
+    from examen.plan.blueprint import solve, validate_formative_count, Slot
 
-    slots = solve(blueprint, curriculum_map)
+    validate_formative_count(blueprint, formative_inventory)
+    slots = solve(blueprint, curriculum_map, formative_inventory=formative_inventory)
     # slots: list[Slot]
 """
 
@@ -21,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from paideia_shared.schemas import CurriculumMap, ExamenBlueprint
+from paideia_shared.schemas import CurriculumMap, ExamenBlueprint, SourceInventoryEntry
 
 # ---------------------------------------------------------------------------
 # Slot dataclass
@@ -43,6 +49,8 @@ class Slot:
         difficulty: Assigned difficulty label.
         section: Optional target section within the chapter.
         question_type: Optional target question type.
+        source_ref: Optional source reference for formative/quiz slots (links
+            back to the SourceInventoryEntry).
     """
 
     slot_id: str
@@ -52,10 +60,11 @@ class Slot:
     difficulty: DifficultyLabel
     section: str | None = None
     question_type: str | None = None
+    source_ref: str | None = None
 
 
 # ---------------------------------------------------------------------------
-# Solver
+# Solver helpers
 # ---------------------------------------------------------------------------
 
 # 난이도 라벨 매핑
@@ -117,7 +126,6 @@ def _difficulty_sequence(n: int, targets: dict[str, float]) -> list[DifficultyLa
         hard_n = 0
 
     # 인터리브: 슬롯 위치 전반에 걸쳐 난이도를 고르게 분산
-    # 방법: easy, medium, hard 를 번갈아 배치 (round-robin)
     interleaved: list[DifficultyLabel] = []
     pools: list[list[DifficultyLabel]] = [
         ["1_쉬움"] * easy_n,
@@ -132,20 +140,60 @@ def _difficulty_sequence(n: int, targets: dict[str, float]) -> list[DifficultyLa
     return interleaved
 
 
+# ---------------------------------------------------------------------------
+# T036 — Formative 전수 슬롯 예약 + source_mix.formative == 대장수 검증
+# ---------------------------------------------------------------------------
+
+
+def validate_formative_count(
+    blueprint: ExamenBlueprint,
+    formative_inventory: list[SourceInventoryEntry],
+) -> None:
+    """Validate that blueprint.source_mix['formative'] == len(formative_inventory).
+
+    This is the "formative == 대장수" cross-check from the spec (data-model §1).
+    It must be called at ingest/pipeline time when both artefacts are loaded.
+
+    Args:
+        blueprint: Validated exam specification.
+        formative_inventory: List of SourceInventoryEntry objects with
+            source="formative" (the actually-administered items).
+
+    Raises:
+        ValueError: If the counts do not match (located error — includes both
+            the blueprint value and the inventory size).
+    """
+    declared = blueprint.source_mix.get("formative", 0)
+    actual = len(formative_inventory)
+    if declared != actual:
+        raise ValueError(
+            f"validate_formative_count: blueprint.source_mix['formative'] == {declared} "
+            f"but len(formative_inventory) == {actual}. "
+            "형성평가 전수 포함 불변식 위반: blueprint 선언 수와 실제 대장 수가 일치해야 합니다. "
+            "blueprint.source_mix.formative 또는 formative_inventory 를 수정하세요."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Main solver
+# ---------------------------------------------------------------------------
+
+
 def solve(
     blueprint: ExamenBlueprint,
     curriculum_map: CurriculumMap,
+    formative_inventory: list[SourceInventoryEntry] | None = None,
 ) -> list[Slot]:
     """Solve the blueprint: return a chapter-even list of Slots.
 
     Allocation procedure:
-    1. Identify the chapters from ``blueprint.chapters`` and look up their
+    1. If ``formative_inventory`` is provided, validate the count against
+       ``blueprint.source_mix['formative']`` (T036 cross-check).
+    2. Identify the chapters from ``blueprint.chapters`` and look up their
        ``chapter_no`` from ``curriculum_map``.
-    2. Distribute ``blueprint.total_items`` evenly across chapters (max diff ≤ 1).
-    3. Assign sources to slots in the order: formative → quiz → textbook (so
-       that formative and quiz slots are anchored to specific chapters via
-       curriculum_map and the remaining are filled with textbook).
-    4. Assign difficulty labels globally (whole-exam distribution) via round-robin
+    3. Distribute ``blueprint.total_items`` evenly across chapters (max diff ≤ 1).
+    4. Assign sources to slots in the order: formative → quiz → textbook.
+    5. Assign difficulty labels globally (whole-exam distribution) via round-robin
        interleaving so individual chapters are NOT forced to any particular
        difficulty distribution.
 
@@ -156,10 +204,21 @@ def solve(
     Args:
         blueprint: Validated exam specification.
         curriculum_map: Week→chapter→section mapping (for chapter_no lookup).
+        formative_inventory: Optional list of formative SourceInventoryEntry
+            objects.  When provided, their count is validated against
+            ``blueprint.source_mix['formative']``.
 
     Returns:
         Deterministic list of :class:`Slot` objects, one per planned exam item.
+
+    Raises:
+        ValueError: If ``formative_inventory`` is provided and its count does
+            not match ``blueprint.source_mix['formative']``.
     """
+    # T036: 형성 전수 검증 (인벤토리 제공 시)
+    if formative_inventory is not None:
+        validate_formative_count(blueprint, formative_inventory)
+
     # ----------------------------------------------------------------
     # Step 1: build chapter→chapter_no lookup from curriculum_map
     # ----------------------------------------------------------------
@@ -243,4 +302,4 @@ def solve(
     return slots
 
 
-__all__ = ["Slot", "solve"]
+__all__ = ["Slot", "solve", "validate_formative_count"]

@@ -54,7 +54,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from paideia_shared.schemas import CurriculumMap, ExamenBlueprint, ExamItemDraft
+from paideia_shared.schemas import (
+    CurriculumMap,
+    ExamenBlueprint,
+    ExamItemDraft,
+    SourceInventoryEntry,
+)
 
 from examen.generate.backend import (
     ApiBackend,
@@ -62,6 +67,7 @@ from examen.generate.backend import (
     LLMBackend,
     SubscriptionBackend,
 )
+from examen.generate.convert_formative import convert_formative
 from examen.generate.item_gen import generate_item
 from examen.ingest.report import write_ingest_report
 from examen.ingest.textbook import load_chapter, verify_chapter_files
@@ -72,7 +78,7 @@ from examen.output.yaml_out import write_yaml
 from examen.plan.blueprint import solve
 from examen.silver.chunk import chunk_chapter
 from examen.silver.evidence_index import EvidenceIndex
-from examen.verify.format_checks import check_format
+from examen.verify.format_checks import check_format, check_formative
 from examen.verify.groundedness import verify_groundedness
 
 # ---------------------------------------------------------------------------
@@ -214,6 +220,7 @@ def build_exam(
     backend: LLMBackend,
     blueprint_path: Path | None = None,
     curriculum_map_path: Path | None = None,
+    formative_inventory: list[SourceInventoryEntry] | None = None,
 ) -> tuple[list[ExamItemDraft], Path]:
     """Run the full ingest→plan→generate→verify→output pipeline.
 
@@ -225,8 +232,11 @@ def build_exam(
     --------------
     1. Verify all chapter .txt files exist (fail-fast on missing → raises).
     2. Load + chunk each chapter; build a **chapter-scoped** EvidenceIndex.
-    3. Solve the blueprint → slot list.
-    4. For each slot: generate → verify_groundedness → check_format.
+    3. Solve the blueprint → slot list (with formative cross-check if inventory provided).
+    4. For each slot:
+       - textbook: generate_item → verify_groundedness → check_format
+       - formative: convert_formative → check_format → check_formative
+       - quiz: NotImplementedError (US3)
     5. Write xlsx + yaml + manifest + ingest_report to the run Gold dir
        (all-or-nothing: writes only after all items are verified).
     6. Return ``(items, run_dir)``.
@@ -242,6 +252,12 @@ def build_exam(
             manifest config_ids hashing).
         curriculum_map_path: Optional path to the curriculum_map.yaml (for
             manifest config_ids hashing).
+        formative_inventory: Optional list of SourceInventoryEntry objects
+            (source="formative").  When provided, the count is validated
+            against ``blueprint.source_mix['formative']`` (T036 cross-check)
+            and formative slots are dispatched to ``convert_formative``.
+            When None, the formative slot count must be 0 or a ValueError is
+            raised.
 
     Returns:
         ``(items, run_dir)`` — the generated+verified items and the
@@ -249,9 +265,9 @@ def build_exam(
 
     Raises:
         FileNotFoundError: If any required chapter .txt is missing.
-        NotImplementedError: If a non-textbook slot is encountered (US1
-            scope: textbook-only).
-        ValueError: If generation or verification fails critically.
+        ValueError: If source_mix.formative != len(formative_inventory), or
+            if generation or verification fails critically.
+        NotImplementedError: If a quiz slot is encountered (US3 scope).
     """
     # ----------------------------------------------------------------
     # Step 1: fail-fast chapter file verification
@@ -314,8 +330,9 @@ def build_exam(
 
     # ----------------------------------------------------------------
     # Step 3: solve blueprint → slot list
+    # T036: pass formative_inventory for cross-check (validate_formative_count)
     # ----------------------------------------------------------------
-    slots = solve(blueprint, curriculum_map)
+    slots = solve(blueprint, curriculum_map, formative_inventory=formative_inventory)
 
     # ----------------------------------------------------------------
     # Step 4: generate + verify each slot
@@ -325,32 +342,78 @@ def build_exam(
     cache_dir = silver_base / "cache"
     cache = InputHashCache(backend=backend, cache_dir=cache_dir)
 
+    # 형성 인벤토리를 source_ref 로 색인 (formative 슬롯 디스패치용)
+    formative_by_ref: dict[str, SourceInventoryEntry] = {}
+    if formative_inventory:
+        for inv_entry in formative_inventory:
+            formative_by_ref[inv_entry.source_ref] = inv_entry
+
+    # 형성 슬롯에 인벤토리를 순서대로 할당
+    # (blueprint solver 는 formative 슬롯을 chapter-even 으로 분배하므로
+    #  인벤토리를 순서대로 슬롯에 매핑한다)
+    formative_iter = iter(formative_inventory or [])
+
     items: list[ExamItemDraft] = []
     for slot in slots:
         ch_no = slot.chapter_no
-        if ch_no not in chapter_data:
-            raise ValueError(
-                f"build_exam: slot '{slot.slot_id}' chapter_no={ch_no} "
-                "has no chapter data — check curriculum_map coverage"
+
+        if slot.source == "textbook":
+            if ch_no not in chapter_data:
+                raise ValueError(
+                    f"build_exam: slot '{slot.slot_id}' chapter_no={ch_no} "
+                    "has no chapter data — check curriculum_map coverage"
+                )
+            _chunks_for_ch, evidence_index = chapter_data[ch_no]
+
+            # generate_item handles textbook slots only
+            item = generate_item(
+                slot=slot,
+                chunks=all_chunks,
+                evidence_index=evidence_index,
+                backend=backend,
+                cache=cache,
             )
-        # generate_item filters all_chunks by chapter_no internally, so we only
-        # need the chapter-scoped evidence_index here (chunks slice not needed).
-        _chunks_for_ch, evidence_index = chapter_data[ch_no]
+            item = verify_groundedness(item, evidence_index)
+            item = check_format(item)
 
-        # generate_item raises NotImplementedError for non-textbook (US2/US3)
-        item = generate_item(
-            slot=slot,
-            chunks=all_chunks,
-            evidence_index=evidence_index,
-            backend=backend,
-            cache=cache,
-        )
+        elif slot.source == "formative":
+            # T034/T036: formative 슬롯 → convert_formative
+            try:
+                inv_entry = next(formative_iter)
+            except StopIteration as exc:
+                raise ValueError(
+                    f"build_exam: formative slot '{slot.slot_id}' has no "
+                    "corresponding formative inventory entry. "
+                    "source_mix.formative 와 formative_inventory 크기가 불일치합니다."
+                ) from exc
 
-        # verify groundedness (re-check against original lines)
-        item = verify_groundedness(item, evidence_index)
+            item = convert_formative(
+                entry=inv_entry,
+                backend=backend,
+                cache=cache,
+            )
+            # chapter 필드를 실제 장 이름으로 보정 (curriculum_map 에서 조회)
+            ch_name = slot.chapter
+            item = item.model_copy(update={
+                "chapter": ch_name,
+                "chapter_no": slot.chapter_no,
+                "difficulty": slot.difficulty,
+            })
+            item = check_format(item)
+            item = check_formative(item)  # T035 formative 전용 검증
 
-        # verify format (option lengths, stem polarity)
-        item = check_format(item)
+        elif slot.source == "quiz":
+            raise NotImplementedError(
+                f"Quiz variation generation is not implemented in US2. "
+                f"See US3 (slot_id={slot.slot_id}). "
+                "This path will be filled by a later sub-unit."
+            )
+
+        else:
+            raise ValueError(
+                f"build_exam: unknown slot source {slot.source!r} "
+                f"(slot_id={slot.slot_id})"
+            )
 
         items.append(item)
 
@@ -453,10 +516,14 @@ def build_exam(
             for ch_no, spans in sorted(removed_spans_by_chapter.items())
         },
     }
+    n_formative = len(formative_inventory) if formative_inventory else 0
     ingest_report: dict[str, Any] = {
         "stt": {"expected": 0, "found": 0, "missing": [], "filename_violations": []},
         "textbook": textbook_report,
-        "formative": {"expected_total": 0, "found": 0},
+        "formative": {
+            "expected_total": blueprint.source_mix.get("formative", 0),
+            "found": n_formative,
+        },
         "quiz": {"weeks": [], "rows": 0},
     }
     write_ingest_report(run_dir / "ingest_report.json", ingest_report)
