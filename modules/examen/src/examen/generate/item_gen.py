@@ -100,6 +100,16 @@ def generate_item(
             "This path will be filled by a later sub-unit."
         )
 
+    # 빈/불일치 청크 가드 (fail loud — 빈 컨텍스트로 백엔드 호출 시 환각 위험).
+    # slot.chapter_no 와 매칭되는 청크가 하나도 없으면 ingest 커버리지 결함이다.
+    matching = [c for c in chunks if c.chapter_no == slot.chapter_no]
+    if not matching:
+        raise ValueError(
+            f"generate_item: slot '{slot.slot_id}' "
+            f"(chapter_no={slot.chapter_no}) has no matching textbook chunks "
+            "— check ingest coverage"
+        )
+
     # Step 1: build bundle (T025)
     request = build_bundle(slot, chunks)
 
@@ -133,6 +143,9 @@ def generate_item(
     # item_no: slot_id 에서 추출 (예: "slot-001" → 1)
     item_no = _extract_item_no(slot.slot_id)
 
+    # answer_no: LLM 제공 정수. null/비정수면 located ValueError (bare TypeError 금지).
+    answer_no = _parse_answer_no(item_data.get("answer_no", 1), slot_id=slot.slot_id)
+
     # 옵션 길이 검증 (safe default — verify 단계에서 재계산)
     options = item_data.get("options", [])
     option_length_ok = _check_option_lengths(options)
@@ -156,7 +169,7 @@ def generate_item(
         stem_polarity=stem_polarity,
         text=item_data.get("text", ""),
         options=options,
-        answer_no=int(item_data.get("answer_no", 1)),
+        answer_no=answer_no,
         distractor_rationale=item_data.get("distractor_rationale", []),
         wrong_explanation=item_data.get("wrong_explanation", ""),
         leap_explanation=item_data.get("leap_explanation", ""),
@@ -216,11 +229,42 @@ def _parse_response(raw_text: str, slot_id: str) -> dict:  # type: ignore[type-a
     return data
 
 
+def _parse_answer_no(value: object, slot_id: str) -> int:
+    """Coerce an LLM-provided answer_no to int, failing loud on bad values.
+
+    ``int(None)`` (when the LLM returns ``{"answer_no": null}``) raises a bare
+    ``TypeError`` that does not say which slot is at fault.  This wrapper
+    re-raises any cast failure as a located ``ValueError``.
+
+    Args:
+        value: The raw ``answer_no`` value from the parsed LLM response.
+        slot_id: Slot identifier for the error message.
+
+    Returns:
+        The integer answer number (range validity is enforced by ExamItemDraft).
+
+    Raises:
+        ValueError: If ``value`` is ``None`` or not coercible to int.
+    """
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"generate_item: slot '{slot_id}' has a malformed 'answer_no' "
+            f"value {value!r} (expected an integer 1-5)."
+        ) from exc
+
+
 def _anchor_evidence(
     key_concept: str | None,
     evidence_index: EvidenceIndex,
 ) -> TextbookEvidence:
     """Search evidence_index for key_concept; return a TextbookEvidence anchor.
+
+    NOTE: ``evidence_index`` is expected to be CHAPTER-SCOPED (built from the
+    slot's chapter source file).  A multi-chapter index can anchor a common
+    term (e.g. "호르몬") to a line in the wrong chapter — the caller must pass
+    a per-chapter index for correct groundedness.
 
     Args:
         key_concept: The item's key concept keyword from the LLM response.

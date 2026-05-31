@@ -484,8 +484,10 @@ class TestBuildBundle:
         chunks = _make_chunks(chapter_no=10)
         r1 = build_bundle(s1, chunks)
         r2 = build_bundle(s2, chunks)
-        # At minimum, slot_id differs
+        # slot_id differs
         assert r1.slot_id != r2.slot_id
+        # The differing difficulty must change the prompt text itself
+        assert r1.prompt != r2.prompt
 
     def test_filters_chunks_to_correct_chapter(self) -> None:
         """Only chunks matching the slot's chapter_no are included."""
@@ -630,15 +632,10 @@ class TestGenerateItem:
 
     def test_evidence_status_is_found_when_concept_in_index(self, tmp_path: Path) -> None:
         """Evidence status is '확인' when key_concept is found in evidence_index."""
-        # The canned item has key_concept='뇌하수체' which is in the evidence index
+        # The canned item has key_concept='뇌하수체' which IS in the evidence index.
         item = self._generate(tmp_path=tmp_path)
-        if item.textbook_evidence is not None:
-            # If found, status must be '확인'
-            found_hits = True  # our index has '뇌하수체'
-            if found_hits:
-                assert item.textbook_evidence.status in ("확인", "미확인"), (
-                    "status must be '확인' or '미확인'"
-                )
+        assert item.textbook_evidence is not None
+        assert item.textbook_evidence.status == "확인"
 
     def test_evidence_status_not_found_when_concept_absent(self, tmp_path: Path) -> None:
         """Evidence status is '미확인' when key_concept is absent from evidence."""
@@ -693,6 +690,63 @@ class TestGenerateItem:
         backend = FakeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_q")
         with pytest.raises(NotImplementedError, match="US3"):
+            generate_item(
+                slot=slot,
+                chunks=chunks,
+                evidence_index=self._make_evidence_index(),
+                backend=backend,
+                cache=cache,
+            )
+
+    # --- Empty / mismatched chunk guard (fail loud, never silently wrong) ---
+
+    def test_empty_chunks_raises_located_value_error(self, tmp_path: Path) -> None:
+        """An empty chunk list raises a ValueError naming the slot, no backend call."""
+        from examen.generate.item_gen import generate_item
+        slot = self._make_slot(slot_id="slot-007", chapter_no=10)
+        backend = FakeBackend()
+        cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_empty")
+        with pytest.raises(ValueError, match="slot-007"):
+            generate_item(
+                slot=slot,
+                chunks=[],
+                evidence_index=self._make_evidence_index(),
+                backend=backend,
+                cache=cache,
+            )
+        # Guard must fire BEFORE the backend is called (no hallucinated context).
+        assert backend.call_count == 0
+
+    def test_no_matching_chapter_chunks_raises(self, tmp_path: Path) -> None:
+        """Chunks present but none matching the slot's chapter → ValueError."""
+        from examen.generate.item_gen import generate_item
+        slot = self._make_slot(slot_id="slot-009", chapter_no=10)
+        # Provide chunks for chapter 11 only — none match chapter 10.
+        chunks = _make_chunks(chapter_no=11, chapter="11장 순환계통")
+        backend = FakeBackend()
+        cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_nomatch")
+        with pytest.raises(ValueError, match="chapter_no=10"):
+            generate_item(
+                slot=slot,
+                chunks=chunks,
+                evidence_index=self._make_evidence_index(),
+                backend=backend,
+                cache=cache,
+            )
+        assert backend.call_count == 0
+
+    # --- Malformed LLM response (fail loud) ---
+
+    def test_null_answer_no_raises_located_value_error(self, tmp_path: Path) -> None:
+        """LLM returning answer_no=null raises a located ValueError, not TypeError."""
+        from examen.generate.item_gen import generate_item
+        custom_item = dict(_CANNED_ITEM_JSON)
+        custom_item["answer_no"] = None
+        backend = FakeBackend(raw_json=custom_item)
+        slot = self._make_slot(slot_id="slot-011")
+        chunks = _make_chunks(chapter_no=10)
+        cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_null")
+        with pytest.raises(ValueError, match="slot-011"):
             generate_item(
                 slot=slot,
                 chunks=chunks,

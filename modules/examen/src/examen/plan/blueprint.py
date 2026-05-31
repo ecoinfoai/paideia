@@ -183,21 +183,12 @@ def solve(
     )
 
     # ----------------------------------------------------------------
-    # Step 3: source assignment
-    # Expand source_mix into a flat list of sources (stable order)
-    # ----------------------------------------------------------------
-    source_list: list[SourceLabel] = []
-    for src in _SOURCE_ORDER:
-        count = blueprint.source_mix.get(src, 0)
-        source_list.extend([src] * count)  # type: ignore[arg-type]
-
-    # ----------------------------------------------------------------
-    # Step 4: difficulty sequence (whole-exam, interleaved)
+    # Step 3: difficulty sequence (whole-exam, interleaved)
     # ----------------------------------------------------------------
     diff_seq = _difficulty_sequence(blueprint.total_items, blueprint.difficulty_targets)
 
     # ----------------------------------------------------------------
-    # Step 5: build slots (chapter-major order, sources interleaved per chapter)
+    # Step 4: build slots (chapter-major order, sources interleaved per chapter)
     # ----------------------------------------------------------------
     # We interleave sources within each chapter proportionally.
     # Strategy:
@@ -226,8 +217,9 @@ def solve(
             src_count_for_ch = per_source_per_chapter[src][ch_idx]
             ch_sources.extend([src] * src_count_for_ch)  # type: ignore[arg-type]
 
-        # Sanity: 챕터별 총 슬롯이 ch_total 과 맞지 않을 때 textbook 으로 보충/절삭
-        # (floating-point round 오차 처리)
+        # Sanity: 챕터별 총 슬롯이 ch_total 과 맞지 않을 때 textbook 으로 보충/절삭.
+        # 출처별·챕터별 정수 배분의 나머지(remainder)가 챕터-균등 배분과 어긋날 수
+        # 있어 보정한다 (부동소수점 오차가 아니라 정수 배분 정렬 차이).
         while len(ch_sources) < ch_total:
             ch_sources.append("textbook")
         ch_sources = ch_sources[:ch_total]
