@@ -71,8 +71,9 @@ from examen.generate.convert_formative import convert_formative
 from examen.generate.item_gen import generate_item
 from examen.generate.vary_quiz import vary_quiz
 from examen.ingest.report import write_ingest_report
+from examen.ingest.stt import scan_stt_dir
 from examen.ingest.textbook import load_chapter, verify_chapter_files
-from examen.output.determinism import finalize_xlsx
+from examen.output.determinism import dump_yaml, finalize_xlsx
 from examen.output.exam_item_projection import write_exam_item_projection
 from examen.output.manifest import build_manifest, write_manifest
 from examen.output.quality_report import (
@@ -84,6 +85,11 @@ from examen.output.xlsx import write_xlsx
 from examen.output.yaml_out import write_yaml
 from examen.plan.blueprint import solve
 from examen.silver.chunk import chunk_chapter
+from examen.silver.emphasis import (
+    aggregate_emphasis,
+    build_keyword_dict,
+    label_items_with_emphasis,
+)
 from examen.silver.evidence_index import EvidenceIndex
 from examen.verify.format_checks import (
     balance_answer_keys,
@@ -258,6 +264,7 @@ def build_exam(
     curriculum_map_path: Path | None = None,
     formative_inventory: list[SourceInventoryEntry] | None = None,
     quiz_inventory: list[SourceInventoryEntry] | None = None,
+    stt_dir: Path | None = None,
 ) -> tuple[list[ExamItemDraft], Path]:
     """Run the full ingest→plan→generate→verify→output pipeline.
 
@@ -299,6 +306,13 @@ def build_exam(
             (source="quiz").  When provided, ``source_mix['quiz']`` items are
             selected chapter-evenly and dispatched to ``vary_quiz``.
             When None, quiz slot count must be 0 or a ValueError is raised.
+        stt_dir: Optional directory of STT (lecture-recording) transcripts for
+            the US7 lecture-emphasis enrichment.  When provided (and non-empty)
+            the per-section 4-class intersection emphasis is computed, items are
+            labeled with ``is_emphasized`` / ``emphasis_class_count``, and a
+            Silver ``emphasis.yaml`` is written.  When None or absent the
+            pipeline degrades: items keep ``is_emphasized = None`` and the
+            ingest_report stt block is zeros (FR-026 / SC-013) — never a failure.
 
     Returns:
         ``(items, run_dir)`` — the generated+verified items and the
@@ -527,6 +541,55 @@ def build_exam(
         items = balance_answer_keys(items)
 
     # ----------------------------------------------------------------
+    # Step 4d: US7 lecture-emphasis enrichment (T057/T058)
+    # Aggregate per-section 4-class intersection emphasis from STT, then label
+    # items.  Non-crashing: missing/None STT degrades (cells == [] → items
+    # unchanged, is_emphasized stays None).  Runs AFTER balance so item_no
+    # ordering is final.
+    # ----------------------------------------------------------------
+    stt_scan = scan_stt_dir(stt_dir)
+    keyword_dict = build_keyword_dict(curriculum_map)
+    emphasis_cells = aggregate_emphasis(
+        stt_scan,
+        curriculum_map,
+        keyword_dict,
+        semester=blueprint.semester,
+        course_slug=blueprint.course_slug,
+    )
+    items = label_items_with_emphasis(items, emphasis_cells, keyword_dict)
+
+    # Silver emphasis artefact (deterministic YAML) — only when emphasis was
+    # actually computed.  Degrade path writes nothing.
+    if emphasis_cells:
+        emphasis_yaml_path = silver_base / "emphasis.yaml"
+        emphasis_payload = [
+            cell.model_dump(mode="python") for cell in emphasis_cells
+        ]
+        emphasis_serialized = dump_yaml(emphasis_payload)
+        emphasis_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _write_emphasis(tmp: Path, _text: str = emphasis_serialized) -> None:
+            tmp.write_text(_text, encoding="utf-8")
+
+        from examen.output.paths import atomic_write as _atomic_write
+
+        _atomic_write(emphasis_yaml_path, _write_emphasis)
+
+    # emphasis_summary for the manifest (FR-025 partial: 강조 집계 기록.
+    # 슬롯 선택 우선순위 반영은 솔버 안정성 보존을 위해 US7 에서 보류 — 라벨링·기록까지).
+    # Always built (degrade path → all-zeros) so the field is consistently present.
+    emphasis_by_chapter: dict[str, int] = {}
+    for cell in emphasis_cells:
+        if cell.is_emphasized:
+            key = str(cell.chapter_no)
+            emphasis_by_chapter[key] = emphasis_by_chapter.get(key, 0) + 1
+    emphasis_summary: dict[str, Any] = {
+        "sections_total": len(emphasis_cells),
+        "emphasized": sum(1 for c in emphasis_cells if c.is_emphasized),
+        "by_chapter": dict(sorted(emphasis_by_chapter.items())),
+    }
+
+    # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output
     # xlsx + yaml are byte-identical across identical-input re-runs; the
     # manifest carries the only non-deterministic field (generated_at).
@@ -604,6 +667,7 @@ def build_exam(
         answer_no_distribution=answer_dist,
         groundedness=groundedness_counts,
         targets_vs_actual=targets_vs_actual,
+        emphasis_summary=emphasis_summary,
     )
     write_manifest(run_dir / "manifest_examen.json", manifest)
 
@@ -622,7 +686,12 @@ def build_exam(
     }
     n_formative = len(formative_inventory) if formative_inventory else 0
     ingest_report: dict[str, Any] = {
-        "stt": {"expected": 0, "found": 0, "missing": [], "filename_violations": []},
+        "stt": {
+            "expected": stt_scan.expected,
+            "found": stt_scan.found,
+            "missing": stt_scan.missing,
+            "filename_violations": stt_scan.filename_violations,
+        },
         "textbook": textbook_report,
         "formative": {
             "expected_total": blueprint.source_mix.get("formative", 0),

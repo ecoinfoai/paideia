@@ -49,3 +49,10 @@ class ExamenManifest(BaseModel):
     answer_no_distribution: dict[int, int]
     groundedness: dict[str, int]
     targets_vs_actual: dict  # type: ignore[type-arg]
+    emphasis_summary: dict | None = Field(  # type: ignore[type-arg]
+        default=None,
+        description=(
+            "US7 강의 강조 집계 요약 (절 합계·강조 절 수·장별 강조 절 수). "
+            "강조 자료 부재 시에도 항상 기록되며, 하류 immersio 가 강조 강도를 소비한다."
+        ),
+    )

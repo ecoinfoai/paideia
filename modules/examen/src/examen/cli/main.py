@@ -180,6 +180,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(build_p)
+    build_p.add_argument(
+        "--stt",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "강의 녹취(STT) 디렉터리 — 미지정 시 bronze 규약 경로 자동 탐색"
+        ),
+    )
 
     return parser
 
@@ -368,6 +377,19 @@ def _run_build(args: argparse.Namespace) -> int:
         responses_dir = silver_dir_path / "responses"
         backend = SubscriptionBackend(staging_dir=staging_dir, responses_dir=responses_dir)
 
+    # Resolve effective STT directory for the US7 lecture-emphasis enrichment.
+    # Precedence: --no-emphasis forces degrade (None); else explicit --stt;
+    # else the convention default data/stt guarded by .exists() (None when absent
+    # → graceful degrade, never a failure; FR-026 / SC-013).
+    stt_dir: Path | None
+    if args.no_emphasis:
+        stt_dir = None
+    elif args.stt is not None:
+        stt_dir = args.stt
+    else:
+        _default_stt = Path("data") / "stt"
+        stt_dir = _default_stt if _default_stt.exists() else None
+
     # Run pipeline
     try:
         items, run_dir = build_exam(
@@ -378,6 +400,7 @@ def _run_build(args: argparse.Namespace) -> int:
             backend=backend,
             blueprint_path=blueprint_path,
             curriculum_map_path=curriculum_map_path,
+            stt_dir=stt_dir,
         )
     except FileNotFoundError as exc:
         print(f"ERROR [examen]: missing input file — {exc}", file=sys.stderr)

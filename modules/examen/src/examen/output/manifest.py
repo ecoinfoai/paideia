@@ -58,6 +58,7 @@ def build_manifest(
     answer_no_distribution: dict[int, int],
     groundedness: dict[str, int],
     targets_vs_actual: dict[str, Any],
+    emphasis_summary: dict[str, Any] | None = None,
 ) -> ExamenManifest:
     """Construct and validate an ExamenManifest.
 
@@ -82,6 +83,10 @@ def build_manifest(
         answer_no_distribution: Count per answer number (1–5).
         groundedness: ``{"확인": N, "미확인": M}`` grounding summary.
         targets_vs_actual: Targets vs. actual metrics dict.
+        emphasis_summary: US7 lecture-emphasis aggregation summary
+            (``{"sections_total", "emphasized", "by_chapter"}``), or ``None``.
+            Recorded as a first-class manifest field so downstream immersio can
+            consume emphasis strength independently of ``targets_vs_actual``.
 
     Returns:
         Validated ExamenManifest instance.
@@ -107,6 +112,7 @@ def build_manifest(
             "answer_no_distribution": answer_no_distribution,
             "groundedness": groundedness,
             "targets_vs_actual": targets_vs_actual,
+            "emphasis_summary": emphasis_summary,
         }
     )
 
