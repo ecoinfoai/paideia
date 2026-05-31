@@ -1,0 +1,41 @@
+# Quiz .xls → SourceInventoryEntry column mapping
+# Determined by T039 devShell xlrd dump of data/quiz_w9_w13/*.xls (BIFF8, cp949)
+#
+# Real file structure (confirmed 2026-05-31):
+#   Two sheets:
+#     Sheet 0: '필독! - 반드시 확인해 주세요!' — instructions only, ignored
+#     Sheet 1: 'Sheet1' — 11 columns, row 0 = header, rows 1..N = quiz rows
+#
+# Confirmed header row (Sheet1, row 0):
+#   ['문제번호', '문제내용', '예상주차', '보기1', '보기2', '보기3', '보기4', '보기5',
+#    '답안', '답안설명', '문항유형']
+#
+# SourceInventoryEntry field mapping:
+#   stem      ← 문제내용
+#   options   ← [보기1, 보기2, 보기3, 보기4, 보기5]
+#   answer    ← 답안  (string "1".."5"; xlrd may return float → coerce)
+#   week      ← parsed from filename pattern '{N}주차'  (not in sheet data)
+#   chapter_no← resolved via week → curriculum_map
+#   source_ref← 퀴즈:{week}주#{row_number}  (1-based, stable order)
+#
+# Notes:
+#   - 예상주차 col contains '009'/'010' etc. (zero-padded LMS codes); ignored
+#     in favour of filename-derived week for traceability.
+#   - 답안설명 (answer explanation) not mapped to SourceInventoryEntry
+#     (variant generation prompt ignores it; available for future enrichment).
+#   - 문항유형 '002' = 단일선택 (5-option MCQ); all rows in these files are 002.
+
+sheet: "Sheet1"
+header_row: 0
+stem: "문제내용"
+options:
+  - "보기1"
+  - "보기2"
+  - "보기3"
+  - "보기4"
+  - "보기5"
+answer: "답안"
+# Fields derived externally (not from sheet columns):
+#   week      → from filename  e.g. "QuestionUploadExcel_9주차.xls" → 9
+#   chapter_no → week → curriculum_map lookup
+#   source_ref → "퀴즈:{week}주#{row_no}"  (row_no = 1-based data row index)

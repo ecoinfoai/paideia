@@ -37,7 +37,7 @@ Never raises on a rule violation — flags it in the returned item's
 
 from __future__ import annotations
 
-from paideia_shared.schemas import ExamItemDraft
+from paideia_shared.schemas import ExamItemDraft, SourceInventoryEntry
 
 # ---------------------------------------------------------------------------
 # Stem polarity detection keywords
@@ -247,4 +247,102 @@ def check_formative(item: ExamItemDraft) -> ExamItemDraft:
     return item.model_copy(update=updates) if updates else item
 
 
-__all__ = ["check_format", "check_formative"]
+# ---------------------------------------------------------------------------
+# T042 — Quiz variation jaccard guard
+# ---------------------------------------------------------------------------
+
+# 자카드 유사도 임계값 (0 < J < 0.8 이 정상 변형 범위)
+_JACCARD_UPPER = 0.8   # 이 이상 → 원본과 너무 유사 (재작성 불충분)
+_JACCARD_LOWER = 0.0   # 이 이하 → 원본과 완전히 다름 (개념 보존 의심)
+
+
+def token_jaccard(a: str, b: str) -> float:
+    """Compute token-set Jaccard similarity between two strings.
+
+    Tokenises by splitting on whitespace.  Empty tokens are ignored.
+    Empty inputs produce Jaccard == 0.0 (no shared tokens, no union).
+
+    Jaccard(A, B) = |A ∩ B| / |A ∪ B|
+
+    Args:
+        a: First string.
+        b: Second string.
+
+    Returns:
+        Float in [0.0, 1.0].  Returns 0.0 if both strings are empty.
+    """
+    tokens_a = set(a.split())
+    tokens_b = set(b.split())
+    union = tokens_a | tokens_b
+    if not union:
+        return 0.0
+    intersection = tokens_a & tokens_b
+    return len(intersection) / len(union)
+
+
+def check_quiz_variation(
+    item: ExamItemDraft,
+    original_entry: SourceInventoryEntry,
+) -> ExamItemDraft:
+    """Apply Jaccard variation guard to a quiz-derived item.
+
+    Computes token Jaccard similarity between the varied item's
+    stem+options text and the original quiz entry's stem+options text.
+    The normal variation range is ``0 < J < 0.8``:
+
+    - J == 0 (wholly different): the concept may not be preserved →
+      flag in ``review_note``.
+    - J >= 0.8 (too similar / identical): the wording was not rewritten
+      sufficiently → flag in ``review_note``.
+    - 0 < J < 0.8: passes — no jaccard flag added.
+
+    Does NOT raise — violations are flagged in ``review_note`` for professor
+    review (constitution: non-crashing verify).
+
+    Args:
+        item: The varied ExamItemDraft (source="quiz").
+        original_entry: The original quiz SourceInventoryEntry.
+
+    Returns:
+        A new ``ExamItemDraft`` with any jaccard violation added to
+        ``review_note``.
+    """
+    # 원본 텍스트: stem + options joined (options may be None for quiz entries)
+    original_opts = original_entry.options or []
+    original_text = " ".join([original_entry.stem] + original_opts)
+
+    # 변형 텍스트: item.text + options
+    varied_text = " ".join([item.text] + list(item.options))
+
+    jaccard = token_jaccard(original_text, varied_text)
+
+    review_note = item.review_note or ""
+    notes: list[str] = []
+
+    if jaccard >= _JACCARD_UPPER:
+        notes.append(
+            f"[quiz_variation_check] jaccard={jaccard:.3f} >= {_JACCARD_UPPER}: "
+            "변형이 충분하지 않습니다 — 발문·보기를 더 다르게 재작성하세요 "
+            f"(source_ref={item.source_ref!r})"
+        )
+    elif jaccard <= _JACCARD_LOWER:
+        # J == 0.0: wholly disjoint — concept preservation cannot be verified
+        notes.append(
+            f"[quiz_variation_check] jaccard={jaccard:.3f} == 0: "
+            "변형 문항과 원본 문항 사이에 공통 토큰이 없습니다 — "
+            "동일 교재 근거 및 정답 판정 포인트 유지 여부를 교수 검토 필요 "
+            f"(source_ref={item.source_ref!r})"
+        )
+
+    if notes:
+        extra = "\n".join(notes)
+        review_note = f"{review_note}\n{extra}" if review_note else extra
+
+    updates: dict[str, object] = {}
+    if review_note != (item.review_note or ""):
+        updates["review_note"] = review_note
+
+    return item.model_copy(update=updates) if updates else item
+
+
+__all__ = ["check_format", "check_formative", "token_jaccard", "check_quiz_variation"]

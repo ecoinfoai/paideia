@@ -367,4 +367,191 @@ def load_formative_inventory(
     return entries
 
 
-__all__ = ["load_formative_inventory"]
+# ---------------------------------------------------------------------------
+# T040 — Quiz inventory parser (xlrd row dicts → SourceInventoryEntry)
+# ---------------------------------------------------------------------------
+
+def _week_to_chapter_no_for_quiz(week: int, curriculum_map: CurriculumMap) -> int | None:
+    """Resolve week → chapter_no via curriculum_map (quiz variant).
+
+    Returns the chapter_no for the first matching week entry, or None.
+
+    Args:
+        week: Week number (from .xls filename).
+        curriculum_map: Validated CurriculumMap.
+
+    Returns:
+        Integer chapter_no or None if not found.
+    """
+    for entry in curriculum_map.entries:
+        if entry.week == week:
+            return entry.chapter_no
+    return None
+
+
+def rows_to_entries(
+    rows: list[dict[str, Any]],
+    *,
+    week: int,
+    curriculum_map: CurriculumMap,
+    semester: str,
+    course_slug: str,
+) -> list[SourceInventoryEntry]:
+    """Map a list of quiz row dicts to SourceInventoryEntry objects.
+
+    Each ``row`` dict must have the keys from quiz_column_map.yaml:
+    ``'문제내용'``, ``'보기1'``..``'보기5'``, ``'답안'``.  The ``week``
+    parameter is passed in separately (from the filename) and used to
+    resolve ``chapter_no`` via ``curriculum_map``.
+
+    ``source_ref`` has the form ``'퀴즈:{week}주#{row_no}'`` where ``row_no``
+    is the 1-based index of the row within this call's ``rows`` list.
+
+    Args:
+        rows: List of row dicts keyed by column header strings.
+        week: Week number derived from the .xls filename (e.g. 9 for '9주차').
+        curriculum_map: Validated CurriculumMap for week→chapter_no lookup.
+        semester: SemesterCode for the entries.
+        course_slug: CourseSlug for the entries.
+
+    Returns:
+        List of SourceInventoryEntry objects (one per row, in order).
+
+    Raises:
+        ValueError: If ``week`` has no matching entry in ``curriculum_map``
+            (fail-fast: located error, 조용한 누락 금지).
+        KeyError: If a required column (문제내용, 보기1..5, 답안) is missing
+            from a row dict (fail-fast).
+    """
+    # Resolve chapter_no once per call (all rows in a file share the same week)
+    chapter_no = _week_to_chapter_no_for_quiz(week, curriculum_map)
+    if chapter_no is None:
+        raise ValueError(
+            f"rows_to_entries: curriculum_map 에 {week}주차 항목이 없습니다. "
+            "quiz_inventory 의 week 와 curriculum_map 을 확인하세요."
+        )
+
+    entries: list[SourceInventoryEntry] = []
+    for row_idx, row in enumerate(rows, start=1):
+        stem = str(row["문제내용"])
+        options = [
+            str(row["보기1"]),
+            str(row["보기2"]),
+            str(row["보기3"]),
+            str(row["보기4"]),
+            str(row["보기5"]),
+        ]
+        # 답안: xlrd may return float (e.g. 3.0); coerce to str "3"
+        raw_answer = row["답안"]
+        try:
+            answer_str = str(int(float(str(raw_answer))))
+        except (ValueError, TypeError):
+            answer_str = str(raw_answer)
+
+        source_ref = f"퀴즈:{week}주#{row_idx}"
+
+        entry = SourceInventoryEntry(
+            semester=semester,
+            course_slug=course_slug,
+            source="quiz",
+            source_ref=source_ref,
+            chapter_no=chapter_no,
+            week=week,
+            stem=stem,
+            options=options,
+            answer=answer_str,
+        )
+        entries.append(entry)
+
+    return entries
+
+
+def load_quiz_inventory(
+    xls_paths: list[Path],
+    curriculum_map: CurriculumMap,
+    semester: str,
+    course_slug: str,
+) -> list[SourceInventoryEntry]:
+    """Load quiz inventory from .xls files using xlrd (BIFF8, cp949).
+
+    Each file's week is parsed from the filename pattern ``{N}주차``.
+    Rows are mapped via :func:`rows_to_entries`.
+
+    The xlrd file-read path is covered by the T039 devShell manual dump
+    (see ``templates/quiz_column_map.yaml`` and ``contracts/source_inventory.md``).
+
+    Args:
+        xls_paths: List of paths to ``QuestionUploadExcel_{N}주차.xls`` files.
+        curriculum_map: Validated CurriculumMap for week→chapter_no lookup.
+        semester: SemesterCode for the entries.
+        course_slug: CourseSlug for the entries.
+
+    Returns:
+        Flat list of SourceInventoryEntry objects (source="quiz") across all
+        files, in file-then-row order.
+
+    Raises:
+        FileNotFoundError: If any .xls file does not exist.
+        ValueError: If a filename does not contain the ``{N}주차`` pattern,
+            or if a week is not in curriculum_map.
+    """
+    import re
+
+    import xlrd
+
+    all_entries: list[SourceInventoryEntry] = []
+    for xls_path in xls_paths:
+        if not xls_path.exists():
+            raise FileNotFoundError(
+                f"load_quiz_inventory: .xls not found: {xls_path}"
+            )
+
+        # Parse week from filename (e.g. 'QuestionUploadExcel_9주차.xls' → 9)
+        m = re.search(r"(\d+)주차", xls_path.stem)
+        if m is None:
+            raise ValueError(
+                f"load_quiz_inventory: cannot parse week from filename {xls_path.name!r}. "
+                "Expected pattern '{N}주차' in stem."
+            )
+        week = int(m.group(1))
+
+        # Open workbook (BIFF8, code page 949)
+        wb = xlrd.open_workbook(str(xls_path), encoding_override="cp949")
+        sh = wb.sheet_by_name("Sheet1")
+
+        # Build header→column-index map from row 0
+        headers = [sh.cell_value(0, c) for c in range(sh.ncols)]
+        header_idx: dict[str, int] = {h: i for i, h in enumerate(headers)}
+
+        required = ["문제내용", "보기1", "보기2", "보기3", "보기4", "보기5", "답안"]
+        for req in required:
+            if req not in header_idx:
+                raise ValueError(
+                    f"load_quiz_inventory: {xls_path.name!r} Sheet1 is missing "
+                    f"required column {req!r}. "
+                    f"Found headers: {headers}"
+                )
+
+        # Read data rows (skip header row 0)
+        rows: list[dict[str, Any]] = []
+        for r in range(1, sh.nrows):
+            row_vals = sh.row_values(r)
+            row_dict: dict[str, Any] = {h: row_vals[i] for h, i in header_idx.items()}
+            # Skip blank rows (문제내용 empty)
+            if not str(row_dict.get("문제내용", "")).strip():
+                continue
+            rows.append(row_dict)
+
+        entries = rows_to_entries(
+            rows,
+            week=week,
+            curriculum_map=curriculum_map,
+            semester=semester,
+            course_slug=course_slug,
+        )
+        all_entries.extend(entries)
+
+    return all_entries
+
+
+__all__ = ["load_formative_inventory", "load_quiz_inventory", "rows_to_entries"]

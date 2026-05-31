@@ -1,4 +1,4 @@
-"""T024 / T036 — Blueprint solver: total_items → chapter-even slot list.
+"""T024 / T036 / T043 — Blueprint solver: total_items → chapter-even slot list.
 
 Deterministic greedy allocation:
 1. Distribute total_items evenly across chapters (max diff ≤ 1).
@@ -11,19 +11,30 @@ T036 addition: ``validate_formative_count`` checks that
 solver runs.  ``solve`` accepts an optional ``formative_inventory`` parameter
 and calls the validator automatically when provided.
 
+T043 addition: ``select_quiz_subset`` deterministically selects ``target``
+quiz entries from a larger inventory pool, distributing them chapter-evenly
+(max count diff ≤ 1).  ``solve`` accepts an optional ``quiz_inventory``
+parameter; when provided the solver attaches ``source_ref`` from the
+selected subset to each quiz slot for downstream traceability.
+
 No ILP, no external dependencies — pure Python.
 
 Usage::
 
-    from examen.plan.blueprint import solve, validate_formative_count, Slot
+    from examen.plan.blueprint import solve, validate_formative_count, Slot, select_quiz_subset
 
     validate_formative_count(blueprint, formative_inventory)
-    slots = solve(blueprint, curriculum_map, formative_inventory=formative_inventory)
+    slots = solve(
+        blueprint, curriculum_map,
+        formative_inventory=formative_inventory,
+        quiz_inventory=quiz_inventory,
+    )
     # slots: list[Slot]
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Literal
 
@@ -141,6 +152,73 @@ def _difficulty_sequence(n: int, targets: dict[str, float]) -> list[DifficultyLa
 
 
 # ---------------------------------------------------------------------------
+# T043 — Quiz chapter-even subset selection
+# ---------------------------------------------------------------------------
+
+
+def select_quiz_subset(
+    inventory: list[SourceInventoryEntry],
+    target: int,
+    chapters: list[int],
+) -> list[SourceInventoryEntry]:
+    """Select ``target`` quiz entries from ``inventory`` in a chapter-even, deterministic order.
+
+    Algorithm:
+    1. Group inventory by ``chapter_no``.
+    2. For each chapter in ``chapters`` order, allocate slots using
+       ``_even_distribute(target, len(chapters))`` — so the per-chapter
+       allocation differs by at most 1.
+    3. Take the first N entries from each chapter group (stable order).
+    4. Return the flat list in chapter-major order (deterministic).
+
+    Args:
+        inventory: Pool of quiz SourceInventoryEntry objects.
+        target: Desired total selection count.
+        chapters: Ordered list of chapter_no values that must be represented.
+
+    Returns:
+        Deterministic list of ``target`` SourceInventoryEntry objects,
+        chapter-even.
+
+    Raises:
+        ValueError: If ``inventory`` cannot supply ``target`` items
+            chapter-evenly (e.g. a chapter has fewer entries than its
+            allocated slot count).
+    """
+    if not inventory:
+        raise ValueError(
+            f"select_quiz_subset: quiz inventory is empty — "
+            f"cannot select {target} items."
+        )
+    if target <= 0:
+        return []
+
+    # Group by chapter_no, preserving original order within each group
+    groups: dict[int, list[SourceInventoryEntry]] = defaultdict(list)
+    for entry in inventory:
+        ch_no = entry.chapter_no if entry.chapter_no is not None else 0
+        groups[ch_no].append(entry)
+
+    # Allocate per-chapter using _even_distribute
+    n_chapters = len(chapters)
+    per_chapter_counts = _even_distribute(target, n_chapters)
+
+    result: list[SourceInventoryEntry] = []
+    for ch_no, alloc in zip(chapters, per_chapter_counts, strict=False):
+        available = groups.get(ch_no, [])
+        if len(available) < alloc:
+            raise ValueError(
+                f"select_quiz_subset: chapter {ch_no} needs {alloc} quiz items "
+                f"but only {len(available)} available in inventory. "
+                "quiz_inventory 가 충분하지 않습니다 — 더 많은 퀴즈 문항을 추가하거나 "
+                "target 을 줄이세요."
+            )
+        result.extend(available[:alloc])
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # T036 — Formative 전수 슬롯 예약 + source_mix.formative == 대장수 검증
 # ---------------------------------------------------------------------------
 
@@ -183,19 +261,24 @@ def solve(
     blueprint: ExamenBlueprint,
     curriculum_map: CurriculumMap,
     formative_inventory: list[SourceInventoryEntry] | None = None,
+    quiz_inventory: list[SourceInventoryEntry] | None = None,
 ) -> list[Slot]:
     """Solve the blueprint: return a chapter-even list of Slots.
 
     Allocation procedure:
     1. If ``formative_inventory`` is provided, validate the count against
        ``blueprint.source_mix['formative']`` (T036 cross-check).
-    2. Identify the chapters from ``blueprint.chapters`` and look up their
+    2. If ``quiz_inventory`` is provided, select ``source_mix['quiz']`` items
+       chapter-evenly via ``select_quiz_subset`` (T043).
+    3. Identify the chapters from ``blueprint.chapters`` and look up their
        ``chapter_no`` from ``curriculum_map``.
-    3. Distribute ``blueprint.total_items`` evenly across chapters (max diff ≤ 1).
-    4. Assign sources to slots in the order: formative → quiz → textbook.
-    5. Assign difficulty labels globally (whole-exam distribution) via round-robin
+    4. Distribute ``blueprint.total_items`` evenly across chapters (max diff ≤ 1).
+    5. Assign sources to slots in the order: formative → quiz → textbook.
+    6. Assign difficulty labels globally (whole-exam distribution) via round-robin
        interleaving so individual chapters are NOT forced to any particular
        difficulty distribution.
+    7. For quiz slots, attach ``source_ref`` from the selected quiz subset
+       (chapter-major order) for downstream traceability.
 
     If a chapter in ``blueprint.chapters`` has no matching entry in
     ``curriculum_map``, its ``chapter_no`` defaults to 0 and a sentinel
@@ -207,6 +290,10 @@ def solve(
         formative_inventory: Optional list of formative SourceInventoryEntry
             objects.  When provided, their count is validated against
             ``blueprint.source_mix['formative']``.
+        quiz_inventory: Optional pool of quiz SourceInventoryEntry objects.
+            When provided, ``source_mix['quiz']`` items are selected
+            chapter-evenly and their ``source_ref`` values are attached to
+            quiz slots.
 
     Returns:
         Deterministic list of :class:`Slot` objects, one per planned exam item.
@@ -214,6 +301,8 @@ def solve(
     Raises:
         ValueError: If ``formative_inventory`` is provided and its count does
             not match ``blueprint.source_mix['formative']``.
+        ValueError: If ``quiz_inventory`` is provided but insufficient to
+            fill the required quiz slots chapter-evenly.
     """
     # T036: 형성 전수 검증 (인벤토리 제공 시)
     if formative_inventory is not None:
@@ -231,6 +320,28 @@ def solve(
     n_chapters = len(chapters)
     if n_chapters == 0:
         return []
+
+    # ----------------------------------------------------------------
+    # T043: quiz subset selection (인벤토리 제공 시)
+    # ----------------------------------------------------------------
+    # chapter_no 목록 (blueprint 장 순서대로, curriculum_map 에서 조회)
+    chapter_nos_ordered = [ch_to_no.get(ch, 0) for ch in chapters]
+
+    # 퀴즈 슬롯 수
+    quiz_target = blueprint.source_mix.get("quiz", 0)
+
+    # quiz_inventory 가 제공되면 챕터 균등으로 quiz_target 개 선택
+    # 선택된 항목을 chapter-major 순서로 인덱스에 넣어 slot 생성 시 참조
+    selected_quiz: list[SourceInventoryEntry] = []
+    if quiz_inventory is not None and quiz_target > 0:
+        selected_quiz = select_quiz_subset(
+            quiz_inventory,
+            target=quiz_target,
+            chapters=chapter_nos_ordered,
+        )
+    # quiz_source_ref_iter: chapter-major 순서로 quiz 슬롯에 source_ref 를 할당
+    # (solver 도 chapter-major 로 슬롯을 생성하��로 순서가 일치)
+    quiz_ref_iter = iter(entry.source_ref for entry in selected_quiz)
 
     # ----------------------------------------------------------------
     # Step 2: chapter-even distribution
@@ -288,6 +399,12 @@ def solve(
             slot_counter += 1
             slot_id = f"slot-{slot_counter:03d}"
             difficulty = diff_seq[slot_counter - 1]
+
+            # T043: quiz 슬롯에 selected_quiz 의 source_ref 를 순서대로 첨부
+            slot_source_ref: str | None = None
+            if src == "quiz" and selected_quiz:
+                slot_source_ref = next(quiz_ref_iter, None)
+
             slots.append(
                 Slot(
                     slot_id=slot_id,
@@ -296,10 +413,11 @@ def solve(
                     source=src,
                     difficulty=difficulty,
                     section=None,
+                    source_ref=slot_source_ref,
                 )
             )
 
     return slots
 
 
-__all__ = ["Slot", "solve", "validate_formative_count"]
+__all__ = ["Slot", "solve", "validate_formative_count", "select_quiz_subset"]

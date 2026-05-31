@@ -69,6 +69,7 @@ from examen.generate.backend import (
 )
 from examen.generate.convert_formative import convert_formative
 from examen.generate.item_gen import generate_item
+from examen.generate.vary_quiz import vary_quiz
 from examen.ingest.report import write_ingest_report
 from examen.ingest.textbook import load_chapter, verify_chapter_files
 from examen.output.determinism import finalize_xlsx
@@ -78,7 +79,7 @@ from examen.output.yaml_out import write_yaml
 from examen.plan.blueprint import solve
 from examen.silver.chunk import chunk_chapter
 from examen.silver.evidence_index import EvidenceIndex
-from examen.verify.format_checks import check_format, check_formative
+from examen.verify.format_checks import check_format, check_formative, check_quiz_variation
 from examen.verify.groundedness import verify_groundedness
 
 # ---------------------------------------------------------------------------
@@ -243,6 +244,7 @@ def build_exam(
     blueprint_path: Path | None = None,
     curriculum_map_path: Path | None = None,
     formative_inventory: list[SourceInventoryEntry] | None = None,
+    quiz_inventory: list[SourceInventoryEntry] | None = None,
 ) -> tuple[list[ExamItemDraft], Path]:
     """Run the full ingest→plan→generate→verify→output pipeline.
 
@@ -258,7 +260,7 @@ def build_exam(
     4. For each slot:
        - textbook: generate_item → verify_groundedness → check_format
        - formative: convert_formative → check_format → check_formative
-       - quiz: NotImplementedError (US3)
+       - quiz: vary_quiz → check_format → check_quiz_variation
     5. Write xlsx + yaml + manifest + ingest_report to the run Gold dir
        (all-or-nothing: writes only after all items are verified).
     6. Return ``(items, run_dir)``.
@@ -280,6 +282,10 @@ def build_exam(
             and formative slots are dispatched to ``convert_formative``.
             When None, the formative slot count must be 0 or a ValueError is
             raised.
+        quiz_inventory: Optional pool of quiz SourceInventoryEntry objects
+            (source="quiz").  When provided, ``source_mix['quiz']`` items are
+            selected chapter-evenly and dispatched to ``vary_quiz``.
+            When None, quiz slot count must be 0 or a ValueError is raised.
 
     Returns:
         ``(items, run_dir)`` — the generated+verified items and the
@@ -288,8 +294,8 @@ def build_exam(
     Raises:
         FileNotFoundError: If any required chapter .txt is missing.
         ValueError: If source_mix.formative != len(formative_inventory), or
+            if quiz_inventory cannot supply enough chapter-even items, or
             if generation or verification fails critically.
-        NotImplementedError: If a quiz slot is encountered (US3 scope).
     """
     # ----------------------------------------------------------------
     # Step 1: fail-fast chapter file verification
@@ -354,7 +360,12 @@ def build_exam(
     # Step 3: solve blueprint → slot list
     # T036: pass formative_inventory for cross-check (validate_formative_count)
     # ----------------------------------------------------------------
-    slots = solve(blueprint, curriculum_map, formative_inventory=formative_inventory)
+    slots = solve(
+        blueprint,
+        curriculum_map,
+        formative_inventory=formative_inventory,
+        quiz_inventory=quiz_inventory,
+    )
 
     # ----------------------------------------------------------------
     # Step 4: generate + verify each slot
@@ -374,6 +385,13 @@ def build_exam(
         key=lambda e: (e.chapter_no if e.chapter_no is not None else 0),
     )
     formative_iter = iter(sorted_formative)
+
+    # 퀴즈 슬롯: solver 가 slot.source_ref 에 선택된 source_ref 를 첨부했으므로
+    # source_ref → SourceInventoryEntry 맵으로 조회한다.
+    quiz_entry_map: dict[str, SourceInventoryEntry] = {
+        entry.source_ref: entry
+        for entry in (quiz_inventory or [])
+    }
 
     items: list[ExamItemDraft] = []
     for slot in slots:
@@ -438,11 +456,35 @@ def build_exam(
             item = check_formative(item)  # T035 formative 전용 검증
 
         elif slot.source == "quiz":
-            raise NotImplementedError(
-                f"Quiz variation generation is not implemented in US2. "
-                f"See US3 (slot_id={slot.slot_id}). "
-                "This path will be filled by a later sub-unit."
+            # T041/T043: quiz 슬롯 → vary_quiz (US3)
+            # solver 가 slot.source_ref 에 선택된 quiz source_ref 를 첨부한다.
+            quiz_ref = slot.source_ref
+            if quiz_ref is None:
+                raise ValueError(
+                    f"build_exam: quiz slot '{slot.slot_id}' has no source_ref. "
+                    "quiz_inventory 를 제공하거나 blueprint.source_mix.quiz 를 0으로 설정하세요."
+                )
+            quiz_entry = quiz_entry_map.get(quiz_ref)
+            if quiz_entry is None:
+                raise ValueError(
+                    f"build_exam: quiz slot '{slot.slot_id}' source_ref={quiz_ref!r} 를 "
+                    "quiz_inventory 에서 찾을 수 없습니다. quiz_inventory 를 확인하세요."
+                )
+
+            item = vary_quiz(
+                entry=quiz_entry,
+                backend=backend,
+                cache=cache,
             )
+            # 글로벌 슬롯 위치, 장 이름, 난이도를 slot 에서 보정 (formative 와 동일 패턴)
+            item = item.model_copy(update={
+                "item_no": _slot_position(slot.slot_id),
+                "chapter": slot.chapter,
+                "chapter_no": slot.chapter_no,
+                "difficulty": slot.difficulty,
+            })
+            item = check_format(item)
+            item = check_quiz_variation(item, quiz_entry)  # T042 자카드 가드
 
         else:
             raise ValueError(
@@ -559,7 +601,10 @@ def build_exam(
             "expected_total": blueprint.source_mix.get("formative", 0),
             "found": n_formative,
         },
-        "quiz": {"weeks": [], "rows": 0},
+        "quiz": {
+            "weeks": sorted({e.week for e in (quiz_inventory or []) if e.week is not None}),
+            "rows": len(quiz_inventory) if quiz_inventory else 0,
+        },
     }
     write_ingest_report(run_dir / "ingest_report.json", ingest_report)
 
