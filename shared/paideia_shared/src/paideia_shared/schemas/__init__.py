@@ -26,6 +26,7 @@ from .cohort_row import CohortRow
 from .combined_analysis_manifest import CombinedAnalysisManifest
 from .combined_analysis_row import CombinedAnalysisRow
 from .correlation_cell import CorrelationCell
+from .curriculum_map import CurriculumEntry, CurriculumMap
 from .diagnostic_mapping import (
     DiagnosticMappingConfig,
     MappingAxes,
@@ -48,8 +49,12 @@ from .email_dispatch_manifest import (
 from .email_dispatch_report import DispatchReportData
 from .email_mapping_entry import EmailMappingEntry
 from .email_message_draft import EmailMessageDraft
+from .emphasis_cell import EmphasisCell
 from .exam_item import ExamItem
+from .exam_item_draft import ExamItemDraft, TextbookEvidence
 from .exam_result import ExamResult
+from .examen_blueprint import ExamenBlueprint
+from .examen_manifest import ExamenManifest
 from .factor_scores import FactorScoreRow
 from .factor_scores_long import FactorScoresLongRow
 from .free_text_categorization import FreeTextRow
@@ -74,11 +79,13 @@ from .pre_send_summary import PreSendSummary
 from .professor_profile import ProfessorProfile
 from .regression_summary import RegressionCoefficient, RegressionFitSummary
 from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
+from .source_inventory_entry import SourceInventoryEntry
 from .student_exam_metrics import StudentExamMetrics
 from .student_master import StudentMaster
 from .student_pdf_bundle import StudentPDFBundle
 from .subgroup_score_comparison import SubgroupScoreComparison
 from .test_profile import DummyStudent, TestProfile
+from .textbook_chunk import TextbookChunk
 
 __all__ = [
     "CanonicalStudentId",
@@ -158,4 +165,14 @@ __all__ = [
     "TestProfile",
     # spec 007 immersio-email v0.1.1 — 1 new model
     "PreSendSummary",
+    # spec 008 examen question-gen — 7 new models (T004-T011)
+    "ExamenBlueprint",
+    "CurriculumEntry",
+    "CurriculumMap",
+    "SourceInventoryEntry",
+    "TextbookChunk",
+    "EmphasisCell",
+    "TextbookEvidence",
+    "ExamItemDraft",
+    "ExamenManifest",
 ]
