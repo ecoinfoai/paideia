@@ -453,6 +453,151 @@ def detect_duplicates(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
     return result
 
 
+# ---------------------------------------------------------------------------
+# T050 — Answer-key balance: reorder answer positions so each of 1–5 falls
+#         in 15–25% and no run of >2 consecutive identical answer numbers.
+# ---------------------------------------------------------------------------
+
+# 정답 번호 균형 목표 범위 (비율)
+_BALANCE_MIN_RATIO = 0.15
+_BALANCE_MAX_RATIO = 0.25
+
+
+def _swap_answer_to_position(item: ExamItemDraft, new_pos: int) -> ExamItemDraft:
+    """Swap the correct answer option to ``new_pos`` (1-based) within an item.
+
+    Performs a two-way swap between the current answer position and ``new_pos``:
+    - ``options[answer_no-1]`` ↔ ``options[new_pos-1]``
+    - ``distractor_rationale[answer_no-1]`` ↔ ``distractor_rationale[new_pos-1]``
+    - ``answer_no`` is updated to ``new_pos``
+
+    The correct answer *content* is unchanged — only its position moves.
+    Pre-condition: ``1 <= new_pos <= 5`` and ``new_pos != item.answer_no``.
+
+    Args:
+        item: The exam item to rebalance.
+        new_pos: The target 1-based position for the correct answer.
+
+    Returns:
+        A new ``ExamItemDraft`` with the swap applied.
+    """
+    opts = list(item.options)
+    rats = list(item.distractor_rationale)
+    old_idx = item.answer_no - 1
+    new_idx = new_pos - 1
+
+    # Swap content
+    opts[old_idx], opts[new_idx] = opts[new_idx], opts[old_idx]
+    rats[old_idx], rats[new_idx] = rats[new_idx], rats[old_idx]
+
+    return item.model_copy(
+        update={
+            "options": opts,
+            "distractor_rationale": rats,
+            "answer_no": new_pos,
+        }
+    )
+
+
+def balance_answer_keys(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
+    """Rebalance answer_no positions so the distribution is 15–25% and runs ≤ 2.
+
+    Algorithm (greedy, deterministic — no randomness):
+    1. Compute current counts per answer number (1–5).
+    2. Determine over-represented numbers (ratio > 25%) and
+       under-represented numbers (ratio < 15%).
+    3. Iterate through items in order.  For each item:
+       a. If its current answer_no creates a run of 3 OR is over-represented
+          and an under-represented target exists, swap the answer to the
+          most under-represented position (breaking ties by lowest number).
+       b. Update counts after each swap.
+    4. Continue until no over-represented / run-of-3 violations remain,
+       or a full pass produces no swaps (convergence guard).
+
+    Guarantees:
+    - Input item list length is preserved.
+    - Each item's correct answer *content* is unchanged (only position moves).
+    - Deterministic: identical input → identical output.
+    - For N ≥ 5 items the algorithm converges (finite items, finite swaps).
+    - For very small N (< 5) the 15–25% guarantee may not be achievable;
+      the algorithm does its best and never crashes.
+
+    Args:
+        items: List of exam items to rebalance.
+
+    Returns:
+        New list of ``ExamItemDraft`` objects with rebalanced answer positions.
+    """
+    if not items:
+        return []
+
+    n = len(items)
+    result = list(items)
+
+    # Maximum passes to prevent infinite loops on pathological inputs
+    max_passes = n * 5
+
+    for _pass in range(max_passes):
+        changed = False
+        counts: dict[int, int] = dict.fromkeys(range(1, 6), 0)
+        for item in result:
+            counts[item.answer_no] += 1
+
+        for idx in range(n):
+            item = result[idx]
+            current = item.answer_no
+
+            # --- Check run-of-3 violation ---
+            run_of_3 = (
+                idx >= 2
+                and result[idx - 1].answer_no == current
+                and result[idx - 2].answer_no == current
+            )
+
+            # --- Check over-represented ---
+            over_represented = (counts[current] / n) > _BALANCE_MAX_RATIO
+
+            if not (run_of_3 or over_represented):
+                continue  # No violation — leave this item alone
+
+            # Find best swap target: most under-represented position
+            # that does NOT introduce a new run-of-3 at this position.
+            # Tie-break: lowest number.
+            # Pass counts and n as default args to bind loop variables (avoids B023).
+            candidates = sorted(
+                [p for p in range(1, 6) if p != current],
+                key=lambda pos, _c=counts, _n=n: (_c[pos] / _n, pos),
+            )
+
+            chosen: int | None = None
+            for cand in candidates:
+                # Avoid creating a run-of-3 at this index after swap:
+                # the two items before must not both have answer_no == cand
+                if idx >= 2 and (
+                    result[idx - 1].answer_no == cand
+                    and result[idx - 2].answer_no == cand
+                ):
+                    continue  # Would create a run-of-3 backwards — skip
+                chosen = cand
+                break
+
+            if chosen is None:
+                # No valid swap found — try any candidate (run avoidance failed,
+                # prefer distribution fix over run fix in degenerate cases)
+                chosen = candidates[0]
+
+            # Perform swap
+            counts[current] -= 1
+            counts[chosen] += 1
+            result[idx] = _swap_answer_to_position(item, chosen)
+            changed = True
+
+        if not changed:
+            break  # Converged — no more swaps needed
+
+    return result
+
+
 __all__ = [
     "check_format",
     "check_formative",
@@ -460,4 +605,5 @@ __all__ = [
     "check_quiz_variation",
     "check_explanation_lengths",
     "detect_duplicates",
+    "balance_answer_keys",
 ]

@@ -75,12 +75,18 @@ from examen.ingest.textbook import load_chapter, verify_chapter_files
 from examen.output.determinism import finalize_xlsx
 from examen.output.exam_item_projection import write_exam_item_projection
 from examen.output.manifest import build_manifest, write_manifest
+from examen.output.quality_report import (
+    build_quality_report,
+    build_targets_vs_actual,
+    write_quality_report,
+)
 from examen.output.xlsx import write_xlsx
 from examen.output.yaml_out import write_yaml
 from examen.plan.blueprint import solve
 from examen.silver.chunk import chunk_chapter
 from examen.silver.evidence_index import EvidenceIndex
 from examen.verify.format_checks import (
+    balance_answer_keys,
     check_explanation_lengths,
     check_format,
     check_formative,
@@ -512,6 +518,15 @@ def build_exam(
     items = [check_explanation_lengths(i) for i in items]
 
     # ----------------------------------------------------------------
+    # Step 4c: US5 answer-key balance (T050)
+    # Run AFTER dedup + length check, BEFORE output & quality report so
+    # that the final answer distribution is balanced.
+    # blueprint.answer_key_balance=True (default) triggers the rebalance.
+    # ----------------------------------------------------------------
+    if blueprint.answer_key_balance:
+        items = balance_answer_keys(items)
+
+    # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output
     # xlsx + yaml are byte-identical across identical-input re-runs; the
     # manifest carries the only non-deterministic field (generated_at).
@@ -563,27 +578,9 @@ def build_exam(
         )
     )
 
-    # targets_vs_actual
+    # targets_vs_actual — T051: use build_targets_vs_actual for full structured dict
     total = len(items)
-    easy_n = sum(1 for i in items if i.difficulty == "1_쉬움")
-    med_n = sum(1 for i in items if i.difficulty == "2_보통")
-    hard_n = sum(1 for i in items if i.difficulty == "3_어려움")
-    ch_counts = list(Counter(i.chapter for i in items).values())
-    targets_vs_actual: dict[str, Any] = {
-        "difficulty": {
-            "target": [
-                blueprint.difficulty_targets.get("easy", 0.45),
-                blueprint.difficulty_targets.get("medium", 0.35),
-                blueprint.difficulty_targets.get("hard", 0.20),
-            ],
-            "actual": [
-                easy_n / total if total else 0.0,
-                med_n / total if total else 0.0,
-                hard_n / total if total else 0.0,
-            ],
-        },
-        "chapter_even_maxdiff": (max(ch_counts) - min(ch_counts)) if ch_counts else 0,
-    }
+    targets_vs_actual: dict[str, Any] = build_targets_vs_actual(items, blueprint)
 
     # llm_backend reflects the ACTUAL backend that generated the items
     # (subscription / api / none(dry-run) for tests' FakeBackend).
@@ -609,6 +606,10 @@ def build_exam(
         targets_vs_actual=targets_vs_actual,
     )
     write_manifest(run_dir / "manifest_examen.json", manifest)
+
+    # 5c-2: quality report (T051) — 출제품질리포트.md
+    quality_report_text = build_quality_report(items, blueprint)
+    write_quality_report(run_dir / "출제품질리포트.md", quality_report_text)
 
     # 5d: ingest report
     textbook_report: dict[str, Any] = {
