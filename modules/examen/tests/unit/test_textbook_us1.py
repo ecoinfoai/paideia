@@ -246,6 +246,42 @@ class TestTextbookClean:
         assert "†본 연구는 한국연구재단의 지원을 받았습니다." not in kept_texts
         assert any("footnote" in r.lower() or "각주" in r for r in removed)
 
+    @pytest.mark.parametrize(
+        "heading",
+        [
+            "연습 문제",       # 공백 변형
+            "연습문제:",       # 콜론 꼬리
+            "[연습문제]",      # 대괄호 헤딩
+            "■ 연습문제",      # 선두 장식
+            "연습문제 (5문항)",  # 괄호 안 문항수
+        ],
+    )
+    def test_exercise_block_variant_removed(self, heading: str) -> None:
+        """Common 연습문제 heading variants still trigger block removal."""
+        lines = [
+            "본문 내용.",
+            heading,
+            "1. 문제 하나.",
+            "2. 문제 둘.",
+        ]
+        kept, removed = self._clean(lines)
+        kept_texts = {text for _, text in kept}
+        assert heading not in kept_texts
+        assert "1. 문제 하나." not in kept_texts
+        assert "2. 문제 둘." not in kept_texts
+        assert any("exercise_block" in r or "연습" in r for r in removed)
+
+    def test_exercise_word_in_body_sentence_not_removed(self) -> None:
+        """A body sentence beginning '연습문제' is NOT mistaken for the block."""
+        lines = [
+            "연습문제는 학습에 매우 중요하다.",
+            "본문 계속.",
+        ]
+        kept, _ = self._clean(lines)
+        kept_texts = {text for _, text in kept}
+        # The sentence must survive (it is body text, not a heading)
+        assert "연습문제는 학습에 매우 중요하다." in kept_texts
+
 
 # ============================================================================
 # T022: textbook loader + evidence_index + verify_chapter_files
@@ -353,6 +389,33 @@ class TestEvidenceIndex:
         hits = idx.search("H U M A N")
         assert len(hits) >= 1
         assert any(h.line_no == 1 for h in hits)
+
+    def test_build_rejects_tuple_shape(self) -> None:
+        """Passing load_chapter's (lineno, text) tuples to build() fails fast."""
+        from examen.silver.evidence_index import EvidenceIndex
+        numbered = [(1, "본문"), (2, "다음 줄")]
+        with pytest.raises(TypeError, match="from_chapter"):
+            EvidenceIndex.build(numbered, source_file="x.txt")  # type: ignore[arg-type]
+
+    def test_from_chapter_preserves_original_line_numbers(self, tmp_path: Path) -> None:
+        """from_chapter wires load_chapter output without renumbering lines."""
+        from examen.ingest.textbook import load_chapter
+        from examen.silver.evidence_index import EvidenceIndex
+
+        p = tmp_path / "10장 내분비계통.txt"
+        p.write_text("\n".join(FIXTURE_LINES), encoding="utf-8")
+        numbered = load_chapter(p)
+        idx = EvidenceIndex.from_chapter(numbered, source_file=p.name)
+        # "PTH" is on original line 31
+        hits = idx.search("PTH")
+        assert len(hits) == 1
+        assert hits[0].line_no == 31
+
+    def test_from_chapter_rejects_bad_shape(self) -> None:
+        """from_chapter fails fast on a non-(int, str) element."""
+        from examen.silver.evidence_index import EvidenceIndex
+        with pytest.raises(TypeError):
+            EvidenceIndex.from_chapter(["plain string"], source_file="x.txt")  # type: ignore[arg-type]
 
 
 class TestVerifyChapterFiles:
@@ -487,9 +550,14 @@ class TestChunkChapter:
     def test_line_ranges_point_at_original_lines(self) -> None:
         """line_start/line_end reference ORIGINAL file line numbers."""
         chunks = self._make_chunks()
-        # Section "1. 뇌하수체" body starts at original line 14
-        # (FIXTURE_LINES index 13 = "뇌하수체는 터키안장에 위치한다.", 1-based = 14)
+        # Section "1. 뇌하수체" body heading is at original line 12 (the BODY
+        # occurrence) — NOT line 6 (the TOC occurrence).  Asserting the exact
+        # line_start exercises the TOC-dedup-correctness invariant.
         sec1 = next(c for c in chunks if c.section == "1. 뇌하수체")
+        assert sec1.line_start == 12, (
+            f"line_start should anchor at the BODY heading (line 12), "
+            f"not the TOC (line 6); got {sec1.line_start}"
+        )
         # The chunk must cover line 14 ("뇌하수체는 터키안장에 위치한다.")
         assert sec1.line_start <= 14 <= sec1.line_end, (
             f"Expected line 14 in [{sec1.line_start}, {sec1.line_end}]"
@@ -505,10 +573,14 @@ class TestChunkChapter:
             assert "갑상샘호르몬의 기능을 설명하시오" not in c.text
 
     def test_removed_spans_logged_in_chunks(self) -> None:
-        """At least one chunk carries removed_spans (noise was found)."""
+        """Chunks carry removed_spans including the exercise-block entry."""
         chunks = self._make_chunks()
         all_removed = [span for c in chunks for span in c.removed_spans]
         assert len(all_removed) > 0
+        # The 연습문제 terminal block (original lines 35–39) MUST be logged.
+        assert any(
+            "exercise_block" in span and "35" in span for span in all_removed
+        ), f"exercise-block span not found in removed_spans: {all_removed}"
 
     def test_chunk_id_is_deterministic(self) -> None:
         """Same input always produces identical chunk_id values."""
@@ -574,3 +646,71 @@ class TestChunkChapter:
         )
         # Should return at least one chunk (whole-chapter fallback)
         assert len(chunks) >= 1
+
+    # ----------------------------------------------------------------
+    # TOC-dedup auditability (review fix)
+    # ----------------------------------------------------------------
+
+    def test_heading_once_logs_anchor_ambiguous_warning(self) -> None:
+        """A section heading occurring 1× records a section-anchor-ambiguous warning.
+
+        With only one occurrence we cannot tell TOC from body; the code treats
+        it as a body heading but MUST log that the decision is ambiguous.
+        """
+        from examen.silver.chunk import chunk_chapter
+        lines = [
+            "1. 뇌하수체",        # single occurrence — ambiguous (TOC vs body)
+            "",
+            "뇌하수체는 터키안장에 위치한다.",
+        ]
+        chunks = chunk_chapter(
+            lines=lines, chapter_no=10, chapter="10장",
+            semester="2026-1", course_slug="anatomy",
+            source_file="10장.txt",
+        )
+        all_removed = [span for c in chunks for span in c.removed_spans]
+        assert any(
+            "section-anchor-ambiguous" in span and "1×" in span
+            for span in all_removed
+        ), f"no 1× ambiguity warning recorded: {all_removed}"
+
+    def test_heading_thrice_logs_duplicate_warning(self) -> None:
+        """A heading occurring 3× records a warning and yields duplicate chunks.
+
+        Occurrence 1 = TOC (skipped); occurrences 2 and 3 = body headings, so
+        two chunks share the same section label.  The ambiguity MUST be logged.
+        """
+        from examen.silver.chunk import chunk_chapter
+        lines = [
+            "1. 뇌하수체",        # 1: TOC
+            "",
+            "1. 뇌하수체",        # 2: body heading A
+            "첫 번째 본문.",
+            "1. 뇌하수체",        # 3: body heading B (duplicate)
+            "두 번째 본문.",
+        ]
+        chunks = chunk_chapter(
+            lines=lines, chapter_no=10, chapter="10장",
+            semester="2026-1", course_slug="anatomy",
+            source_file="10장.txt",
+        )
+        # Two body chunks for the same section label
+        sec_chunks = [c for c in chunks if c.section == "1. 뇌하수체"]
+        assert len(sec_chunks) == 2, f"expected 2 duplicate-section chunks, got {len(sec_chunks)}"
+        # chunk_ids must still be unique (ordinal disambiguates)
+        assert len({c.chunk_id for c in sec_chunks}) == 2
+        # A 3× ambiguity warning must be recorded
+        all_removed = [span for c in chunks for span in c.removed_spans]
+        assert any(
+            "section-anchor-ambiguous" in span and "3×" in span
+            for span in all_removed
+        ), f"no 3× ambiguity warning recorded: {all_removed}"
+
+    def test_clean_two_occurrence_heading_no_ambiguity_warning(self) -> None:
+        """The normal 2× case (TOC + one body) records NO ambiguity warning."""
+        chunks = self._make_chunks()
+        all_removed = [span for c in chunks for span in c.removed_spans]
+        # Fixture headings each appear exactly 2× (TOC + body) → unambiguous
+        assert not any(
+            "section-anchor-ambiguous" in span for span in all_removed
+        ), f"unexpected ambiguity warning on clean 2× fixture: {all_removed}"

@@ -64,18 +64,82 @@ class EvidenceIndex:
         *,
         source_file: str,
     ) -> EvidenceIndex:
-        """Build an EvidenceIndex from a list of raw lines.
+        """Build an EvidenceIndex from a list of raw string lines.
+
+        Line numbers are assigned by position (1-based ``enumerate``).  Use
+        this when you have the plain ``list[str]`` form (e.g. the result of
+        ``Path.read_text().split("\\n")``).  If you already have the
+        ``(lineno, text)`` tuple form produced by
+        :func:`examen.ingest.textbook.load_chapter`, call
+        :meth:`from_chapter` instead — passing tuples here is a type error
+        that would otherwise silently corrupt line numbers.
 
         Args:
-            lines: 0-indexed raw lines from the original file (BEFORE
+            lines: 0-indexed raw string lines from the original file (BEFORE
                 any cleaning step).
             source_file: Basename of the source file (used in hit records).
 
         Returns:
             A populated EvidenceIndex.
+
+        Raises:
+            TypeError: If ``lines`` is not a list of ``str`` (fail-fast guard
+                against accidentally passing the ``load_chapter`` tuple form).
         """
+        # Fail-fast: reject the (lineno, text) tuple shape so a caller can't
+        # silently get wrong line numbers (matters for T027 groundedness).
+        if lines and not isinstance(lines[0], str):
+            raise TypeError(
+                "EvidenceIndex.build expects list[str]; got an element of "
+                f"type {type(lines[0]).__name__!r}.  If you have the "
+                "(lineno, text) form from load_chapter, use "
+                "EvidenceIndex.from_chapter() instead."
+            )
         idx = cls(source_file=source_file)
         idx._lines = [(i + 1, line) for i, line in enumerate(lines)]
+        return idx
+
+    @classmethod
+    def from_chapter(
+        cls,
+        numbered_lines: list[tuple[int, str]],
+        *,
+        source_file: str,
+    ) -> EvidenceIndex:
+        """Build an EvidenceIndex directly from ``load_chapter`` output.
+
+        This is the type-safe bridge between
+        :func:`examen.ingest.textbook.load_chapter` (which returns
+        ``list[tuple[int, str]]`` with ORIGINAL 1-based line numbers) and the
+        evidence index.  The original line numbers are preserved verbatim —
+        no renumbering — so groundedness anchors stay valid (T027).
+
+        Args:
+            numbered_lines: ``(1-based lineno, text)`` pairs, as returned by
+                ``load_chapter``.
+            source_file: Basename of the source file (used in hit records).
+
+        Returns:
+            A populated EvidenceIndex preserving the supplied line numbers.
+
+        Raises:
+            TypeError: If an element is not a ``(int, str)`` pair (fail-fast).
+        """
+        idx = cls(source_file=source_file)
+        validated: list[tuple[int, str]] = []
+        for item in numbered_lines:
+            if (
+                not isinstance(item, tuple)
+                or len(item) != 2
+                or not isinstance(item[0], int)
+                or not isinstance(item[1], str)
+            ):
+                raise TypeError(
+                    "EvidenceIndex.from_chapter expects list[tuple[int, str]] "
+                    f"(load_chapter output); got element {item!r}."
+                )
+            validated.append(item)
+        idx._lines = validated
         return idx
 
     def search(self, term: str) -> list[EvidenceHit]:

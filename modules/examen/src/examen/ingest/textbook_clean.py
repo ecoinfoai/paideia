@@ -58,8 +58,17 @@ _RE_TABLE_CAPTION: Final = re.compile(r"^표\s+\d+")
 # 달리는 챕터 헤더: "제NNN장" 패턴 (단독 줄 — 본문에서 이렇게 단독으로 나오는 경우)
 _RE_RUNNING_HEADER: Final = re.compile(r"^제\d+장\s")
 
-# 연습문제 블록 시작
-_RE_EXERCISE_START: Final = re.compile(r"^연습문제\s*$")
+# 연습문제 블록 시작 — 헤딩 변형 허용:
+#   "연습문제", "연습 문제", "연습문제:", "연습문제 (10문항)", "■ 연습문제", "[연습문제]"
+# 본문 문장("연습문제는 중요하다.")과 구분하기 위해, "연습 문제" 토큰 뒤에는
+# 임의의 한글 텍스트가 아니라 헤딩성 꼬리(구두점·괄호 안 문항수·번호)만 허용한다.
+_RE_EXERCISE_START: Final = re.compile(
+    r"^[\s■□▶◆●○\[\(]*"          # 선두 장식 기호·여는 괄호
+    r"연습\s*문제"                  # "연습문제" 또는 "연습 문제"
+    r"\s*[:\-–—\]\)]*"             # 콜론·대시·닫는 괄호
+    r"\s*(?:\([0-9가-힣\s]+\))?"   # 선택적 "(10문항)" 같은 꼬리
+    r"\s*$"
+)
 
 # 참고문헌 섹션 시작
 _RE_REFERENCE_START: Final = re.compile(r"^참고문헌")
@@ -77,13 +86,14 @@ def _is_spaced_letter_header(stripped: str) -> bool:
     """Return True if *stripped* looks like a spaced-letter header.
 
     A spaced-letter header is a line where every whitespace-delimited token
-    is a single uppercase letter, digit, or the special symbols ``&`` / ``%``,
-    AND there are at least 3 such tokens (to avoid false-positives on short
-    section labels).
+    is **at most two characters** drawn from uppercase letters, digits, or the
+    symbols ``&`` / ``%``, AND there are at least 3 such tokens (to avoid
+    false-positives on short section labels).  The ≤2-char allowance lets a
+    trailing chapter number ride along, e.g. the ``10`` in "C H A P T E R  10".
 
     Examples::
         "H U M A N  A N A T O M Y  &  P H Y S I O L O G Y"  → True
-        "C H A P T E R  10"                                   → True
+        "C H A P T E R  10"                                   → True (10 is a 2-char token)
         "A"                                                    → False (too short)
         "갑상샘"                                                → False
     """

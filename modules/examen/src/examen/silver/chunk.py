@@ -37,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from typing import Final
 
 from paideia_shared.schemas import TextbookChunk
@@ -138,12 +139,16 @@ def chunk_chapter(
     # ----------------------------------------------------------------
     # A section boundary is a kept line whose text matches _RE_SECTION_HEADING.
     # We also need to avoid re-detecting the TOC at the top of the chapter.
-    # Strategy: the FIRST occurrence of "N. …" is TOC; subsequent occurrences
-    # are body headings.  We use a two-pass approach:
-    #   Pass A — collect all candidate (kept_index, lineno, section_text)
-    #   Pass B — deduplicate: keep only body occurrences (second+ occurrence
-    #            of each section number) OR, if a heading appears only once,
-    #            treat that single occurrence as the body heading.
+    # Strategy: the FIRST occurrence of "N. …" is the TOC entry; subsequent
+    # occurrences are body headings.  This heuristic has two failure modes
+    # that MUST be auditable (constitution V — no silent skip):
+    #   (a) a heading occurring only 1× has no body counterpart; we treat the
+    #       single occurrence as the body heading, but it may actually be a
+    #       TOC-only entry → anchored at the chapter top.  Log a warning.
+    #   (b) a heading occurring 3+× yields duplicate-section chunks (one TOC
+    #       skipped, ≥2 body chunks for the same section).  Log a warning.
+    # Warnings are appended to ``removed_spans`` with a
+    # ``section-anchor-ambiguous`` reason so they travel with every chunk.
 
     # Collect all matching lines (kept, not blank)
     candidates: list[tuple[int, str]] = []  # (original_lineno, section_text)
@@ -154,12 +159,33 @@ def chunk_chapter(
             sec_text = f"{m.group(1)}. {m.group(2).strip()}"
             candidates.append((lineno, sec_text))
 
-    # Count occurrences per section number
-    from collections import Counter
+    # Count occurrences per section heading
     sec_counts: Counter[str] = Counter(sec for _, sec in candidates)
 
-    # Build body_headings: for each section number that appears >1 time,
-    # skip the first occurrence (TOC); keep the rest.  If only once, keep it.
+    # Audit pass — emit one warning per ambiguous heading (deterministic order:
+    # first appearance in the file).  De-duplicate so a 3× heading logs once.
+    warned: set[str] = set()
+    for _lineno, sec in candidates:
+        if sec in warned:
+            continue
+        count = sec_counts[sec]
+        if count == 1:
+            warned.add(sec)
+            removed_spans.append(
+                f"[section-anchor-ambiguous] heading '{sec}' occurs 1× — "
+                "treated as body heading but may be a TOC-only entry "
+                "(anchored where it appears)."
+            )
+        elif count > 2:
+            warned.add(sec)
+            removed_spans.append(
+                f"[section-anchor-ambiguous] heading '{sec}' occurs {count}× — "
+                "first treated as TOC, the remaining produce duplicate-section "
+                "chunks (verify body structure)."
+            )
+
+    # Build body_headings: for each heading that appears >1 time, skip the
+    # first occurrence (TOC); keep the rest.  If only once, keep it.
     body_headings: list[tuple[int, str]] = []  # (original_lineno, section_text)
     seen_sec: Counter[str] = Counter()
     for lineno, sec in candidates:

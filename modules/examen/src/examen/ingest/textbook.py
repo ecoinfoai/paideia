@@ -63,16 +63,20 @@ def load_chapter(path: Path) -> list[tuple[int, str]]:
 def _chapter_file_pattern(chapter_no: int) -> re.Pattern[str]:
     """Return a compiled regex that matches a filename for *chapter_no*.
 
-    Matching strategy (lenient, config-independent):
-    1. ``NNN장`` anywhere in the stem (covers "8장 호흡계통.txt").
-    2. Digit-only prefix equal to chapter_no (covers "08.txt", "8.txt").
+    Matching strategy (lenient, config-independent): the stem must contain
+    the token ``{N}장`` where ``N`` is the chapter number, with ``N`` not
+    immediately preceded by another digit.  Examples (chapter_no=8):
 
-    The pattern is anchored to the stem (filename without extension) so
-    that "18장.txt" does NOT match chapter_no=8.
+    - "8장 호흡계통"  → match
+    - "8장"          → match
+    - "18장"         → NO match (the leading ``1`` is a digit before ``8장``)
+
+    Real course files always use the ``장`` token, so digit-only stems like
+    "8.txt" or "08.txt" are intentionally NOT matched (out of scope).
     """
     n = str(chapter_no)
-    # Pattern A: exactly N장 (preceded by non-digit or start, followed by
-    # any char)  → matches "8장", "10장" without colliding with "18장"
+    # N장 token (preceded by start-of-string or a non-digit) → matches
+    # "8장"/"10장" without colliding with "18장".
     return re.compile(
         rf"(?:^|(?<=\D)){re.escape(n)}장"
     )
