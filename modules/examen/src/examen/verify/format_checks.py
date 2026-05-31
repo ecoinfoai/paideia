@@ -23,10 +23,14 @@ For items with ``source == "formative"``:
 - A best-effort scope check flags suspicious option text (heuristic; never
   raises — violations are recorded in ``review_note``).
 
-Scope (US1/US2)
----------------
-Answer-key balance and duplicate detection are US4/US5 tasks and are
-NOT implemented here.
+Later additions (US3–US5) in this module
+-----------------------------------------
+- ``check_quiz_variation`` (T042): Jaccard variation guard for quiz items.
+- ``check_explanation_lengths`` (T048): wrong/leap/intent length checks.
+- ``detect_duplicates`` (T048): key_concept near-duplicate flagging.
+- ``balance_answer_keys`` (T050): answer-position rebalance to 15–25% / no
+  run-of-3.
+All remain non-raising — violations are flagged, never crash the pipeline.
 
 Design
 ------
@@ -36,6 +40,8 @@ Never raises on a rule violation — flags it in the returned item's
 """
 
 from __future__ import annotations
+
+import math
 
 from paideia_shared.schemas import ExamItemDraft, SourceInventoryEntry
 
@@ -455,12 +461,16 @@ def detect_duplicates(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
 
 # ---------------------------------------------------------------------------
 # T050 — Answer-key balance: reorder answer positions so each of 1–5 falls
-#         in 15–25% and no run of >2 consecutive identical answer numbers.
+#         in 15–25% and no run of more than 2 consecutive identical answer
+#         numbers (i.e. no three-in-a-row).
 # ---------------------------------------------------------------------------
 
 # 정답 번호 균형 목표 범위 (비율)
 _BALANCE_MIN_RATIO = 0.15
 _BALANCE_MAX_RATIO = 0.25
+
+# 부동소수점 경계 오차 보정용 epsilon (lo=ceil(0.15·n), hi=floor(0.25·n) 계산 시)
+_BALANCE_EPS = 1e-9
 
 
 def _swap_answer_to_position(item: ExamItemDraft, new_pos: int) -> ExamItemDraft:
@@ -499,28 +509,121 @@ def _swap_answer_to_position(item: ExamItemDraft, new_pos: int) -> ExamItemDraft
     )
 
 
+def _balance_bounds(n: int) -> tuple[int, int]:
+    """Return (lo, hi) — the min/max allowed count per answer number for N=n.
+
+    ``lo = ceil(0.15·n)``, ``hi = floor(0.25·n)`` with epsilon guards so exact
+    boundaries (e.g. 0.15·40 = 6.0) are inclusive rather than tripped by float
+    representation error.
+    """
+    lo = math.ceil(_BALANCE_MIN_RATIO * n - _BALANCE_EPS)
+    hi = math.floor(_BALANCE_MAX_RATIO * n + _BALANCE_EPS)
+    return lo, hi
+
+
+def _position_in_run(seq: list[int], pos: int) -> bool:
+    """True iff ``seq[pos]`` participates in any run of 3 identical values.
+
+    Checks the three windows that include ``pos``: ``[pos-2,pos]``,
+    ``[pos-1,pos+1]``, ``[pos,pos+2]`` (clamped to bounds).
+    """
+    n = len(seq)
+    v = seq[pos]
+    for start in (pos - 2, pos - 1, pos):
+        a, b, c = start, start + 1, start + 2
+        if a >= 0 and c < n and seq[a] == seq[b] == seq[c] == v:
+            return True
+    return False
+
+
+def _balance_distribution(seq: list[int], lo: int, hi: int) -> None:
+    """Move answer numbers from the most over- to the most under-represented.
+
+    Mutates ``seq`` in place.  Each step reassigns the first occurrence of the
+    globally most-represented number to the globally least-represented number,
+    monotonically shrinking the spread until every count lands in ``[lo, hi]``.
+
+    Triggers on BOTH over-representation (count > hi) AND under-representation
+    (count < lo) — the latter was the US5 Critical gap: a number could sit
+    below 15% while nothing exceeded 25% and the old greedy never noticed.
+    """
+    n = len(seq)
+    max_iter = n * 6  # generous convergence guard (spread shrinks each step)
+    for _ in range(max_iter):
+        counts = {num: seq.count(num) for num in range(1, 6)}
+        # Most over-represented (tie → lowest number); most under (tie → lowest).
+        over = max(range(1, 6), key=lambda num: (counts[num], -num))
+        under = min(range(1, 6), key=lambda num: (counts[num], num))
+        if counts[over] <= hi and counts[under] >= lo:
+            return  # every number within [lo, hi]
+        if over == under:
+            return  # all equal — cannot improve
+        # Reassign the first item carrying `over` to `under`.
+        idx = seq.index(over)
+        seq[idx] = under
+
+
+def _break_runs(seq: list[int]) -> None:
+    """Eliminate runs of 3+ identical values via count-preserving swaps.
+
+    Mutates ``seq`` in place.  Swapping two positions exchanges their values,
+    so per-number counts (and thus the 15–25% distribution fixed earlier) are
+    preserved.  Deterministic: always fixes the lowest-index run with the
+    lowest-index valid swap partner.  Degrades gracefully (returns) if a run
+    cannot be broken — never raises, never loops forever.
+    """
+    n = len(seq)
+    if n < 3:
+        return
+    max_iter = n * n
+    for _ in range(max_iter):
+        run_idx = next(
+            (i for i in range(2, n) if seq[i] == seq[i - 1] == seq[i - 2]),
+            None,
+        )
+        if run_idx is None:
+            return  # no runs remain
+        i = run_idx
+        swapped = False
+        for j in range(n):
+            if seq[j] == seq[i]:
+                continue
+            seq[i], seq[j] = seq[j], seq[i]
+            if not _position_in_run(seq, i) and not _position_in_run(seq, j):
+                swapped = True
+                break
+            seq[i], seq[j] = seq[j], seq[i]  # revert — swap did not help
+        if not swapped:
+            return  # cannot break this run with any swap — degrade gracefully
+
+
 def balance_answer_keys(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
     """Rebalance answer_no positions so the distribution is 15–25% and runs ≤ 2.
 
-    Algorithm (greedy, deterministic — no randomness):
-    1. Compute current counts per answer number (1–5).
-    2. Determine over-represented numbers (ratio > 25%) and
-       under-represented numbers (ratio < 15%).
-    3. Iterate through items in order.  For each item:
-       a. If its current answer_no creates a run of 3 OR is over-represented
-          and an under-represented target exists, swap the answer to the
-          most under-represented position (breaking ties by lowest number).
-       b. Update counts after each swap.
-    4. Continue until no over-represented / run-of-3 violations remain,
-       or a full pass produces no swaps (convergence guard).
+    Two-phase, fully deterministic (no randomness), operating on a working array
+    of the items' answer numbers:
+
+    1. **Distribution** (``_balance_distribution``): repeatedly move the most
+       over-represented answer number to the most under-represented until every
+       number's count lands in ``[lo, hi]`` where ``lo = ceil(0.15·N)`` and
+       ``hi = floor(0.25·N)``.  This corrects BOTH over-representation (>25%)
+       AND under-representation (<15%); the latter was the US5 Critical gap.
+    2. **Run-breaking** (``_break_runs``): eliminate any run of three identical
+       consecutive answers via count-preserving swaps, so the distribution from
+       phase 1 is not disturbed.
+
+    The final answer-number array is applied per item via
+    ``_swap_answer_to_position`` — moving each item's *correct option* to its
+    target slot, so the correct answer content is never altered.
 
     Guarantees:
-    - Input item list length is preserved.
-    - Each item's correct answer *content* is unchanged (only position moves).
+    - Input length preserved; each item's correct answer content unchanged.
     - Deterministic: identical input → identical output.
-    - For N ≥ 5 items the algorithm converges (finite items, finite swaps).
-    - For very small N (< 5) the 15–25% guarantee may not be achievable;
-      the algorithm does its best and never crashes.
+    - Idempotent: an already-conforming list is returned unchanged (both phases
+      no-op when there is no violation), so ``balance(balance(x)) == balance(x)``.
+    - For N in the feasible band (``5·lo ≤ N ≤ 5·hi``) both invariants hold.
+      For very small / infeasible N the algorithm does its best and never
+      crashes.
 
     Args:
         items: List of exam items to rebalance.
@@ -532,69 +635,22 @@ def balance_answer_keys(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
         return []
 
     n = len(items)
-    result = list(items)
+    seq = [item.answer_no for item in items]
 
-    # Maximum passes to prevent infinite loops on pathological inputs
-    max_passes = n * 5
+    lo, hi = _balance_bounds(n)
+    # Distribution is only achievable when 5·lo ≤ N ≤ 5·hi (each number can sit
+    # in [lo, hi] and still sum to N).  Outside that band (e.g. N < 4) we skip
+    # the distribution phase — there is no valid target — but still break runs.
+    if lo <= hi and 5 * lo <= n <= 5 * hi:
+        _balance_distribution(seq, lo, hi)
+    _break_runs(seq)
 
-    for _pass in range(max_passes):
-        changed = False
-        counts: dict[int, int] = dict.fromkeys(range(1, 6), 0)
-        for item in result:
-            counts[item.answer_no] += 1
-
-        for idx in range(n):
-            item = result[idx]
-            current = item.answer_no
-
-            # --- Check run-of-3 violation ---
-            run_of_3 = (
-                idx >= 2
-                and result[idx - 1].answer_no == current
-                and result[idx - 2].answer_no == current
-            )
-
-            # --- Check over-represented ---
-            over_represented = (counts[current] / n) > _BALANCE_MAX_RATIO
-
-            if not (run_of_3 or over_represented):
-                continue  # No violation — leave this item alone
-
-            # Find best swap target: most under-represented position
-            # that does NOT introduce a new run-of-3 at this position.
-            # Tie-break: lowest number.
-            # Pass counts and n as default args to bind loop variables (avoids B023).
-            candidates = sorted(
-                [p for p in range(1, 6) if p != current],
-                key=lambda pos, _c=counts, _n=n: (_c[pos] / _n, pos),
-            )
-
-            chosen: int | None = None
-            for cand in candidates:
-                # Avoid creating a run-of-3 at this index after swap:
-                # the two items before must not both have answer_no == cand
-                if idx >= 2 and (
-                    result[idx - 1].answer_no == cand
-                    and result[idx - 2].answer_no == cand
-                ):
-                    continue  # Would create a run-of-3 backwards — skip
-                chosen = cand
-                break
-
-            if chosen is None:
-                # No valid swap found — try any candidate (run avoidance failed,
-                # prefer distribution fix over run fix in degenerate cases)
-                chosen = candidates[0]
-
-            # Perform swap
-            counts[current] -= 1
-            counts[chosen] += 1
-            result[idx] = _swap_answer_to_position(item, chosen)
-            changed = True
-
-        if not changed:
-            break  # Converged — no more swaps needed
-
+    result: list[ExamItemDraft] = []
+    for item, target in zip(items, seq, strict=True):
+        if item.answer_no != target:
+            result.append(_swap_answer_to_position(item, target))
+        else:
+            result.append(item)
     return result
 
 

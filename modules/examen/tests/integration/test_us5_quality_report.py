@@ -656,3 +656,116 @@ class TestBalanceAnswerKeysUnit:
         items = self._make_items_all_same_answer(1, answer_no=1)
         result = balance_answer_keys(items)
         assert len(result) == 1
+
+    def _make_items_with_answer_sequence(
+        self, answer_seq: list[int]
+    ) -> list[ExamItemDraft]:
+        """Create items whose answer_no follows ``answer_seq`` exactly (in order)."""
+        items = []
+        for i, answer_no in enumerate(answer_seq):
+            items.append(
+                ExamItemDraft(
+                    semester=_SEMESTER,
+                    course_slug=_COURSE,
+                    item_no=i + 1,
+                    source="textbook",
+                    chapter="8장 호흡계통",
+                    chapter_no=8,
+                    question_type="지식축적",
+                    difficulty="2_보통",
+                    stem_polarity="부정형",
+                    text="다음 중 가장 옳지 않은 것은?",
+                    options=[
+                        "① " + "가" * 28,
+                        "② " + "나" * 28,
+                        "③ " + "다" * 28,
+                        "④ " + "라" * 28,
+                        "⑤ " + "마" * 28,
+                    ],
+                    answer_no=answer_no,
+                    distractor_rationale=[
+                        "옳은 진술: 가." if j + 1 != answer_no else "틀린 진술: 다."
+                        for j in range(5)
+                    ],
+                    wrong_explanation="오답 설명." * 10,
+                    leap_explanation="도약 설명." * 10,
+                    intent="출제의도 텍스트 테스트.",
+                    option_length_ok=True,
+                )
+            )
+        return items
+
+    def test_under_representation_without_over_or_run_is_fixed(self) -> None:
+        """Under-rep (<15%) with NO over-rep (>25%) and NO run-of-3 must still be fixed.
+
+        Regression guard for the US5 Critical: the original greedy only triggered
+        on over-representation (>25%) or a run-of-3, so a distribution like
+        counts {1:5, 2:9, 3:9, 4:8, 5:9} over N=40 — where answer_no=1 is at
+        12.5% (<15%) but nothing exceeds 25% and no three identical answers run
+        consecutively — was returned unchanged, violating FR-013/SC-007.
+
+        We build exactly that multiset, arranged so there is no run-of-3, and
+        assert balance pulls every number into the 15–25% band.
+        """
+        from examen.verify.format_checks import balance_answer_keys
+
+        # Multiset: answer_no=1 appears 5 times (12.5% < 15%); 2,3,5 appear 9
+        # times (22.5%); 4 appears 8 times (20%). Max = 9 (22.5% ≤ 25%) so no
+        # over-rep trigger fires under the old algorithm.
+        # Build the exact multiset, then interleave to avoid any run-of-3.
+        multiset: list[int] = (
+            [1] * 5 + [2] * 9 + [3] * 9 + [4] * 8 + [5] * 9
+        )
+        assert len(multiset) == 40
+        # Interleave deterministically to avoid any run-of-3: sort by (rank within
+        # its own number) so identical numbers are spread out.
+        from collections import defaultdict
+
+        buckets: dict[int, list[int]] = defaultdict(list)
+        for v in multiset:
+            buckets[v].append(v)
+        # Round-robin draw from buckets (descending by remaining size) → no runs.
+        seq: list[int] = []
+        while any(buckets.values()):
+            order = sorted(
+                (num for num in range(1, 6) if buckets[num]),
+                key=lambda num: (-len(buckets[num]), num),
+            )
+            for num in order:
+                if buckets[num]:
+                    seq.append(buckets[num].pop())
+        assert len(seq) == 40
+
+        items = self._make_items_with_answer_sequence(seq)
+
+        # Sanity: the constructed input has NO over-rep and NO run-of-3 — only
+        # the under-rep violation. This is what defeated the old algorithm.
+        in_counts = Counter(i.answer_no for i in items)
+        assert max(in_counts.values()) / 40 <= 0.25, "test setup: unexpected over-rep"
+        for i in range(len(items) - 2):
+            a, b, c = items[i].answer_no, items[i + 1].answer_no, items[i + 2].answer_no
+            assert not (a == b == c), "test setup: unexpected run-of-3 in input"
+        assert in_counts[1] / 40 < 0.15, "test setup: answer_no=1 should be under-rep"
+
+        balanced = balance_answer_keys(items)
+        total = len(balanced)
+        out_counts = Counter(i.answer_no for i in balanced)
+        for num in range(1, 6):
+            ratio = out_counts.get(num, 0) / total
+            assert 0.15 <= ratio <= 0.25, (
+                f"after balance answer_no={num}: ratio={ratio:.2%} out of 15-25%. "
+                f"Dist: {dict(sorted(out_counts.items()))}"
+            )
+        # And still no run-of-3.
+        for i in range(len(balanced) - 2):
+            a, b, c = (
+                balanced[i].answer_no,
+                balanced[i + 1].answer_no,
+                balanced[i + 2].answer_no,
+            )
+            assert not (a == b == c), f"run-of-3 at {i} after balance"
+        # And correctness preserved.
+        for orig, bal in zip(items, balanced, strict=True):
+            assert (
+                bal.options[bal.answer_no - 1] == orig.options[orig.answer_no - 1]
+            ), f"item {orig.item_no}: correct option content changed"
