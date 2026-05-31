@@ -6,7 +6,9 @@ exercises, footnotes, and headers from the raw .txt files.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._common import CourseSlug, SemesterCode
 
@@ -35,3 +37,13 @@ class TextbookChunk(BaseModel):
         default_factory=list,
         description="제거된 구간 목록 (감사 로그)",
     )
+
+    @model_validator(mode="after")
+    def _v1_line_order(self) -> Self:
+        """V1: line_end must be >= line_start."""
+        if self.line_end < self.line_start:
+            raise ValueError(
+                f"V1: line_end ({self.line_end}) < line_start ({self.line_start}). "
+                "line_end must be greater than or equal to line_start."
+            )
+        return self

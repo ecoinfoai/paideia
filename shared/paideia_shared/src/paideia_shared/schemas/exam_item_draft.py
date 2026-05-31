@@ -10,7 +10,7 @@ schema-valid.  Length validation happens at the verify/generate stage.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -36,9 +36,9 @@ class ExamItemDraft(BaseModel):
     """One LLM-generated exam question, pre-adoption.
 
     Invariants enforced at construction:
+    - ``1 <= answer_no <= 5`` (via Field bounds)
     - V1: ``len(options) == 5``
-    - V2: ``1 <= answer_no <= 5``
-    - V3: ``len(distractor_rationale) == 5``
+    - V2: ``len(distractor_rationale) == 5``
 
     Text-length constraints (wrong_explanation / leap_explanation 270~330자,
     intent 40~60자) are documented only here; they are enforced by the
@@ -58,7 +58,7 @@ class ExamItemDraft(BaseModel):
     week: int | None = None
     key_concept: str | None = None
     is_emphasized: bool | None = None
-    emphasis_class_count: int | None = None
+    emphasis_class_count: Annotated[int | None, Field(ge=0, le=4)] = None
     question_type: Literal["지식축적", "맥락통찰"]
     bloom: (
         Literal[
@@ -75,7 +75,7 @@ class ExamItemDraft(BaseModel):
     stem_polarity: Literal["부정형", "긍정형"]
     text: str
     options: list[str]
-    answer_no: int
+    answer_no: Annotated[int, Field(ge=1, le=5, description="정답 보기 번호 (1~5)")]
     distractor_rationale: list[str]
     wrong_explanation: str = Field(
         ...,
@@ -104,7 +104,7 @@ class ExamItemDraft(BaseModel):
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def _v1_options_len(self) -> ExamItemDraft:
+    def _v1_options_len(self) -> Self:
         """V1: options must have exactly 5 elements."""
         if len(self.options) != 5:
             raise ValueError(
@@ -113,19 +113,10 @@ class ExamItemDraft(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _v2_answer_no_range(self) -> ExamItemDraft:
-        """V2: answer_no must be in [1, 5]."""
-        if not (1 <= self.answer_no <= 5):
-            raise ValueError(
-                f"V2: answer_no == {self.answer_no}, must be in [1, 5]."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _v3_distractor_rationale_len(self) -> ExamItemDraft:
-        """V3: distractor_rationale must have exactly 5 elements."""
+    def _v2_distractor_rationale_len(self) -> Self:
+        """V2: distractor_rationale must have exactly 5 elements."""
         if len(self.distractor_rationale) != 5:
             raise ValueError(
-                f"V3: len(distractor_rationale) == {len(self.distractor_rationale)}, must be 5."
+                f"V2: len(distractor_rationale) == {len(self.distractor_rationale)}, must be 5."
             )
         return self

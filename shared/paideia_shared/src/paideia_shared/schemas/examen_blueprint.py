@@ -6,7 +6,7 @@ downstream code consumes it.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -61,7 +61,7 @@ class ExamenBlueprint(BaseModel):
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def _v2_source_mix_sum(self) -> ExamenBlueprint:
+    def _v2_source_mix_sum(self) -> Self:
         """V2: sum(source_mix) must equal total_items."""
         total = sum(self.source_mix.values())
         if total != self.total_items:
@@ -72,7 +72,7 @@ class ExamenBlueprint(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _v3_difficulty_targets_sum(self) -> ExamenBlueprint:
+    def _v3_difficulty_targets_sum(self) -> Self:
         """V3: sum(difficulty_targets) must be 1.0 ± 1e-6."""
         total = sum(self.difficulty_targets.values())
         if abs(total - 1.0) > _FLOAT_EPS:

@@ -272,13 +272,30 @@ class TestExamenBlueprint:
             ExamenBlueprint(**_base_blueprint(unknown_field="oops"))
 
     def test_positive_difficulty_targets_within_epsilon(self) -> None:
-        """Difficulty targets that sum to 1.0 ± 1e-6 (float rounding) must pass."""
-        # 0.45 + 0.35 + 0.20 = 1.0 exactly; also test near-boundary
+        """Difficulty targets summing to 1.0 within ±1e-6 must pass."""
+        # 0.45 + 5e-7 + 0.35 + (0.20 - 5e-7) = 1.0 within tolerance
         ExamenBlueprint(
             **_base_blueprint(
-                difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
+                difficulty_targets={
+                    "easy": 0.45 + 5e-7,
+                    "medium": 0.35,
+                    "hard": 0.20 - 5e-7,
+                },
             )
         )
+
+    def test_negative_difficulty_targets_outside_epsilon(self) -> None:
+        """Difficulty targets summing to 1.0 + 2e-6 (outside ±1e-6) → ValidationError."""
+        with pytest.raises(ValidationError):
+            ExamenBlueprint(
+                **_base_blueprint(
+                    difficulty_targets={
+                        "easy": 0.45 + 2e-6,
+                        "medium": 0.35,
+                        "hard": 0.20,
+                    },
+                )
+            )
 
 
 # ===========================================================================
@@ -375,6 +392,15 @@ class TestTextbookChunk:
         """removed_spans defaults to []."""
         data = {k: v for k, v in _base_textbook_chunk().items() if k != "removed_spans"}
         TextbookChunk(**data)
+
+    def test_positive_single_line(self) -> None:
+        """line_end == line_start is valid (single-line chunk)."""
+        TextbookChunk(**_base_textbook_chunk(line_start=10, line_end=10))
+
+    def test_negative_line_end_before_start(self) -> None:
+        """line_end < line_start → ValidationError (V1)."""
+        with pytest.raises(ValidationError):
+            TextbookChunk(**_base_textbook_chunk(line_start=25, line_end=10))
 
     def test_negative_extra_field(self) -> None:
         with pytest.raises(ValidationError):
