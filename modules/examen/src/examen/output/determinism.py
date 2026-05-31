@@ -72,6 +72,8 @@ def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
     """
     iso = when.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    # openpyxl 이 생성한 xlsx 를 가정한다. ``<dcterms:modified>`` 가 없으면
+    # regex 가 매치 0개로 조용히 통과(no-op) — immersio 와 동일 동작.
     with zipfile.ZipFile(path, "r") as src:
         members: list[tuple[str, bytes, int]] = []
         for info in src.infolist():

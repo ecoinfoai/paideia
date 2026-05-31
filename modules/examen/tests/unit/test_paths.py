@@ -73,6 +73,8 @@ class TestAtomicWrite:
 
         # Target must not exist (atomic guarantee)
         assert not target.exists()
+        # No orphaned temp file should remain
+        assert not list(tmp_path.glob(".tmp_*"))
 
     def test_atomic_write_replaces_existing_file(self, tmp_path: Path) -> None:
         """Existing file is atomically replaced."""

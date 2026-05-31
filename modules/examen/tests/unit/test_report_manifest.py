@@ -150,15 +150,30 @@ class TestWriteManifest:
         m2 = ExamenManifest.model_validate(raw)
         assert m2.semester == m.semester
 
-    def test_atomic_no_partial_on_bad_path(self, tmp_path: Path) -> None:
-        """If target directory doesn't exist, create it; on hard failure, no partial file."""
+    def test_creates_parent_directories(self, tmp_path: Path) -> None:
+        """Parent directories are created if they do not exist."""
         from examen.output.manifest import build_manifest, write_manifest
 
         m = build_manifest(**_make_valid_manifest_kwargs())
-        # Deep path that doesn't exist — should be created
         dest = tmp_path / "deep" / "sub" / "manifest_examen.json"
         write_manifest(dest, m)
         assert dest.exists()
+
+    def test_atomic_no_partial_on_write_failure(self, tmp_path: Path) -> None:
+        """On a hard write failure, no partial file and no leftover .tmp_* remain."""
+        from examen.output.manifest import build_manifest, write_manifest
+
+        m = build_manifest(**_make_valid_manifest_kwargs())
+        # Target path is itself a directory → os.replace(tmp, dest) raises.
+        dest = tmp_path / "manifest_examen.json"
+        dest.mkdir()
+
+        with pytest.raises(OSError):
+            write_manifest(dest, m)
+
+        # The directory still exists, but no temp file should be orphaned.
+        assert dest.is_dir()
+        assert not list(tmp_path.glob(".tmp_*")), "orphaned temp file left behind"
 
     def test_generated_at_only_non_deterministic_field(self, tmp_path: Path) -> None:
         """Two manifests with the same generated_at produce byte-identical files."""
@@ -182,5 +197,5 @@ class TestWriteManifest:
         dest = tmp_path / "manifest.json"
         write_manifest(dest, m)
         raw = dest.read_text(encoding="utf-8")
-        assert "쉬움" in raw or "anatomy" in raw  # at least no \\u escape
+        assert "쉬움" in raw  # Korean written as UTF-8, not \\uXXXX
         assert "\\u" not in raw

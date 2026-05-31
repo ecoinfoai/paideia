@@ -44,10 +44,7 @@ def write_ingest_report(path: Path, report_dict: dict[str, Any]) -> None:
         TypeError: If ``report_dict`` contains non-JSON-serialisable values.
             No partial file is written.
     """
-    # 부모 디렉터리 생성 (없으면)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # JSON 직렬화를 먼저 시도 — 실패 시 파일을 건드리지 않음
+    # JSON 직렬화를 먼저 시도 — 실패 시 디렉터리 부수효과 없이 즉시 중단
     serialized = json.dumps(
         report_dict,
         sort_keys=True,
@@ -57,6 +54,9 @@ def write_ingest_report(path: Path, report_dict: dict[str, Any]) -> None:
     # 개행 정규화: 마지막에 개행 1개 추가
     if not serialized.endswith("\n"):
         serialized += "\n"
+
+    # 직렬화 성공 후에만 부모 디렉터리 생성
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write(tmp: Path) -> None:
         tmp.write_text(serialized, encoding="utf-8")

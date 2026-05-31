@@ -125,10 +125,8 @@ def write_manifest(path: Path, manifest: ExamenManifest) -> None:
         path: Destination path (e.g. ``gold_dir / "manifest_examen.json"``).
         manifest: Validated ExamenManifest to write.
     """
-    # 부모 디렉터리 생성
-    path.parent.mkdir(parents=True, exist_ok=True)
-
     # Pydantic → dict, 그대로 JSON 직렬화 (int key 처리 포함)
+    # 직렬화를 먼저 — 실패 시 디렉터리 부수효과 없음
     raw = manifest.model_dump(mode="json")
     serialized = json.dumps(
         raw,
@@ -138,6 +136,9 @@ def write_manifest(path: Path, manifest: ExamenManifest) -> None:
     )
     if not serialized.endswith("\n"):
         serialized += "\n"
+
+    # 직렬화 성공 후에만 부모 디렉터리 생성
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write(tmp: Path) -> None:
         tmp.write_text(serialized, encoding="utf-8")

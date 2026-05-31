@@ -22,8 +22,9 @@ import yaml
 from paideia_shared.schemas import CurriculumMap, ExamenBlueprint
 from pydantic import ValidationError
 
-# 기본 데이터 루트 (프로젝트 루트 상대 경로)
-_DEFAULT_DATA_ROOT = Path("data")
+# bronze_dir 의 단일 출처는 paths.py — 여기서는 재노출만 한다 (paths.py 는 stdlib 만
+# 의존하므로 import 순환 없음).
+from examen.output.paths import bronze_dir
 
 
 def load_blueprint(path: Path) -> ExamenBlueprint:
@@ -115,31 +116,6 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
         raise ValueError(
             f"curriculum_map.yaml validation failed at {path}: {errors}"
         ) from exc
-
-
-def bronze_dir(
-    semester: str,
-    course_slug: str,
-    *,
-    data_root: Path | None = None,
-) -> Path:
-    """Return the Bronze-layer directory path for the given semester and course.
-
-    Follows the paideia convention::
-
-        {data_root}/bronze/examen/{semester}-{course_slug}/
-
-    Args:
-        semester: Semester code (e.g. ``"2026-1"``).
-        course_slug: ASCII kebab-case course identifier (e.g. ``"anatomy"``).
-        data_root: Optional override for the ``data/`` root. Defaults to
-            the project-relative ``data/`` directory.
-
-    Returns:
-        Path object for the Bronze examen directory (not necessarily created).
-    """
-    root = data_root if data_root is not None else _DEFAULT_DATA_ROOT
-    return root / "bronze" / "examen" / f"{semester}-{course_slug}"
 
 
 __all__ = ["load_blueprint", "load_curriculum_map", "bronze_dir"]

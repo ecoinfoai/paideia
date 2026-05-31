@@ -96,9 +96,10 @@ class TestLoadBlueprint:
             load_blueprint(p)
         msg = str(exc_info.value)
         assert str(p) in msg, f"file path not in error: {msg}"
+        assert "total_items" in msg, f"offending field not in error: {msg}"
 
     def test_source_mix_sum_mismatch_raises_with_location(self, tmp_path: Path) -> None:
-        """sum(source_mix) != total_items raises ValueError with file path."""
+        """sum(source_mix) != total_items raises ValueError with file + field."""
         from examen.ingest.config import load_blueprint
 
         # source_mix sum = 40, total_items = 48 → V2 fires
@@ -106,7 +107,9 @@ class TestLoadBlueprint:
         p = _write(tmp_path, "blueprint.yaml", bad)
         with pytest.raises(ValueError) as exc_info:
             load_blueprint(p)
-        assert str(p) in str(exc_info.value)
+        msg = str(exc_info.value)
+        assert str(p) in msg, f"file path not in error: {msg}"
+        assert "source_mix" in msg, f"offending field not in error: {msg}"
 
     def test_invalid_yaml_raises_with_location(self, tmp_path: Path) -> None:
         """Malformed YAML raises ValueError with the file path."""
@@ -157,13 +160,16 @@ class TestLoadCurriculumMap:
             load_curriculum_map(p)
 
     def test_missing_required_field_raises_with_location(self, tmp_path: Path) -> None:
-        """Missing 'entries' raises ValidationError with file path."""
+        """Missing 'entries' raises ValidationError with file + field name."""
         from examen.ingest.config import load_curriculum_map
 
         p = _write(tmp_path, "curriculum_map.yaml",
                    "semester: '2026-1'\ncourse_slug: 'anatomy'\n")
-        with pytest.raises(ValueError, match=str(p)):
+        with pytest.raises(ValueError) as exc_info:
             load_curriculum_map(p)
+        msg = str(exc_info.value)
+        assert str(p) in msg, f"file path not in error: {msg}"
+        assert "entries" in msg, f"offending field not in error: {msg}"
 
 
 # ---------------------------------------------------------------------------
