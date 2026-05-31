@@ -1,0 +1,5 @@
+# paideia 문서 사이트(MkDocs Material) 빌드 의존성.
+# 로컬:  pip install -r docs/requirements.txt && mkdocs serve
+# uv:    uvx --with-requirements docs/requirements.txt mkdocs serve
+# CI:    .github/workflows/docs.yml 에서 사용
+mkdocs-material>=9.5

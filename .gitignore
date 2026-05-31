@@ -48,3 +48,6 @@ _workspace/
 # immersio-email dry-run preview output (FR — preview directory not tracked)
 tmp/immersio_email_preview/
 
+
+# MkDocs 빌드 산출물 (GitHub Pages는 CI에서 빌드)
+/site/

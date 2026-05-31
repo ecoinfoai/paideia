@@ -1,0 +1,74 @@
+site_name: paideia
+site_description: 한 교과목의 학기 전 주기 데이터 시스템 — needs-map · examen · immersio 등 모듈 문서
+# 프로젝트 페이지 URL (origin: github.com/ecoinfoai/paideia)
+site_url: https://ecoinfoai.github.io/paideia/
+docs_dir: docs
+repo_url: https://github.com/ecoinfoai/paideia
+repo_name: ecoinfoai/paideia
+
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: 다크 모드로 전환
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: 라이트 모드로 전환
+
+nav:
+  - 홈: README.md
+  - 시작하기:
+      - 왜 paideia 인가: why_paideia.md
+      - Quickstart: quickstart.md
+      - Tutorial: tutorial.md
+  - 모듈 사용법:
+      - needs-map (사전진단): needs-map/how_to_use_needs-map.md
+      - examen (시험 출제): examen/how_to_use_examen.md
+      - immersio (결과 해석): immersio/how_to_use_immersio.md
+      - maieutica (퀴즈 생성·개발 중): maieutica/how_to_use_maieutica.md
+      - formative-analysis (형성평가·통합 예정): formative-analysis/how_to_use_formative-analysis.md
+      - retro-mester (학기 회고·개발 중): retro-mester/how_to_use_retro-mester.md
+      - metric-codex (학습 기록부·개발 중): metric-codex/how_to_use_metric-codex.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
