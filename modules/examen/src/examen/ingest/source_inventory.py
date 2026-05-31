@@ -405,10 +405,17 @@ def rows_to_entries(
     resolve ``chapter_no`` via ``curriculum_map``.
 
     ``source_ref`` has the form ``'퀴즈:{week}주#{row_no}'`` where ``row_no``
-    is the 1-based index of the row within this call's ``rows`` list.
+    is the **physical 1-based sheet row number** of the item in the original
+    ``.xls`` (constitution V: a professor must be able to locate the original
+    item in the real file).  ``load_quiz_inventory`` supplies the physical row
+    via the ``'_sheet_row'`` key on each row dict; this value survives blank-row
+    filtering so a blank mid-sheet row does NOT shift later items' source_refs.
+    If ``'_sheet_row'`` is absent (e.g. unit tests with synthetic rows), the
+    1-based position within ``rows`` is used as a fallback.
 
     Args:
-        rows: List of row dicts keyed by column header strings.
+        rows: List of row dicts keyed by column header strings.  Each may carry
+            a ``'_sheet_row'`` int (the physical 1-based sheet row number).
         week: Week number derived from the .xls filename (e.g. 9 for '9주차').
         curriculum_map: Validated CurriculumMap for week→chapter_no lookup.
         semester: SemesterCode for the entries.
@@ -432,7 +439,7 @@ def rows_to_entries(
         )
 
     entries: list[SourceInventoryEntry] = []
-    for row_idx, row in enumerate(rows, start=1):
+    for fallback_idx, row in enumerate(rows, start=1):
         stem = str(row["문제내용"])
         options = [
             str(row["보기1"]),
@@ -448,7 +455,11 @@ def rows_to_entries(
         except (ValueError, TypeError):
             answer_str = str(raw_answer)
 
-        source_ref = f"퀴즈:{week}주#{row_idx}"
+        # source_ref 의 행번호는 물리적 시트 행(1-based)을 사용한다 (감사 추적).
+        # load_quiz_inventory 가 '_sheet_row' 로 실제 행번호를 주입한다.
+        # 합성 행(단위 테스트)에는 '_sheet_row' 가 없으므로 enumerate 위치로 폴백.
+        sheet_row = int(row.get("_sheet_row", fallback_idx))
+        source_ref = f"퀴즈:{week}주#{sheet_row}"
 
         entry = SourceInventoryEntry(
             semester=semester,
@@ -532,14 +543,18 @@ def load_quiz_inventory(
                     f"Found headers: {headers}"
                 )
 
-        # Read data rows (skip header row 0)
+        # Read data rows (skip header row 0).
+        # Carry the PHYSICAL 1-based sheet row number through '_sheet_row' so
+        # source_ref stays anchored to the real .xls row even when blank
+        # mid-sheet rows are skipped (constitution V: 감사 추적성).
         rows: list[dict[str, Any]] = []
         for r in range(1, sh.nrows):
             row_vals = sh.row_values(r)
             row_dict: dict[str, Any] = {h: row_vals[i] for h, i in header_idx.items()}
-            # Skip blank rows (문제내용 empty)
+            # Skip blank rows (문제내용 empty) — physical row index still advances
             if not str(row_dict.get("문제내용", "")).strip():
                 continue
+            row_dict["_sheet_row"] = r + 1  # xlrd row r (0-based) → physical row r+1
             rows.append(row_dict)
 
         entries = rows_to_entries(

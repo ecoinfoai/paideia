@@ -129,7 +129,7 @@ class TestRowsToEntries:
         assert entries[0].week == 10
 
     def test_source_ref_format(self) -> None:
-        """source_ref has format '퀴즈:{week}주#{row_number}'."""
+        """source_ref has format '퀴즈:{week}주#{row_number}' (fallback positional)."""
         from examen.ingest.source_inventory import rows_to_entries
 
         rows = [_quiz_row(번호=1.0), _quiz_row(번호=2.0)]
@@ -137,6 +137,57 @@ class TestRowsToEntries:
         entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
         assert entries[0].source_ref == "퀴즈:9주#1"
         assert entries[1].source_ref == "퀴즈:9주#2"
+
+    def test_source_ref_uses_physical_sheet_row(self) -> None:
+        """When '_sheet_row' is present, source_ref uses the physical sheet row number."""
+        from examen.ingest.source_inventory import rows_to_entries
+
+        # Two rows whose physical sheet rows are 2 and 5 (a blank row at 3-4 was skipped)
+        rows = [
+            {**_quiz_row(번호=1.0), "_sheet_row": 2},
+            {**_quiz_row(번호=2.0), "_sheet_row": 5},
+        ]
+        cm = _curriculum()
+        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        assert entries[0].source_ref == "퀴즈:9주#2"
+        assert entries[1].source_ref == "퀴즈:9주#5"
+
+    def test_blank_mid_sheet_row_does_not_shift_source_ref(self) -> None:
+        """A blank mid-sheet row keeps later items anchored to their real .xls row.
+
+        Reproduces load_quiz_inventory's row-building logic: header at sheet row 1,
+        data at sheet rows 2 and 3, a BLANK row at sheet row 4, then data at sheet
+        row 5.  After blank-row filtering, the surviving items must carry physical
+        rows 2, 3, 5 — NOT renumbered 1, 2, 3 (which would point a professor to the
+        wrong physical row).  Constitution V: 감사 추적성.
+        """
+        from examen.ingest.source_inventory import rows_to_entries
+
+        # Simulate xlrd reading sheet rows 1..5 (row 0 = header, skipped upstream).
+        # row 4 (physical) is blank → skipped; physical row counter still advances.
+        sheet_rows = [
+            ("Q1 발문", "2"),   # physical row 2
+            ("Q2 발문", "3"),   # physical row 3
+            ("", ""),          # physical row 4 — blank, skipped
+            ("Q3 발문", "5"),   # physical row 5
+        ]
+        rows: list[dict[str, object]] = []
+        for offset, (stem, _physical) in enumerate(sheet_rows):
+            physical_row = offset + 2  # header is physical row 1, data starts at 2
+            if not str(stem).strip():
+                continue  # blank row skipped, physical_row advances
+            row = _quiz_row(문제내용=stem)
+            row["_sheet_row"] = physical_row
+            rows.append(row)
+
+        cm = _curriculum()
+        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        assert len(entries) == 3
+        refs = [e.source_ref for e in entries]
+        # The third surviving item must be anchored to physical row 5 (not #3)
+        assert refs == ["퀴즈:9주#2", "퀴즈:9주#3", "퀴즈:9주#5"], (
+            f"blank-row filtering shifted source_ref off the physical row: {refs}"
+        )
 
     def test_multiple_rows_produces_multiple_entries(self) -> None:
         """Multiple rows → multiple SourceInventoryEntry objects."""
@@ -157,15 +208,16 @@ class TestRowsToEntries:
             rows_to_entries(rows, week=99, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
 
     def test_numeric_답안_coerced_to_str(self) -> None:  # noqa: N802
-        """Numeric 답안 value (e.g. 3.0 float from xlrd) is coerced to string."""
+        """Numeric 답안 value (3.0 float from xlrd) is coerced to exact str '3'."""
         from examen.ingest.source_inventory import rows_to_entries
 
-        rows = [_quiz_row(답안="3")]
+        # xlrd returns numeric cells as float (e.g. 3.0); exercise the float→str path
+        rows = [_quiz_row(답안=3.0)]  # type: ignore[arg-type]
         cm = _curriculum()
         entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
-        # answer should be coerced to str "3"
+        # float 3.0 must coerce to the exact string "3" (not "3.0")
         assert isinstance(entries[0].answer, str)
-        assert entries[0].answer in ("3", "3.0")  # either int-coercion is fine
+        assert entries[0].answer == "3"
 
 
 # ---------------------------------------------------------------------------
