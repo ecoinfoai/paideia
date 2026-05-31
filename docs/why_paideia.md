@@ -1,75 +1,82 @@
-# 왜 paideia 인가 (why_paideia)
+# Why paideia (why_paideia)
 
-> **paideia(παιδεία)** — 고대 그리스에서 "전인적 교육·교양 형성"을 뜻하는 말.
-> 한 학기 동안 학생을 **진단하고, 가르치고, 평가하고, 회고하여** 다음
-> 학기를 준비하는 교육의 순환을 한 단어로 담았다.
-
----
-
-## 1. 어떤 문제를 푸는가
-
-대학 교과목 하나를 한 학기 운영하면 다음과 같은 데이터가 흩어진 채 쌓인다.
-
-- 사전진단 설문 응답
-- 강의 녹취(STT)·강의 자료
-- 형성평가·퀴즈
-- 중간·기말고사 성적·OMR
-- 학생 피드백·성적 산출 자료
-- 차년도 개선을 위한 회고 메모
-
-현실에서 이 데이터는 대부분 **분석되지 못한 채 사장**된다. 교수자는 매
-학기 같은 수작업(점수 집계, 문항 분석, 보고서 작성, 메일 발송)을
-반복하고, 학생 한 명 한 명에게 맞춘 피드백을 줄 시간은 없다.
-
-**paideia 는 이 흐름 전체를 자동화·표준화한다.**
+> **paideia (παιδεία)** — an ancient Greek word meaning the cultivation of
+> the whole person, the formation of character and culture through education.
+> It captures, in a single word, the educational cycle of **diagnosing,
+> teaching, assessing, and reflecting on** students over a semester in order
+> to prepare for the next one.
 
 ---
 
-## 2. 핵심 설계 원칙
+## 1. What Problem Does It Solve?
 
-paideia 의 모든 모듈은 다음 5개 원칙을 공유한다.
+Running a single university course for one semester generates the following
+data, which tends to pile up scattered and disconnected:
 
-### (1) 결정론(determinism)
-같은 입력 → 같은 산출(byte-identical). 모든 난수 seed 를 고정하고,
-타임스탬프를 명시적으로 주입한다. 두 번 돌려도 결과가 흔들리지 않으므로
-**검토·재현·감사**가 가능하다.
+- Pre-diagnostic survey responses
+- Lecture transcripts (STT) and teaching materials
+- Formative assessments and quizzes
+- Midterm and final exam scores and OMR sheets
+- Student feedback and grading materials
+- Retrospective notes for improving the course next year
 
-### (2) 데이터 레이크 계층 (Bronze → Silver → Gold)
-- **Bronze** — 원본 그대로(설문 CSV, OMR `.xls`, 교재 `.txt`, 강의 STT).
-- **Silver** — 정규화된 중간 산출(`*.parquet`). 모듈 간 교환 포맷.
-- **Gold** — 사람이 보는 최종 산출(`xlsx`/`md`/`pdf`/`png`).
+In practice, most of this data ends up **buried, never analyzed**. Every
+semester the instructor repeats the same manual work (tallying scores,
+analyzing items, writing reports, sending emails) and never has time to give
+each individual student tailored feedback.
 
-각 모듈은 이전 모듈의 Silver/Gold 를 입력으로 받아 다음 산출을 만든다.
-
-### (3) 모듈 독립성
-각 모듈은 **단독 실행 가능**하며, 다른 모듈의 산출이 없어도
-degrade 모드로 동작한다. (예: needs-map 결과가 없어도 immersio 는
-시험 분석을 끝까지 수행하고, 진단 연계 컬럼만 N/A 로 둔다.)
-
-### (4) 한국어 우선
-모든 산출물(PDF·xlsx·md)은 한국어. NanumGothic 폰트 필수.
-한글이 깨지는 산출은 만들지 않는다.
-
-### (5) uv workspace 단일 monorepo
-하나의 저장소, 모듈별 독립 패키지. 의존성은 umbrella 에서 통합 관리한다.
+**paideia automates and standardizes this entire flow.**
 
 ---
 
-## 3. 한 학기의 시간 순서 = 모듈 구성
+## 2. Core Design Principles
 
-paideia 는 한 학기의 **시간 흐름**을 그대로 모듈로 옮겼다.
+Every module in paideia shares the following five principles.
 
-| 순서 | 모듈 | 역할 | 입력 | 산출 | 상태 |
+### (1) Determinism
+Same input → same output (byte-identical). All random seeds are fixed, and
+timestamps are injected explicitly. Because results don't drift when you run
+it twice, the outputs are **reviewable, reproducible, and auditable**.
+
+### (2) Data Lake Layering (Bronze → Silver → Gold)
+- **Bronze** — raw as-is (survey CSVs, OMR `.xls`, textbook `.txt`, lecture STT).
+- **Silver** — normalized intermediate output (`*.parquet`). The exchange format between modules.
+- **Gold** — final, human-facing output (`xlsx` / `md` / `pdf` / `png`).
+
+Each module takes the Silver/Gold output of a previous module as input and
+produces the next set of outputs.
+
+### (3) Module Independence
+Each module is **runnable on its own** and operates in a degraded mode even
+when another module's output is absent. (For example, even without needs-map
+results, immersio still completes its exam analysis end-to-end and simply
+leaves the diagnostic-linkage columns as N/A.)
+
+### (4) Korean First
+All outputs (PDF, xlsx, md) are in Korean. The NanumGothic font is required.
+No output is produced with broken Korean glyphs.
+
+### (5) A Single uv-workspace Monorepo
+One repository, with an independent package per module. Dependencies are
+managed centrally from the umbrella.
+
+---
+
+## 3. The Semester's Timeline = the Module Lineup
+
+paideia maps the **temporal flow** of a semester directly onto its modules.
+
+| Order | Module | Role | Input | Output | Status |
 |---|---|---|---|---|---|
-| 1 | **needs-map** | 사전진단 분석 | 진단 설문 응답 | 의미축 점수·군집·1인 1장 카드 | ✅ 출하 |
-| 2 | **examen** | 기말 시험 출제 | 교재·STT·형성평가·퀴즈 | 기말 출제 초안 | ✅ 출하 |
-| 3 | **immersio** | 시험 결과 해석 + 학생 맞춤 보고서 | 시험 성적·문항 | 문항분석·학생 보고서·이메일 | ✅ 출하 |
-| 4 | **metric-codex** | 평가 지표 표준 사전 | (모듈 공통 참조) | 지표 정의·계산 규칙 사전 | 🚧 아이디어 |
-| 5 | **retro-mester** | 학기 회고·차년도 개선 | 전 모듈 산출 | 회고 보고서·개선 제안 | 🚧 아이디어 |
+| 1 | **needs-map** | Pre-diagnostic analysis | Diagnostic survey responses | Semantic-axis scores, clusters, one-card-per-student | ✅ Shipped |
+| 2 | **examen** | Final-exam generation | Textbooks, STT, formative assessments, quizzes | Final-exam draft | ✅ Shipped |
+| 3 | **immersio** | Exam result interpretation + per-student reports | Exam scores, items | Item analysis, student reports, email | ✅ Shipped |
+| 4 | **metric-codex** | Standard dictionary of assessment metrics | (Shared reference across modules) | Metric definitions, calculation-rule dictionary | 🚧 Idea stage |
+| 5 | **retro-mester** | Semester retrospective, next-year improvement | Output of all modules | Retrospective report, improvement proposals | 🚧 Idea stage |
 
 ---
 
-## 4. 데이터 흐름 (한 학기)
+## 4. Data Flow (Over One Semester)
 
 ```text
     [사전진단 설문]
@@ -91,44 +98,40 @@ paideia 는 한 학기의 **시간 흐름**을 그대로 모듈로 옮겼다.
     [needs-map ...]
 ```
 
-진단(needs-map) → 출제(examen) → 결과(immersio) 의 **인과 흐름**이
-한 줄로 이어지고, 학기가 끝나면 retro-mester 가 이 모두를 회고해
-다음 학기 needs-map 입력 설계로 되돌아간다. 순환은 닫혀 있다.
+The **causal chain** of diagnosis (needs-map) → question generation (examen)
+→ results (immersio) runs in a single line, and when the semester ends,
+retro-mester reflects on all of it and loops back to the input design for the
+next semester's needs-map. The cycle is closed.
 
 ---
 
-## 5. 기술 스택
+## 5. Tech Stack
 
 - **Python 3.11** (uv workspace, paideia umbrella)
-- **계약**: pydantic ≥ 2.6
-- **데이터**: pandas ≥ 2.0 + pyarrow ≥ 15 (Silver parquet, 결정성 옵션 고정)
-- **통계**: scipy · scikit-learn · statsmodels
-- **시각화**: matplotlib (figs, dpi=150, `Software=paideia` 메타)
-- **문서 산출**: reportlab (PDF) · openpyxl (xlsx)
-- **LLM**: anthropic SDK + instructor (구조화 출력; 폴백·캐시 동반)
-- **저장소**: 로컬 파일시스템 (Bronze → Silver → Gold)
+- **Contracts**: pydantic ≥ 2.6
+- **Data**: pandas ≥ 2.0 + pyarrow ≥ 15 (Silver parquet, with determinism options fixed)
+- **Statistics**: scipy · scikit-learn · statsmodels
+- **Visualization**: matplotlib (figs, dpi=150, `Software=paideia` metadata)
+- **Document output**: reportlab (PDF) · openpyxl (xlsx)
+- **LLM**: anthropic SDK + instructor (structured output; with fallback and caching)
+- **Storage**: local filesystem (Bronze → Silver → Gold)
 
-LLM 은 **선택적 가속기**다. 외부 LLM 에 도달하지 못해도 결정론 단계는
-끝까지 완주하도록 설계되어 있다.
-
----
-
-## 6. 누가 쓰는가
-
-- **운영**: 부산보건대학교 (bhug.ac.kr)
-- **파일럿**: 단일 교과목 「인체구조와기능」
-- **확장**: 다교과 확장 예정
+The LLM is an **optional accelerator**. The system is designed so that the
+deterministic stages run to completion even when an external LLM cannot be
+reached.
 
 ---
 
-## 다음 읽을거리
+## 6. Who Uses It
 
-- 처음이라면 → [quickstart.md](quickstart.md) (5분 안에 첫 산출)
-- 한 학기를 처음부터 끝까지 따라가려면 → [tutorial.md](tutorial.md)
-- 모듈별 상세 사용법 → 각 모듈 폴더의 `how_to_use_*.md`
-</content>
-</invoke>
+- **Operated by**: Busan Health University (bhug.ac.kr)
+- **Pilot**: a single course, "Human Structure and Function"
+- **Expansion**: multi-course rollout planned
 
-<result>
-File does not exist.
-</result>
+---
+
+## Further Reading
+
+- New here? → [quickstart.md](quickstart.md) (your first output in 5 minutes)
+- Want to follow a full semester start to finish? → [tutorial.md](tutorial.md)
+- Detailed per-module usage → each module folder's `how_to_use_*.md`

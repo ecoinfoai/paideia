@@ -1,43 +1,40 @@
 # how_to_use_metric-codex
 
-> 🚧 **이 모듈은 아직 개발되지 않았습니다 (The module is under development).**
+> 🚧 **The module is under development.**
 >
-> 현재는 `idea/metric-codex-v0.1.0.md` 설계 문서로만 존재합니다.
-> 실행 가능한 CLI·코드는 없으며, 구현 시 본 문서로 사용법을 채웁니다.
+> It currently exists only as the design document `idea/metric-codex-v0.1.0.md`.
+> There is no runnable CLI or code yet; once implemented, this document will be filled in with usage instructions.
 >
-> ⚠️ metric-codex 는 paideia 의 직접 scope **밖**의 하류 프로젝트입니다.
-> paideia 산출을 *학생 한 명 중심*으로 다시 모으는 집계·질의 층으로,
-> 소비자가 교과목 교수자가 아니라 **지도교수**이고 데이터 모델이 학생 단위입니다.
+> ⚠️ metric-codex is a downstream project **outside** the direct scope of paideia.
+> It is an aggregation and query layer that re-gathers paideia's outputs around *a single student*;
+> its consumer is not a course instructor but an **academic advisor**, and its data model is student-centric.
 
 ---
 
-## 무엇이 될 모듈인가
+## What this module will be
 
-**metric-codex**(기록부 *codex* + *metric* → "학습 지표 기록부") —
-paideia 가 내는 학습역량 데이터와 학교 시스템의 성적·출석을 **학생 한 명
-중심**으로 누적 저장하고, 지도교수가 자기 지도학생의 한 학기 학습을
-**로컬 LLM 으로 근거 기반 질의**할 수 있게 하는 도구.
+**metric-codex** (a register, *codex*, + *metric* → "a register of learning metrics") —
+a tool that accumulates the learning-competency data produced by paideia together with the grades and attendance from the school's systems, **centered on a single student**, and lets an academic advisor run **evidence-based, locally-run-LLM queries** about a semester of learning for the students they advise.
 
-| 항목 | 계획 |
+| Item | Plan |
 |---|---|
-| 입력 | 학교 Excel(총점·출석, 최소층) + paideia 산출(문항·도메인, 풍부층) |
-| 산출 | 학생별 누적 store + 지도교수 질의 응답(출처 인용) |
-| 소비자 | 지도교수 (자기 지도학생만) |
-| 의존성 | paideia 모듈 산출 (특히 immersio 학생별 기록) |
+| Input | School Excel files (total scores and attendance, the minimal layer) + paideia outputs (per-item and per-domain, the rich layer) |
+| Output | A per-student accumulated store + advisor query responses (with source citations) |
+| Consumer | Academic advisors (their own advisees only) |
+| Dependencies | paideia module outputs (especially immersio's per-student records) |
 
-## 핵심 제약 (설계 닻)
+## Core constraints (design anchors)
 
-- **학습역량 데이터만** — 상담·생활 정보는 법적 제한으로 제외.
-- **자기 지도학생만** 조회 가능.
-- **로컬 처리** — 질의는 로컬 LLM, 데이터가 기계를 떠나지 않는다.
-- **근거 인용** — 모든 답은 출처를 인용하고, 없는 부분은 "근거 없음" 으로 명시.
-- **정형 + 비정형 하이브리드** — 점수·응시 같은 표와 자유서술을 함께 담아 질의.
-- **출처·시점 꼬리표** — 어느 출처·언제 들어왔는지 기록(파일 기반 적재).
+- **Learning-competency data only** — counseling and personal-life information is excluded for legal reasons.
+- **Only one's own advisees** can be queried.
+- **Local processing** — queries run on a local LLM, and the data never leaves the machine.
+- **Evidence citation** — every answer cites its source, and anything missing is explicitly marked as "no evidence."
+- **Structured + unstructured hybrid** — tables such as scores and test attempts are held together with free-text descriptions for querying.
+- **Source and timestamp tags** — a record of which source the data came from and when it arrived (file-based ingestion).
 
-## 참고
+## References
 
-- 설계 메모: `idea/metric-codex-v0.1.0.md`
-- 데이터 공급 모듈: [immersio](../immersio/how_to_use_immersio.md) ·
+- Design notes: `idea/metric-codex-v0.1.0.md`
+- Data-supplying modules: [immersio](../immersio/how_to_use_immersio.md) ·
   [needs-map](../needs-map/how_to_use_needs-map.md)
-- 전체 그림: [why_paideia](../why_paideia.md)
-</content>
+- The big picture: [why_paideia](../why_paideia.md)

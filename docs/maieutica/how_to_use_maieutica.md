@@ -1,38 +1,35 @@
 # how_to_use_maieutica
 
-> 🚧 **이 모듈은 아직 개발되지 않았습니다 (The module is under development).**
+> 🚧 **The module is under development.**
 >
-> 현재는 `idea/` 의 설계 문서로만 존재하며, 실행 가능한 CLI·코드는 없습니다.
-> 아래는 계획된 방향이며 구현 시 본 문서로 사용법을 채웁니다.
+> It currently exists only as a design document under `idea/`; there is no runnable CLI or code yet.
+> What follows is the planned direction; once implemented, this document will be filled in with usage instructions.
 
 ---
 
-## 무엇이 될 모듈인가
+## What this module will be
 
-**maieutica**(그리스어 *μαιευτική*, 산파술) — 매주 진행할 **객관식 퀴즈
-후보**와 **서술형 형성평가 후보**를 교재 텍스트로부터 생성하는 모듈.
+**maieutica** (from the Greek *μαιευτική*, "the art of midwifery") — a module that generates **multiple-choice quiz candidates** and **short-answer formative-assessment candidates** from textbook text for use each week.
 
-| 항목 | 계획 |
+| Item | Plan |
 |---|---|
-| 입력 | 교재 챕터 텍스트 (PDF 추출 또는 Markdown) |
-| 산출 | 챕터별 객관식 후보 N개 + 서술형 후보 M개 (Pydantic 검증 JSON) |
-| 학기 시점 | 학기 전(전체) + 매주(점진) |
-| 의존성 | 교재 |
-| 코드 vs LLM | 텍스트 청킹·구조화 출력 검증 = 코드, 문항 생성 = LLM 필수 |
-| 후속 소비자 | formative-analysis, examen |
+| Input | Textbook chapter text (extracted from PDF or Markdown) |
+| Output | N multiple-choice candidates + M short-answer candidates per chapter (Pydantic-validated JSON) |
+| Point in the semester | Before the semester (all at once) + each week (incrementally) |
+| Dependencies | Textbook |
+| Code vs. LLM | Text chunking and structured-output validation = code; question generation = LLM (required) |
+| Downstream consumers | formative-analysis, examen |
 
-LLM 출력은 반드시 Pydantic 스키마로 검증된 JSON 으로 받아(AutoQuizzer 패턴),
-하류 모듈이 안전하게 소비하도록 한다.
+LLM output must always be received as JSON validated against a Pydantic schema (the AutoQuizzer pattern), so that downstream modules can consume it safely.
 
-## 현재 대안
+## Current alternative
 
-모듈이 나오기 전까지는 다음 Claude Code 스킬로 유사한 산출을 만들 수 있다.
+Until the module is available, you can produce similar output with the following Claude Code skills.
 
-- **chapter-quiz-generator** — 챕터별 5지선다 퀴즈 20문항 생성
-- **formative-test-creator** — 서술형 형성평가 문항 + 루브릭 생성
+- **chapter-quiz-generator** — generates 20 five-option multiple-choice quiz questions per chapter
+- **formative-test-creator** — generates short-answer formative-assessment items with rubrics
 
-## 참고
+## References
 
-- 설계 메모: `idea/paideia-idea.md` §1.2
-- 전체 그림: [why_paideia](../why_paideia.md)
-</content>
+- Design notes: `idea/paideia-idea.md` §1.2
+- The big picture: [why_paideia](../why_paideia.md)

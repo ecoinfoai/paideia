@@ -1,38 +1,42 @@
 # how_to_use_immersio
 
-> **immersio v0.1.x** — 시험 결과 해석 + 학생 맞춤형 보고서 생성 모듈.
-> (라틴어 *immersio*: 몰입)
-> OMR·성적을 받아 문항 품질을 분석하고, needs-map 진단과 결합 분석하며,
-> 학생별 맞춤 보고서를 만들어 이메일로 발송한다.
+> **immersio v0.1.x** — module for interpreting exam results and generating
+> personalized student reports.
+> (Latin *immersio*: immersion.)
+> Takes OMR and grades, analyzes item quality, performs combined analysis with
+> the needs-map diagnosis, builds a personalized report per student, and sends
+> it by email.
 
-paideia 의 결과 해석 모듈로, 한 학기에 여러 **Phase** 로 나누어 실행한다.
-모든 통계·라벨·카드는 결정론 코드, 코칭 멘트 자연어화만 LLM 옵션이다.
+This is paideia's result-interpretation module, run across several **Phases**
+over a semester. All statistics, labels, and cards come from deterministic code;
+only the natural-language phrasing of coaching comments is an LLM option.
 
 ---
 
-## 1. 한눈에
+## 1. At a glance
 
 ```bash
-uv run --package immersio immersio <subcommand> [옵션]
+uv run --package immersio immersio <subcommand> [options]
 ```
 
-- 콘솔 스크립트: **`immersio`**
-- 서브커맨드: `ingest` · `analyze` · `combine` · `email`
-  (보조: `email-init-test-fixtures` · `email-cleanup-log`)
-- 데이터 키: `{semester}-{course}` (예: `2026-1-anatomy`)
+- Console script: **`immersio`**
+- Subcommands: `ingest` · `analyze` · `combine` · `email`
+  (auxiliary: `email-init-test-fixtures` · `email-cleanup-log`)
+- Data key: `{semester}-{course}` (e.g. `2026-1-anatomy`)
 
-| Phase | 커맨드 | 역할 |
+| Phase | Command | Role |
 |---|---|---|
-| 0 | `ingest` | Bronze → Silver 4종 |
-| 1+2 | `analyze` | 시험 품질 분석 + 학생 지표 + 보고서 |
-| 3 | `combine` | needs-map × 시험 결합 분석 |
-| 6 | `email` | 학생 맞춤 PDF 발송 |
+| 0 | `ingest` | Bronze → 4 Silver files |
+| 1+2 | `analyze` | Exam quality analysis + student metrics + report |
+| 3 | `combine` | needs-map × exam combined analysis |
+| 6 | `email` | Send personalized student PDFs |
 
 ---
 
 ## 2. `ingest` — Phase 0 (Bronze → Silver)
 
-설문·OMR·출석부·시험문제를 파싱·검증·통합한다.
+Parses, validates, and integrates the survey, OMR, attendance roster, and exam
+questions.
 
 ```bash
 uv run --package immersio immersio ingest \
@@ -41,52 +45,55 @@ uv run --package immersio immersio ingest \
   --output-key 2026-1-anatomy
 ```
 
-| 플래그 | 필수 | 기본값 |
+| Flag | Required | Default |
 |---|---|---|
-| `--bronze-dir` | ✅ | — (`진단평가/`·`시험성적/`·`출석/`·`시험문제/`·`매핑/` 포함) |
-| `--mapping` | ✅ | — 진단 매핑 YAML |
-| `--exam-yaml` | — | 시험문제/ 자동 감지 |
+| `--bronze-dir` | ✅ | — (contains `진단평가/` · `시험성적/` · `출석/` · `시험문제/` · `매핑/`) |
+| `--mapping` | ✅ | — diagnostic mapping YAML |
+| `--exam-yaml` | — | auto-detected from 시험문제/ |
 | `--output-key` | — | `{semester}-{course}` |
 | `--output-dir` | — | `data/silver/immersio/` |
-| `--exam-result-pattern` | — | `*_{section}반*결과.xls(x)` (제외 토큰: `(OX)`,`(문항분석)`,`결시`) |
+| `--exam-result-pattern` | — | `*_{section}반*결과.xls(x)` (exclusion tokens: `(OX)`, `(문항분석)`, `결시`) |
 | `--no-git-commit` | — | off |
 
-**산출** (`data/silver/immersio/{key}/`): `student_master.parquet` ·
+**Output** (`data/silver/immersio/{key}/`): `student_master.parquet` ·
 `diagnostic_response.parquet` · `exam_result.parquet` · `exam_item.parquet` ·
 `manifest.json`.
-(앞 두 개가 **needs-map 의 입력**이다.)
+(The first two are **inputs to needs-map**.)
 
 ---
 
-## 3. `analyze` — Phase 1+2 (시험 품질 + 학생 지표)
+## 3. `analyze` — Phase 1+2 (exam quality + student metrics)
 
 ```bash
 uv run --package immersio immersio analyze \
   --semester 2026-1 --course anatomy
 ```
 
-| 플래그 | 필수 | 기본값 |
+| Flag | Required | Default |
 |---|---|---|
 | `--semester` / `--course` | ✅ | — |
 | `--silver-dir` / `--gold-dir` | — | `data/silver` / `data/gold` |
-| `--legacy-xlsx` | — | `data/silver/legacy/중간고사_분석결과.xlsx` (부재 시 diff 스킵) |
-| `--created-at-utc` | — | 입력 sha256 기반 계산 (지정 시 byte-identical) |
+| `--legacy-xlsx` | — | `data/silver/legacy/중간고사_분석결과.xlsx` (diff skipped if absent) |
+| `--created-at-utc` | — | computed from the input sha256 (byte-identical when specified) |
 | `--seed` | — | `42` (env `PAIDEIA_RANDOM_SEED`) |
-| `--no-needs-map` | — | off (켜면 진단 연계 컬럼 N/A) |
+| `--no-needs-map` | — | off (when on, diagnostic-linked columns are N/A) |
 
-**산출**:
+**Output**:
 - Silver: `문항통계.parquet` · `학생지표.parquet`
-- Gold: `시험분석결과.xlsx`(7시트: 전체요약·메타데이터·변별력·정답률·학생성적·히스토그램·문항상세) ·
+- Gold: `시험분석결과.xlsx` (7 sheets: 전체요약 [overall summary] · 메타데이터 [metadata] · 변별력 [discrimination] · 정답률 [correct-rate] · 학생성적 [student scores] · 히스토그램 [histogram] · 문항상세 [item detail]) ·
   `시험품질보고서.{md,pdf}` · `figs/fig{1,2}_*.png` · `legacy_diff.md`
 
-> needs-map silver(`data/silver/needs-map/{key}/factor_scores.parquet`)가 있으면
-> 학생 지표 시트에 `관심챕터_*`·`비호감챕터_*` 컬럼이 채워진다. 없으면 N/A.
+> If the needs-map Silver
+> (`data/silver/needs-map/{key}/factor_scores.parquet`) exists, the
+> `관심챕터_*` and `비호감챕터_*` columns in the student-metrics sheet are
+> populated. Otherwise they are N/A.
 
 ---
 
-## 4. `combine` — Phase 3 (진단 × 시험 결합)
+## 4. `combine` — Phase 3 (diagnosis × exam)
 
-needs-map 군집·요인 점수와 시험 결과를 결합해 상관·회귀·군집 비교를 분석한다.
+Combines the needs-map cluster and factor scores with exam results to analyze
+correlations, regression, and cluster comparisons.
 
 ```bash
 uv run --package immersio immersio combine \
@@ -95,125 +102,127 @@ uv run --package immersio immersio combine \
   --include-cluster --include-subgroup
 ```
 
-| 플래그 | 필수 | 의미 |
+| Flag | Required | Meaning |
 |---|---|---|
 | `--semester` / `--course` | ✅ | — |
-| `--silver-dir` / `--gold-dir` | ✅ | 기본값 없음 — 명시 필수 |
-| `--include-cluster` | — | 군집 비교(fig5·§4·sheet3) 활성화 |
-| `--include-subgroup` | — | 서브그룹 비교(fig6·§5·sheet4) 활성화 |
+| `--silver-dir` / `--gold-dir` | ✅ | No default — must be specified |
+| `--include-cluster` | — | Enable cluster comparison (fig5 · §4 · sheet3) |
+| `--include-subgroup` | — | Enable subgroup comparison (fig6 · §5 · sheet4) |
 
-**입력**: needs-map 4종(`factor_scores`·`cluster_assignment`·`cluster_names.json`·
-`manifest.json`) + immersio 4종(`student_master`·`diagnostic_response`·
-`학생지표`·`manifest`).
+**Input**: 4 needs-map files (`factor_scores` · `cluster_assignment` ·
+`cluster_names.json` · `manifest.json`) + 4 immersio files (`student_master` ·
+`diagnostic_response` · `학생지표` · `manifest`).
 
-**산출**:
+**Output**:
 - Silver: `진단×시험결합.parquet` · `manifest_phase3.json`
-- Gold: `결합분석보고서.{md,pdf}` · `결합분석.xlsx`(2~4시트) · `figs/fig{3,4,5,6}_*.png`
+- Gold: `결합분석보고서.{md,pdf}` · `결합분석.xlsx` (2–4 sheets) · `figs/fig{3,4,5,6}_*.png`
 
 ---
 
-## 5. `email` — Phase 6 (학생 맞춤 PDF 발송)
+## 5. `email` — Phase 6 (send personalized student PDFs)
 
-학생별 PDF 를 Gmail API 로 발송한다. **dry-run → self-test → 실제 발송** 순서를 권장.
+Sends a per-student PDF via the Gmail API. The recommended order is
+**dry-run → self-test → real send**.
 
 ```bash
-# (1) dry-run — Gmail 호출 0, .eml 미리보기만
+# (1) dry-run — zero Gmail calls, .eml previews only
 uv run immersio email --profile kjeong \
   --semester 2026-1 --course anatomy --exam-name "기말고사"
 
-# (2) self-test — 운영자에게만 5건 (학생 도달 0, --send 필수)
+# (2) self-test — 5 messages to the operator only (zero student reach, --send required)
 uv run immersio email --profile kjeong \
   --semester 2026-1 --course anatomy --exam-name "기말고사" --self-test 5 --send
 
-# (3) 실제 발송 — 확인 게이트(yes/no) 후 발송
+# (3) real send — sends after a confirmation gate (yes/no)
 uv run immersio email --profile kjeong \
   --semester 2026-1 --course anatomy --exam-name "기말고사" --send
 
-# 실패자만 재시도
+# Retry only the failures
 uv run immersio email --profile kjeong \
   --semester 2026-1 --course anatomy --exam-name "기말고사" --send --retry-failed
 ```
 
-| 플래그 | 필수 | 기본값 |
+| Flag | Required | Default |
 |---|---|---|
 | `--profile` | ✅ | `~/.config/paideia/immersio_email/{profiles,test_profiles}/{name}.yaml` |
 | `--semester` / `--course` | ✅ | — |
-| `--exam-name` | ✅ | — (빈 문자열 거부) |
-| `--sent-date` | — | 오늘 (KST) |
+| `--exam-name` | ✅ | — (empty string rejected) |
+| `--sent-date` | — | today (KST) |
 | `--send` | — | off (= dry-run) |
-| `--self-test N` | — | None (1–10, `--send` 필요) |
-| `--retry-failed` / `--retry-skipped` | — | (상호 배타) |
-| `--rate-per-min` | — | profile (기본 20, 1–30) |
-| `--cohort` | — | `all` (또는 `low_score`/`rest`) |
-| `--confirm-sample` | — | profile (기본 3) |
+| `--self-test N` | — | None (1–10, requires `--send`) |
+| `--retry-failed` / `--retry-skipped` | — | (mutually exclusive) |
+| `--rate-per-min` | — | profile (default 20, 1–30) |
+| `--cohort` | — | `all` (or `low_score` / `rest`) |
+| `--confirm-sample` | — | profile (default 3) |
 | `--bronze-csv` | — | `data/bronze/진단평가/진단평가_1차_결과.csv` |
 | `--gold-pdf-dir` | — | `data/gold/immersio/{key}/이메일_발송용` |
 
-### dry-run vs send 의미론 (중요)
+### dry-run vs send semantics (important)
 
-| | dry-run (기본) | `--send` |
+| | dry-run (default) | `--send` |
 |---|---|---|
-| Gmail API 호출 | 0 | 있음 |
-| 학생 도달 | 0 | 있음 |
-| 로그 파일 | `메일_발송로그_dryrun.csv` (truncate) | `메일_발송로그.csv` (append) |
-| 미리보기 | `.eml` (To=학생) | — |
-| 확인 게이트 | 없음 | 첫 N건 표본 + yes/no |
+| Gmail API calls | 0 | yes |
+| Student reach | 0 | yes |
+| Log file | `메일_발송로그_dryrun.csv` (truncated) | `메일_발송로그.csv` (appended) |
+| Preview | `.eml` (To = student) | — |
+| Confirmation gate | none | first N samples + yes/no |
 
-> **로그 파일이 분리**되어 dry-run 이 실제 발송 로그를 오염시키지 않는다.
-> `status=success` 행은 재실행 시 자동 skip (idempotent).
+> **The log files are kept separate** so that a dry-run never contaminates the
+> real send log. Rows with `status=success` are automatically skipped on re-run
+> (idempotent).
 
-### 인증
+### Authentication
 
-profile YAML 의 `secrets_ref.service_account_json_path_env` 가 가리키는 env
-변수(예: `PAIDEIA_GCP_SA_JSON_PATH_KJEONG`)에 Service Account JSON 경로를 둔다.
-Gmail DwD(domain-wide delegation) 위임 필요. 키 파일은 0400 권장(agenix 암호화).
+Place the Service Account JSON path in the env variable referenced by the
+profile YAML's `secrets_ref.service_account_json_path_env`
+(e.g. `PAIDEIA_GCP_SA_JSON_PATH_KJEONG`). Gmail DwD (domain-wide delegation)
+is required. The key file should be 0400 (agenix-encrypted recommended).
 
-### 보조 커맨드
+### Auxiliary commands
 
-- `immersio email-init-test-fixtures --profile <test>` — 테스트용 더미 PDF 생성
+- `immersio email-init-test-fixtures --profile <test>` — generate dummy test PDFs
 - `immersio email-cleanup-log --semester ... --course ... --keep success,test_dummy [--dry-run]`
-  — v0.1.0 시기의 섞인 발송 로그 정리
+  — clean up the mixed send logs from the v0.1.0 era
 
 ---
 
-## 6. 종료 코드 (요약)
+## 6. Exit codes (summary)
 
-| 커맨드 | 0 | 주요 비-0 |
+| Command | 0 | Main non-zero |
 |---|---|---|
-| ingest | 성공 | 1 검증 · 2 인자/파일 · 3 IO · 4 무결성 |
-| analyze | 성공 | 1 검증 · 2 pydantic · 3 결측 · 4 archival · 6 폰트 |
-| combine | 성공 | 1·2·3·4 · 5 스키마 mismatch · 6 폰트 |
-| email | 성공 | 1/2 입력 · 3 IO · 4 무결성 · 5 인증 · 7 lock · 8 부분실패 |
+| ingest | Success | 1 validation · 2 args/files · 3 IO · 4 integrity |
+| analyze | Success | 1 validation · 2 pydantic · 3 missing data · 4 archival · 6 font |
+| combine | Success | 1·2·3·4 · 5 schema mismatch · 6 font |
+| email | Success | 1/2 input · 3 IO · 4 integrity · 5 auth · 7 lock · 8 partial failure |
 
 ---
 
-## 7. 환경 변수
+## 7. Environment variables
 
-| 변수 | 의미 |
+| Variable | Meaning |
 |---|---|
-| `PAIDEIA_RANDOM_SEED` | analyze seed (`--seed` 가 우선) |
-| `PAIDEIA_KR_FONT_PATH` / `_BOLD_PATH` | NanumGothic 경로 (PDF/PNG 필수) |
-| `PAIDEIA_GCP_SA_JSON_PATH_{PROFILE}` | email Service Account JSON 경로 |
+| `PAIDEIA_RANDOM_SEED` | analyze seed (`--seed` takes precedence) |
+| `PAIDEIA_KR_FONT_PATH` / `_BOLD_PATH` | NanumGothic path (required for PDF/PNG) |
+| `PAIDEIA_GCP_SA_JSON_PATH_{PROFILE}` | email Service Account JSON path |
 
 ---
 
-## 8. 자주 막히는 곳
+## 8. Common pitfalls
 
-| 증상 | 해결 |
+| Symptom | Fix |
 |---|---|
-| `exit 6` / 한글 깨짐 | NanumGothic 설치 |
-| `semester` 거부 | `YYYY-[12SW]` (예: `2026-1`), 하이픈 필수 |
-| `course` 거부 | kebab-case 소문자 (`anatomy` OK, `Anatomy` 거부) |
-| email exit 5 | SA JSON 경로/DwD 위임 확인 |
-| email exit 7 | 동시 `--send` 또는 cleanup-log lock 충돌 |
-| `--cohort low_score` 인데 exit 3 | `학생지표.parquet` 필요 |
+| `exit 6` / garbled Korean | Install NanumGothic |
+| `semester` rejected | `YYYY-[12SW]` (e.g. `2026-1`), the hyphen is required |
+| `course` rejected | lowercase kebab-case (`anatomy` OK, `Anatomy` rejected) |
+| email exit 5 | Check the SA JSON path / DwD delegation |
+| email exit 7 | Concurrent `--send`, or a cleanup-log lock conflict |
+| `--cohort low_score` but exit 3 | `학생지표.parquet` is required |
 
 ---
 
-## 관련 문서
+## Related documents
 
-- 선행 진단: [needs-map](../needs-map/how_to_use_needs-map.md) (Phase 3 결합 입력)
-- 시험 출제: [examen](../examen/how_to_use_examen.md)
-- 회고 환류: [retro-mester](../retro-mester/how_to_use_retro-mester.md)
-- 설계 철학: [why_paideia](../why_paideia.md)
-</content>
+- Prerequisite diagnosis: [needs-map](../needs-map/how_to_use_needs-map.md) (Phase 3 combined input)
+- Exam authoring: [examen](../examen/how_to_use_examen.md)
+- Retrospective feedback: [retro-mester](../retro-mester/how_to_use_retro-mester.md)
+- Design philosophy: [why_paideia](../why_paideia.md)
