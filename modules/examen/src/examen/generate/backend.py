@@ -40,6 +40,8 @@ from typing import Any
 
 import anthropic
 
+from examen.output.paths import atomic_write
+
 # ---------------------------------------------------------------------------
 # Sentinel exception
 # ---------------------------------------------------------------------------
@@ -69,6 +71,9 @@ class GenerationRequest:
 
     slot_id: str
     prompt: str
+    # NOTE: ``frozen=True`` is *shallow* — the list/dict below are still mutable.
+    # Callers MUST NOT mutate ``context_refs``/``metadata`` after construction,
+    # or the cache key (derived from these fields) would diverge silently.
     context_refs: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -206,7 +211,10 @@ class InputHashCache:
             ensure_ascii=False,
             indent=2,
         )
-        cache_file.write_text(serialized, encoding="utf-8")
+        # Atomic write (temp→os.replace) so a crash mid-write can never leave a
+        # corrupt/partial cache .json — a later run would otherwise read garbage
+        # and skip the backend (constitution V: 부분 산출 금지).
+        atomic_write(cache_file, lambda tmp: tmp.write_text(serialized, encoding="utf-8"))
         return response
 
     def cache_hit_rate(self) -> float:

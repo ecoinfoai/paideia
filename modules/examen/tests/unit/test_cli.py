@@ -104,45 +104,20 @@ class TestHelpWorks:
 # Missing required options → exit 2
 # ---------------------------------------------------------------------------
 
+_ALL_SUBCOMMANDS = ["ingest", "plan", "dry-run", "generate", "verify", "build"]
+
+
 class TestMissingRequiredOptions:
-    def test_ingest_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on ingest should exit 2."""
-        code = _invoke(["ingest", "--course", "anatomy"])
+    @pytest.mark.parametrize("sub", _ALL_SUBCOMMANDS)
+    def test_missing_semester_returns_exit2(self, sub: str) -> None:
+        """Missing --semester on every subcommand should exit 2."""
+        code = _invoke([sub, "--course", "anatomy"])
         assert code == 2
 
-    def test_ingest_missing_course_returns_exit2(self) -> None:
-        """Missing --course on ingest should exit 2."""
-        code = _invoke(["ingest", "--semester", "2026-1"])
-        assert code == 2
-
-    def test_plan_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on plan should exit 2."""
-        code = _invoke(["plan", "--course", "anatomy"])
-        assert code == 2
-
-    def test_plan_missing_course_returns_exit2(self) -> None:
-        """Missing --course on plan should exit 2."""
-        code = _invoke(["plan", "--semester", "2026-1"])
-        assert code == 2
-
-    def test_generate_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on generate should exit 2."""
-        code = _invoke(["generate", "--course", "anatomy"])
-        assert code == 2
-
-    def test_dry_run_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on dry-run should exit 2."""
-        code = _invoke(["dry-run", "--course", "anatomy"])
-        assert code == 2
-
-    def test_verify_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on verify should exit 2."""
-        code = _invoke(["verify", "--course", "anatomy"])
-        assert code == 2
-
-    def test_build_missing_semester_returns_exit2(self) -> None:
-        """Missing --semester on build should exit 2."""
-        code = _invoke(["build", "--course", "anatomy"])
+    @pytest.mark.parametrize("sub", _ALL_SUBCOMMANDS)
+    def test_missing_course_returns_exit2(self, sub: str) -> None:
+        """Missing --course on every subcommand should exit 2."""
+        code = _invoke([sub, "--semester", "2026-1"])
         assert code == 2
 
 
@@ -240,3 +215,38 @@ class TestNoEmphasisFlag:
             "--blueprint", str(valid_bp),
         ])
         assert code != 2
+
+
+# ---------------------------------------------------------------------------
+# Pipeline exception trap → exit 3 / 4
+# ---------------------------------------------------------------------------
+
+class TestPipelineExceptionTrap:
+    """app() must map pipeline exceptions to exit codes 3/4 now (T016).
+
+    The trap lives in app() so future pipeline wiring inherits it; these
+    tests inject a handler that raises to exercise the trap directly.
+    """
+
+    def test_backend_unreachable_returns_exit4(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A handler raising BackendUnreachableError → app returns 4."""
+        import examen.cli.main as cli_main
+        from examen.generate.backend import BackendUnreachableError
+
+        def _boom(_args: object) -> int:
+            raise BackendUnreachableError("api unreachable")
+
+        monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _boom)
+        code = _invoke(["generate", "--semester", "2026-1", "--course", "anatomy"])
+        assert code == 4
+
+    def test_runtime_error_returns_exit3(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A handler raising RuntimeError → app returns 3."""
+        import examen.cli.main as cli_main
+
+        def _boom(_args: object) -> int:
+            raise RuntimeError("response not yet provided")
+
+        monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _boom)
+        code = _invoke(["generate", "--semester", "2026-1", "--course", "anatomy"])
+        assert code == 3

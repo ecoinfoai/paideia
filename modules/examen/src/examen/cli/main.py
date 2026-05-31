@@ -32,6 +32,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from examen.generate.backend import BackendUnreachableError
+
 # ---------------------------------------------------------------------------
 # Argument parser builder
 # ---------------------------------------------------------------------------
@@ -354,7 +356,20 @@ def app(argv: list[str] | None = None) -> int:
         parser.error(f"unknown command: {args.command}")
         return 2
 
-    return handler(args)
+    # Pipeline exception trap (T016 — exit codes 3/4). Placed in app() so all
+    # future pipeline wiring inherits the mapping without each handler repeating
+    # it. BackendUnreachableError (api 백엔드 도달 실패) → 4; any other
+    # RuntimeError (생성/검증 단계 실패, e.g. SubscriptionBackend missing
+    # response) → 3. Order matters: BackendUnreachableError subclasses
+    # RuntimeError, so it must be caught first.
+    try:
+        return handler(args)
+    except BackendUnreachableError as exc:
+        print(f"ERROR [examen]: LLM backend unreachable — {exc}", file=sys.stderr)
+        return 4
+    except RuntimeError as exc:
+        print(f"ERROR [examen]: generate/verify step failed — {exc}", file=sys.stderr)
+        return 3
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -97,10 +97,13 @@ class TestInputHashCache:
         # First call: miss
         resp1 = cache.generate(req)
         assert fake.call_count == 1
+        assert resp1.cache_hit is False
 
         # Second call: hit — backend should NOT be called again
         resp2 = cache.generate(req)
         assert fake.call_count == 1, "backend was called on cache hit!"
+        # The hit must be flagged so manifest cache_hit_rate is accurate.
+        assert resp2.cache_hit is True
         # Response text must be byte-identical
         assert resp2.raw_text == resp1.raw_text
 
