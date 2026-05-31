@@ -73,13 +73,20 @@ from examen.generate.vary_quiz import vary_quiz
 from examen.ingest.report import write_ingest_report
 from examen.ingest.textbook import load_chapter, verify_chapter_files
 from examen.output.determinism import finalize_xlsx
+from examen.output.exam_item_projection import write_exam_item_projection
 from examen.output.manifest import build_manifest, write_manifest
 from examen.output.xlsx import write_xlsx
 from examen.output.yaml_out import write_yaml
 from examen.plan.blueprint import solve
 from examen.silver.chunk import chunk_chapter
 from examen.silver.evidence_index import EvidenceIndex
-from examen.verify.format_checks import check_format, check_formative, check_quiz_variation
+from examen.verify.format_checks import (
+    check_explanation_lengths,
+    check_format,
+    check_formative,
+    check_quiz_variation,
+    detect_duplicates,
+)
 from examen.verify.groundedness import verify_groundedness
 
 # ---------------------------------------------------------------------------
@@ -495,6 +502,16 @@ def build_exam(
         items.append(item)
 
     # ----------------------------------------------------------------
+    # Step 4b: US4 post-generation verify pass (T046/T048)
+    # Run AFTER all items are collected so dedup can see the full set.
+    # - detect_duplicates: flag items sharing the same key_concept.
+    # - check_explanation_lengths: flag wrong/leap/intent length violations.
+    # Both are non-crashing (flag into review_note / duplicate_flag).
+    # ----------------------------------------------------------------
+    items = detect_duplicates(items)
+    items = [check_explanation_lengths(i) for i in items]
+
+    # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output
     # xlsx + yaml are byte-identical across identical-input re-runs; the
     # manifest carries the only non-deterministic field (generated_at).
@@ -516,6 +533,15 @@ def build_exam(
     # 5b: yaml (nested full-fidelity)
     yaml_path = run_dir / "기말출제초안.yaml"
     write_yaml(items, yaml_path)
+
+    # 5b-2: ExamItem projection sidecar (immersio 소비용, T047)
+    exam_items_path = run_dir / "exam_items.yaml"
+    write_exam_item_projection(
+        items,
+        exam_items_path,
+        semester=blueprint.semester,
+        course_slug=blueprint.course_slug,
+    )
 
     # 5c: manifest
     generated_at = datetime.datetime.now(datetime.UTC).strftime(

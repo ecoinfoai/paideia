@@ -345,4 +345,119 @@ def check_quiz_variation(
     return item.model_copy(update=updates) if updates else item
 
 
-__all__ = ["check_format", "check_formative", "token_jaccard", "check_quiz_variation"]
+
+# ---------------------------------------------------------------------------
+# T048 — Explanation / intent length verification
+# ---------------------------------------------------------------------------
+
+# wrong_explanation / leap_explanation 목표 범위 (코드포인트)
+_WRONG_LEAP_MIN = 270
+_WRONG_LEAP_MAX = 330
+
+# intent 목표 범위 (코드포인트)
+_INTENT_MIN = 40
+_INTENT_MAX = 60
+
+
+def check_explanation_lengths(item: ExamItemDraft) -> ExamItemDraft:
+    """Verify wrong_explanation, leap_explanation, and intent lengths.
+
+    Checks:
+    1. ``wrong_explanation`` must be 270–330 codepoints.
+    2. ``leap_explanation`` must be 270–330 codepoints.
+    3. ``intent`` must be 40–60 codepoints.
+
+    Out-of-range violations are recorded in ``review_note`` (never raises).
+    The item is returned as-is when all fields are in range.
+
+    Args:
+        item: The exam item to length-check.
+
+    Returns:
+        A new ``ExamItemDraft`` with any length violations appended to
+        ``review_note``.  Returns the original object (identity) if no
+        violations are found.
+    """
+    notes: list[str] = []
+
+    wrong_len = len(item.wrong_explanation)
+    if not (_WRONG_LEAP_MIN <= wrong_len <= _WRONG_LEAP_MAX):
+        notes.append(
+            f"[length_check] wrong_explanation 길이 위반: "
+            f"{wrong_len}자 (목표 {_WRONG_LEAP_MIN}~{_WRONG_LEAP_MAX}자)"
+        )
+
+    leap_len = len(item.leap_explanation)
+    if not (_WRONG_LEAP_MIN <= leap_len <= _WRONG_LEAP_MAX):
+        notes.append(
+            f"[length_check] leap_explanation 길이 위반: "
+            f"{leap_len}자 (목표 {_WRONG_LEAP_MIN}~{_WRONG_LEAP_MAX}자)"
+        )
+
+    intent_len = len(item.intent)
+    if not (_INTENT_MIN <= intent_len <= _INTENT_MAX):
+        notes.append(
+            f"[length_check] intent 길이 위반: "
+            f"{intent_len}자 (목표 {_INTENT_MIN}~{_INTENT_MAX}자)"
+        )
+
+    if not notes:
+        return item
+
+    review_note = item.review_note or ""
+    extra = "\n".join(notes)
+    review_note = f"{review_note}\n{extra}" if review_note else extra
+    return item.model_copy(update={"review_note": review_note})
+
+
+# ---------------------------------------------------------------------------
+# T048 — Duplicate detection by key_concept
+# ---------------------------------------------------------------------------
+
+
+def detect_duplicates(items: list[ExamItemDraft]) -> list[ExamItemDraft]:
+    """Flag near-duplicate items by ``key_concept``.
+
+    Items sharing the same non-None ``key_concept`` are considered potential
+    duplicates.  The *first* occurrence is kept (``duplicate_flag`` unchanged);
+    all subsequent items with the same concept are flagged
+    (``duplicate_flag = True``).
+
+    Design decisions:
+    - ``key_concept=None`` items are NEVER grouped as duplicates (no signal).
+    - Items already carrying ``duplicate_flag=True`` (from a prior run or
+      manual annotation) are left as-is and not cleared.
+    - Deterministic: stable input order → stable output flags.
+
+    Args:
+        items: List of exam items (order is preserved).
+
+    Returns:
+        New list with the same length as ``items``, where duplicate items
+        have ``duplicate_flag=True`` set.
+    """
+    seen: set[str] = set()
+    result: list[ExamItemDraft] = []
+
+    for item in items:
+        kc = item.key_concept
+        if kc is not None and kc in seen:
+            # 중복 — duplicate_flag 를 True 로 설정
+            if not item.duplicate_flag:
+                item = item.model_copy(update={"duplicate_flag": True})
+        elif kc is not None:
+            seen.add(kc)
+        # key_concept=None 또는 첫 출현: 플래그 유지 (이미 True 이면 그대로)
+        result.append(item)
+
+    return result
+
+
+__all__ = [
+    "check_format",
+    "check_formative",
+    "token_jaccard",
+    "check_quiz_variation",
+    "check_explanation_lengths",
+    "detect_duplicates",
+]
