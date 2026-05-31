@@ -33,7 +33,7 @@ class ExamenManifest(BaseModel):
     )
     config_ids: dict[str, str] = Field(
         ...,
-        description="blueprint·curriculum_map·키워드사전 식별자",
+        description="blueprint·curriculum_map 파일 식별자(SHA-256). 키워드사전은 교재에서 코드로 파생되어 별도 해시 대상 아님.",
     )
     generated_at: str = Field(
         ...,
