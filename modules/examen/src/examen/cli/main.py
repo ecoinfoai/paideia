@@ -31,8 +31,18 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from examen.generate.backend import BackendUnreachableError
+
+if TYPE_CHECKING:
+    from paideia_shared.schemas import (
+        CurriculumMap,
+        ExamenBlueprint,
+        SourceInventoryEntry,
+    )
+
+    from examen.generate.backend import LLMBackend
 
 # ---------------------------------------------------------------------------
 # Argument parser builder
@@ -312,22 +322,149 @@ def _run_verify(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_build(args: argparse.Namespace) -> int:
+def _select_backend(
+    args: argparse.Namespace, semester: str, course: str
+) -> LLMBackend:
+    """Construct the real LLM backend for ``build`` from ``args.backend``.
+
+    Factored out of ``_run_build`` so tests can inject a network-free
+    ``FakeBackend`` via the ``_run_build(..., backend=...)`` seam without
+    instantiating the real ``SubscriptionBackend`` / ``ApiBackend``.
+
+    Args:
+        args: Parsed CLI namespace (uses ``args.backend``).
+        semester: Semester code (for the subscription staging/responses dirs).
+        course: Course slug (for the subscription staging/responses dirs).
+
+    Returns:
+        A concrete ``LLMBackend`` instance (``ApiBackend`` or
+        ``SubscriptionBackend``).
+    """
+    from examen.generate.backend import ApiBackend, SubscriptionBackend
+
+    if args.backend == "api":
+        return ApiBackend()
+    # subscription: staging + responses dirs under silver
+    from examen.output.paths import silver_dir as _silver_dir
+
+    silver_dir_path = _silver_dir(semester, course)
+    staging_dir = silver_dir_path / "staging"
+    responses_dir = silver_dir_path / "responses"
+    return SubscriptionBackend(staging_dir=staging_dir, responses_dir=responses_dir)
+
+
+def _load_build_inventories(
+    blueprint: ExamenBlueprint,
+    curriculum_map: CurriculumMap,
+    bronze_dir_path: Path,
+) -> tuple[list[SourceInventoryEntry] | None, list[SourceInventoryEntry] | None]:
+    """Resolve formative & quiz source inventories from the Bronze convention.
+
+    Loads inventories ONLY when the blueprint actually declares them
+    (``source_mix['formative'] > 0`` / ``source_mix['quiz'] > 0``).  When a
+    source is declared but its Bronze data is missing, fails fast with a
+    located ``FileNotFoundError`` (caller maps to exit 2 — no silent skip,
+    constitution: 조용한 누락 금지).  When a source is NOT declared
+    (count == 0) the corresponding inventory is ``None`` so ``build_exam``'s
+    existing ``source_mix == 0`` guard (validate_formative_count) is honoured.
+
+    Bronze layout (quickstart §1)::
+
+        {bronze}/formative/Ch*_FormativeTest.yaml
+        {bronze}/formative/형성평가_실제_출제문제들.txt
+        {bronze}/quiz/QuestionUploadExcel_{week}주차.xls
+
+    Args:
+        blueprint: Validated ExamenBlueprint (reads ``source_mix``).
+        curriculum_map: Validated CurriculumMap (week→chapter resolution).
+        bronze_dir_path: Path to the Bronze directory.
+
+    Returns:
+        ``(formative_inventory, quiz_inventory)`` — each a
+        ``list[SourceInventoryEntry]`` when declared+present, else ``None``.
+
+    Raises:
+        FileNotFoundError: If a source is declared (>0) but its Bronze data
+            (subdir / required file) is absent.
+        ValueError: Propagated from the loaders (malformed input, unmatched
+            administered item, week missing from curriculum_map, etc.).
+    """
+    from examen.ingest.source_inventory import (
+        load_formative_inventory,
+        load_quiz_inventory,
+    )
+
+    source_mix = blueprint.source_mix
+    semester = blueprint.semester
+    course_slug = blueprint.course_slug
+
+    # ---- formative ----
+    formative_inventory = None
+    if source_mix.get("formative", 0) > 0:
+        formative_dir = bronze_dir_path / "formative"
+        actual_txt = formative_dir / "형성평가_실제_출제문제들.txt"
+        chapter_yamls = sorted(formative_dir.glob("Ch*_FormativeTest.yaml"))
+        if not formative_dir.is_dir() or not actual_txt.exists() or not chapter_yamls:
+            raise FileNotFoundError(
+                f"_run_build: blueprint.source_mix.formative="
+                f"{source_mix['formative']} (>0) 이지만 형성평가 입력을 찾을 수 "
+                f"없습니다. 기대 경로: {actual_txt} 와 "
+                f"{formative_dir}/Ch*_FormativeTest.yaml. "
+                "형성 출처를 배치하거나 source_mix.formative 를 0 으로 설정하세요."
+            )
+        formative_inventory = load_formative_inventory(
+            actual_txt=actual_txt,
+            chapter_yamls=chapter_yamls,
+            curriculum_map=curriculum_map,
+            semester=semester,
+            course_slug=course_slug,
+        )
+
+    # ---- quiz ----
+    quiz_inventory = None
+    if source_mix.get("quiz", 0) > 0:
+        quiz_dir = bronze_dir_path / "quiz"
+        xls_paths = sorted(quiz_dir.glob("*.xls"))
+        if not quiz_dir.is_dir() or not xls_paths:
+            raise FileNotFoundError(
+                f"_run_build: blueprint.source_mix.quiz={source_mix['quiz']} "
+                f"(>0) 이지만 퀴즈 입력(.xls)을 찾을 수 없습니다. 기대 경로: "
+                f"{quiz_dir}/QuestionUploadExcel_*주차.xls. "
+                "퀴즈 출처를 배치하거나 source_mix.quiz 를 0 으로 설정하세요."
+            )
+        quiz_inventory = load_quiz_inventory(
+            xls_paths=xls_paths,
+            curriculum_map=curriculum_map,
+            semester=semester,
+            course_slug=course_slug,
+        )
+
+    return formative_inventory, quiz_inventory
+
+
+def _run_build(args: argparse.Namespace, backend: LLMBackend | None = None) -> int:
     """Handler for ``build``: ingest→plan→generate→verify→Gold output pipeline.
 
-    Loads blueprint + curriculum_map, verifies chapter files, runs the full
+    Loads blueprint + curriculum_map, verifies chapter files, loads the
+    formative/quiz source inventories from the Bronze convention, runs the full
     build_exam() pipeline with the selected backend, and writes Gold artefacts
     to a run-isolated directory.
 
+    Args:
+        args: Parsed CLI namespace.
+        backend: Optional injected ``LLMBackend`` (test seam).  When ``None``
+            the real backend is selected from ``args.backend`` via
+            ``_select_backend``.  Tests pass a network-free ``FakeBackend``.
+
     Exit codes:
         0 — success
-        2 — missing/invalid input (blueprint, curriculum_map, chapter files)
+        2 — missing/invalid input (blueprint, curriculum_map, chapter files,
+            or a declared formative/quiz source with no Bronze data)
         3 — generation/verify step failure
         4 — LLM backend unreachable (api mode)
     """
     from pathlib import Path
 
-    from examen.generate.backend import ApiBackend, SubscriptionBackend
     from examen.ingest.config import bronze_dir as _bronze_dir
     from examen.ingest.config import load_blueprint, load_curriculum_map
     from examen.pipeline import build_exam
@@ -365,17 +502,25 @@ def _run_build(args: argparse.Namespace) -> int:
         print(f"ERROR [examen]: curriculum_map validation failed — {exc}", file=sys.stderr)
         return 2
 
-    # Select backend
     bronze_dir_path = _bronze_dir(semester, course)
-    if args.backend == "api":
-        backend = ApiBackend()
-    else:
-        # subscription: staging + responses dirs under silver
-        from examen.output.paths import silver_dir as _silver_dir
-        silver_dir_path = _silver_dir(semester, course)
-        staging_dir = silver_dir_path / "staging"
-        responses_dir = silver_dir_path / "responses"
-        backend = SubscriptionBackend(staging_dir=staging_dir, responses_dir=responses_dir)
+
+    # Load formative/quiz inventories from the Bronze convention.  Only loaded
+    # when blueprint.source_mix declares them; a declared-but-absent source is a
+    # located fail-fast (exit 2).  Absent+undeclared → None (build_exam guard).
+    try:
+        formative_inventory, quiz_inventory = _load_build_inventories(
+            blueprint, curriculum_map, bronze_dir_path
+        )
+    except FileNotFoundError as exc:
+        print(f"ERROR [examen]: missing source inventory — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [examen]: source inventory error — {exc}", file=sys.stderr)
+        return 2
+
+    # Select backend (real backend unless a test injected one via the seam)
+    if backend is None:
+        backend = _select_backend(args, semester, course)
 
     # Resolve effective STT directory for the US7 lecture-emphasis enrichment.
     # Precedence: --no-emphasis forces degrade (None); else explicit --stt;
@@ -400,6 +545,8 @@ def _run_build(args: argparse.Namespace) -> int:
             backend=backend,
             blueprint_path=blueprint_path,
             curriculum_map_path=curriculum_map_path,
+            formative_inventory=formative_inventory,
+            quiz_inventory=quiz_inventory,
             stt_dir=stt_dir,
         )
     except FileNotFoundError as exc:
