@@ -12,7 +12,9 @@ import json
 from pathlib import Path
 
 from maieutica.output.manifest import build_manifest, write_manifest
-from paideia_shared.schemas import MaieuticaManifest
+from maieutica.verify.format_checks import answer_no_distribution
+from paideia_shared.schemas import MaieuticaManifest, QuizItemCandidate
+from paideia_shared.schemas.maieutica.leap_explanation import LeapExplanation
 
 
 def _kwargs() -> dict:
@@ -71,9 +73,6 @@ def test_write_manifest_deterministic_json(tmp_path: Path) -> None:
 
 def test_answer_no_distribution_sourced_from_format_checks() -> None:
     """answer_no_distribution wiring matches verify.format_checks output."""
-    from maieutica.verify.format_checks import answer_no_distribution
-    from paideia_shared.schemas import QuizItemCandidate
-    from paideia_shared.schemas.maieutica.leap_explanation import LeapExplanation
 
     def cand(item_no: int, answer_no: int) -> QuizItemCandidate:
         wrong, leap_text = "오답.", "도약."

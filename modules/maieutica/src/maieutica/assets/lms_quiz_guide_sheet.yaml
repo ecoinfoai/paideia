@@ -104,13 +104,13 @@ cells:
   text: 7주차
 - row: 15
   col: 7
-  text: 008
+  text: '008'
 - row: 15
   col: 8
   text: 8주차
 - row: 16
   col: 7
-  text: 009
+  text: '009'
 - row: 16
   col: 8
   text: 9주차

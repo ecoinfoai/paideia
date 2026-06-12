@@ -33,3 +33,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/maieutica"]
+# [VERIFY wheel-build]: templates/ lives outside src/ and loads via
+# Path(__file__); a wheel install would miss it. Current usage is editable
+# uv-workspace only. If a wheel build is added, move templates/ into
+# src/maieutica/ (like assets/) or use force-include.

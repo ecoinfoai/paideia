@@ -164,15 +164,15 @@ def _cell_text(item: QuizItemCandidate, column: dict[str, Any], *, week: int) ->
     return str(value)
 
 
-def _write_guide_sheet(book: xlwt.Workbook) -> None:
+def _write_guide_sheet(book: xlwt.Workbook, text_style: xlwt.XFStyle) -> None:
     """Write Sheet 0 from the frozen guide asset onto ``book``.
 
     Args:
         book: The xlwt workbook to add the guide sheet to.
+        text_style: Shared text style (one XF entry across both sheets).
     """
     asset = _load_guide_asset()
     sheet = book.add_sheet(asset["sheet_name"])
-    text_style = xlwt.XFStyle()
     for cell in asset["cells"]:
         sheet.write(cell["row"], cell["col"], cell["text"], text_style)
 
@@ -182,6 +182,8 @@ def _write_data_sheet(
     candidates: list[QuizItemCandidate],
     *,
     week: int,
+    text_style: xlwt.XFStyle,
+    number_style: xlwt.XFStyle,
 ) -> None:
     """Write Sheet 1 (headers + candidate rows) onto ``book``.
 
@@ -189,14 +191,12 @@ def _write_data_sheet(
         book: The xlwt workbook to add the data sheet to.
         candidates: Quiz candidates, one per data row.
         week: Target week (for the ``예상주차`` zero-pad).
+        text_style: Shared text style (one XF entry across both sheets).
+        number_style: Shared numeric style for ``문제번호``.
     """
     column_map = _load_column_map()
     sheet = book.add_sheet(column_map["sheet"])
     columns = _ordered_columns()
-
-    # A single shared style keeps the xf table small and deterministic.
-    text_style = xlwt.XFStyle()
-    number_style = xlwt.XFStyle()
 
     # Header row.
     for col_idx, column in enumerate(columns):
@@ -229,14 +229,23 @@ def write_quiz_xls(
     zero-padded.
 
     Args:
-        path: Destination ``.xls`` path.  The parent directory must exist.
+        path: Destination ``.xls`` path.  Parent directories are created if
+            missing (symmetry with ``write_manifest``).
         candidates: Quiz candidates (one per data row).
         week: Target week (for the ``예상주차`` zero-pad format).
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     def _write(tmp: Path) -> None:
+        # Single shared style objects keep the XF table minimal and the output
+        # byte-deterministic across both sheets (SC-009 / R1).
+        text_style = xlwt.XFStyle()
+        number_style = xlwt.XFStyle()
         book = xlwt.Workbook(encoding=_WORKBOOK_ENCODING)
-        _write_guide_sheet(book)
-        _write_data_sheet(book, candidates, week=week)
+        _write_guide_sheet(book, text_style)
+        _write_data_sheet(
+            book, candidates, week=week, text_style=text_style, number_style=number_style
+        )
         book.save(str(tmp))
 
     atomic_write(path, _write)

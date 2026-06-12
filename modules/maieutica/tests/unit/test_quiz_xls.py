@@ -101,3 +101,25 @@ def test_week_zero_padding_three_digits(tmp_path: Path) -> None:
     cell = sheet1.cell(1, col["예상주차"])
     assert cell.ctype == xlrd.XL_CELL_TEXT
     assert cell.value == "001"
+
+
+def test_quiz_xls_empty_candidates(tmp_path: Path) -> None:
+    """Empty candidate list → header-only Sheet1, still valid + byte-deterministic."""
+    out = tmp_path / "QuestionUploadExcel_9주차.xls"
+    write_quiz_xls(out, [], week=9)
+
+    book = xlrd.open_workbook(str(out))
+    assert book.nsheets == 2
+    sheet0 = book.sheet_by_index(0)
+    assert sheet0.name == guide_sheet_name()
+    sheet1 = book.sheet_by_index(1)
+    assert sheet1.name == "Sheet1"
+    # Header row only — no data rows.
+    assert sheet1.nrows == 1
+    assert [sheet1.cell(0, c).value for c in range(sheet1.ncols)] == list(QUIZ_HEADERS)
+
+    # Still byte-deterministic with an empty list.
+    def writer(path: Path) -> None:
+        write_quiz_xls(path, [], week=9)
+
+    gate_xls_deterministic(writer, work_dir=tmp_path)
