@@ -179,11 +179,13 @@ def _build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     verify_p = sub.add_parser(
         "verify",
-        help="입력 검증만 (전체 검증은 build 안에서 실행 — US5 T052/T053 에서 독립 배선 예정)",
+        help="기존 run 에 자동 2차 재검토(review_candidates)를 수행해 yaml 갱신",
         description=(
-            "현재는 생성사양·curriculum_map 입력 검증만 수행한다.\n"
-            "전체 검증(groundedness·형식·중복·자동 2차 재검토)은 build 파이프라인\n"
-            "안에서 실행되며, 독립 verify 서브커맨드 배선은 US5(T052/T053)에서 추가된다."
+            "이미 build 된 run 의 출제후보_완전판.yaml 을 읽어\n"
+            "결정론 규칙 검사(LLM 없음, 항상 실행) + 선택적 LLM 적대적 패스를\n"
+            "수행하고 review_note 를 채운 뒤 yaml 을 덮어쓴다.\n"
+            "run yaml 이 없으면 exit 2 (build 먼저 실행 필요).\n"
+            "LLM 백엔드 미도달 시 규칙 전용으로 폴백 (헌장 I)."
         ),
     )
     _add_common_args(verify_p)
@@ -477,29 +479,77 @@ def _run_generate(args: argparse.Namespace, backend: LLMBackend | None = None) -
     return 0
 
 
-def _run_verify(args: argparse.Namespace) -> int:
-    """Handler for ``verify``: input validation only.
+def _run_verify(args: argparse.Namespace, backend: LLMBackend | None = None) -> int:
+    """Handler for ``verify``: locate the run yaml, run review_candidates, write back.
 
-    Currently validates only the generation spec + curriculum map inputs.  The
-    full verification suite (groundedness / format / duplicates / 2nd-pass
-    review) runs inside ``build``; wiring it as a standalone ``verify``
-    subcommand is deferred to US5 (T052/T053).
+    Recomputes the deterministic ``run_id`` from the same inputs used by
+    ``build``, locates ``runs/{run_id}/出제후보_완전판.yaml``, reconstructs
+    typed candidates via :func:`~maieutica.output.candidate_yaml.read_candidate_yaml`,
+    runs the auto 2nd-pass review (rules-only when ``backend`` is ``None``), and
+    writes the updated yaml back.  The LLM adversarial layer runs only when
+    ``backend`` is provided and reachable; if it is not reachable the rules-only
+    result is used (Constitution I — degrade, no hard stop).
 
     Args:
         args: Parsed CLI namespace.
+        backend: Optional injected backend (test seam); ``None`` → rules-only.
 
     Returns:
-        0 on success; 2 on missing/invalid input.
+        0 on success; 2 if the run yaml is missing (run not built yet) or input
+        validation fails.
     """
+    from maieutica.ingest.spec_load import resolve_chapter_txt
+    from maieutica.output.candidate_yaml import read_candidate_yaml, write_candidate_yaml
+    from maieutica.output.paths import compute_run_id, run_gold_dir
+    from maieutica.verify.review_agent import review_candidates
+
     try:
-        _spec, _curriculum_map, _bronze, _sp, _cp = _load_inputs(args)
+        spec, _curriculum_map, bronze, spec_path, cmap_path = _load_inputs(args)
+        chapter_txt = resolve_chapter_txt(bronze, spec.chapter_no)
     except FileNotFoundError as exc:
         print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
         return 2
     except ValueError as exc:
         print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
         return 2
-    print("[maieutica verify] inputs valid", file=sys.stderr)
+
+    # Recompute run_id deterministically from the same inputs build used.
+    run_id = compute_run_id(
+        generation_spec_bytes=spec_path.read_bytes(),
+        curriculum_map_bytes=cmap_path.read_bytes(),
+        chapter_txt_bytes=chapter_txt.read_bytes(),
+    )
+    run_dir = run_gold_dir(
+        args.semester, args.course, run_id=run_id, data_root=_DATA_ROOT
+    )
+    yaml_path = run_dir / "출제후보_완전판.yaml"
+
+    try:
+        quiz_items, formative_items = read_candidate_yaml(yaml_path)
+    except FileNotFoundError:
+        print(
+            f"ERROR [maieutica]: run yaml not found — run 'build' first: {yaml_path}",
+            file=sys.stderr,
+        )
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: candidate yaml invalid — {exc}", file=sys.stderr)
+        return 2
+
+    reviewed_quiz, reviewed_formative = review_candidates(
+        quiz_items, formative_items, backend=backend
+    )
+
+    write_candidate_yaml(reviewed_quiz, reviewed_formative, yaml_path)
+    annotated = sum(1 for i in reviewed_quiz if i.review_note) + sum(
+        1 for i in reviewed_formative if i.review_note
+    )
+    print(
+        f"[maieutica verify] done: {len(reviewed_quiz)} quiz + "
+        f"{len(reviewed_formative)} formative reviewed; "
+        f"{annotated} annotated → {yaml_path}",
+        file=sys.stderr,
+    )
     return 0
 
 

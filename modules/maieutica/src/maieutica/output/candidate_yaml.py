@@ -37,7 +37,9 @@ via :func:`maieutica.output.paths.atomic_write`.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import yaml
 from paideia_shared.schemas import FormativeItemCandidate, QuizItemCandidate
 
 from maieutica.output.determinism import dump_yaml
@@ -77,4 +79,46 @@ def write_candidate_yaml(
     atomic_write(path, _write)
 
 
-__all__ = ["write_candidate_yaml"]
+def read_candidate_yaml(
+    path: Path,
+) -> tuple[list[QuizItemCandidate], list[FormativeItemCandidate]]:
+    """Read the full-fidelity candidate yaml back to typed models.
+
+    Parses the ``출제후보_완전판.yaml`` produced by
+    :func:`write_candidate_yaml` and reconstructs each entry via Pydantic's
+    ``model_validate``.  Used by the ``verify`` CLI step (T053) to locate and
+    re-validate a previously built run's candidates without re-running the full
+    pipeline.
+
+    Args:
+        path: Path to the full-fidelity candidate yaml (must exist).
+
+    Returns:
+        ``(quiz_items, formative_items)`` — lists of typed, frozen Pydantic
+        models.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+        ValueError: If the yaml structure is invalid (missing top-level keys or
+            model validation fails on any entry).
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"candidate yaml not found: {path}")
+
+    raw: Any = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"candidate yaml must be a mapping, got {type(raw).__name__}: {path}")
+
+    quiz_raw = raw.get("quiz")
+    formative_raw = raw.get("formative")
+    if quiz_raw is None or formative_raw is None:
+        raise ValueError(
+            f"candidate yaml must have 'quiz' and 'formative' top-level keys: {path}"
+        )
+
+    quiz_items = [QuizItemCandidate.model_validate(d) for d in quiz_raw]
+    formative_items = [FormativeItemCandidate.model_validate(d) for d in formative_raw]
+    return quiz_items, formative_items
+
+
+__all__ = ["read_candidate_yaml", "write_candidate_yaml"]
