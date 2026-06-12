@@ -30,8 +30,16 @@ number(s) of the removed content::
     "[reason] line N: 'text'"         # single-line removal
     "[reason] lines start–end: …"     # multi-line block removal
 
-Callers can parse the ``line N`` token to reconstruct the char offset of the
-removed text in the original file (offset = sum of len(line_k)+1 for k<N).
+``removed_spans`` is an AUDIT LOG ONLY — it is not a structured offset source,
+and downstream code must NOT string-parse the ``line N`` token to recover
+offsets.  Char offsets for KEPT lines are derived from the full original line
+list produced by ``load_chapter`` (T018) together with the ``(lineno, text)``
+pairs returned here::
+
+    char_start(N) = sum(len(line_k) + 1 for k in 1..N-1)
+
+i.e. the offset of a kept line is computed from the original lines and its
+preserved lineno, never by re-parsing the audit strings.
 
 Usage::
 
@@ -137,7 +145,8 @@ def clean_textbook(
 
     Args:
         lines: Raw lines from a PDF-extracted textbook ``.txt`` file.  The list
-            is 0-indexed internally; returned line numbers are 1-based.
+            is 0-indexed on input; returned line numbers are 1-based, so
+            ``lines[0]`` maps to lineno 1, ``lines[i]`` to lineno ``i + 1``.
 
     Returns:
         A 2-tuple of:

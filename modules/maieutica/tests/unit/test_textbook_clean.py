@@ -7,13 +7,18 @@ Covers:
   captions, 연습문제 block, 참고문헌, footnotes.
 - Body text and section headings are kept.
 - Original line numbers preserved on kept lines.
-- removed_spans audit log entries map back to ORIGINAL char offsets (verified
-  by parsing the '[reason] line N: ...' format and checking the original text
-  at those positions).
+- removed_spans audit log entries reference ORIGINAL line numbers (verified by
+  parsing the '[reason] line N: ...' format and checking the original text at
+  those positions).  Note: removed_spans is an audit log only — offsets for kept
+  lines come from load_chapter's original line list, not from these strings.
+- load_chapter → clean_textbook chain: original linenos survive the type
+  junction (load returns list[tuple], clean takes list[str]).
 - Determinism: identical input → identical output.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -335,3 +340,41 @@ class TestEdgeCases:
         assert heading not in {t for _, t in kept}
         assert "1. 문제." not in {t for _, t in kept}
         assert any("exercise" in r.lower() or "연습" in r for r in removed)
+
+
+# ============================================================================
+# Chain: load_chapter → clean_textbook (type-junction tripwire)
+# ============================================================================
+
+
+class TestLoadCleanChain:
+    """Guards the load → clean junction: load returns list[tuple], clean
+    takes list[str]; the kept linenos must still be the ORIGINAL file linenos
+    even when earlier lines were removed by cleaning.
+    """
+
+    def test_kept_line_keeps_original_lineno_after_chain(
+        self, tmp_path: Path
+    ) -> None:
+        """A surviving body line carries its ORIGINAL lineno through the chain.
+
+        FIXTURE_LINES has noise on lines 1–5, 9, 11, 13 (etc.) that the cleaner
+        removes.  '흡기 시 횡격막이 하강한다.' is at original line 17.  After
+        load_chapter → clean_textbook it must still be reported at lineno 17,
+        NOT renumbered to a compacted index.
+        """
+        from maieutica.ingest.textbook import load_chapter
+
+        p = tmp_path / "8장 호흡계통.txt"
+        p.write_text("\n".join(FIXTURE_LINES), encoding="utf-8")
+
+        pairs = load_chapter(p)
+        # Type junction: feed only the text strings into clean_textbook
+        kept, _removed = _clean([text for _, text in pairs])
+
+        line_map = {text: lineno for lineno, text in kept}
+        assert line_map.get("흡기 시 횡격막이 하강한다.") == 17, (
+            f"original lineno not preserved through chain: {line_map}"
+        )
+        # And an earlier kept body line also keeps its original lineno
+        assert line_map.get("코는 후각과 공기 가습을 담당한다.") == 8

@@ -219,11 +219,11 @@ class TestValidateWeekInMap:
         validate_week_in_map(cm, week=9, curriculum_map_path=map_path)
 
     def test_absent_week_raises(self, tmp_path: Path) -> None:
-        """Week 99 is NOT in the curriculum_map → raises."""
+        """Week 99 is NOT in the curriculum_map → raises ValueError."""
         from maieutica.ingest.spec_load import validate_week_in_map
 
         map_path, cm = self._make_map(tmp_path)
-        with pytest.raises((KeyError, ValueError, LookupError)):
+        with pytest.raises(ValueError):
             validate_week_in_map(cm, week=99, curriculum_map_path=map_path)
 
     def test_absent_week_error_names_week(self, tmp_path: Path) -> None:
@@ -231,7 +231,7 @@ class TestValidateWeekInMap:
         from maieutica.ingest.spec_load import validate_week_in_map
 
         map_path, cm = self._make_map(tmp_path)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             validate_week_in_map(cm, week=99, curriculum_map_path=map_path)
         assert "99" in str(exc_info.value), (
             f"week number not in error: {exc_info.value}"
@@ -242,7 +242,7 @@ class TestValidateWeekInMap:
         from maieutica.ingest.spec_load import validate_week_in_map
 
         map_path, cm = self._make_map(tmp_path)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             validate_week_in_map(cm, week=99, curriculum_map_path=map_path)
         assert str(map_path) in str(exc_info.value), (
             f"file path not in error: {exc_info.value}"

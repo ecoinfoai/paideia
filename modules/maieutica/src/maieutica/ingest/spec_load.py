@@ -154,7 +154,7 @@ def validate_week_in_map(
     """Verify that ``week`` exists in the curriculum map.
 
     Iterates ``cm.entries`` looking for any entry whose ``week`` equals the
-    target.  If absent, raises ``KeyError`` with a message that names both
+    target.  If absent, raises ``ValueError`` with a message that names both
     the missing week and the source file (constitution III: error messages
     must include expected vs actual context).
 
@@ -165,12 +165,14 @@ def validate_week_in_map(
             error message only).
 
     Raises:
-        KeyError: If ``week`` is not present in any entry of ``cm``.
-            Message includes the week number and the file path.
+        ValueError: If ``week`` is not present in any entry of ``cm``.
+            Message includes the week number and the file path.  ValueError is
+            used (not KeyError) for consistency with the module's other
+            config-validation errors.
     """
     present_weeks = {entry.week for entry in cm.entries}
     if week not in present_weeks:
-        raise KeyError(
+        raise ValueError(
             f"Week {week} not found in curriculum map '{curriculum_map_path}'. "
             f"Available weeks: {sorted(present_weeks)}"
         )
