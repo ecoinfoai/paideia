@@ -483,20 +483,29 @@ def _run_verify(args: argparse.Namespace, backend: LLMBackend | None = None) -> 
     """Handler for ``verify``: locate the run yaml, run review_candidates, write back.
 
     Recomputes the deterministic ``run_id`` from the same inputs used by
-    ``build``, locates ``runs/{run_id}/出제후보_완전판.yaml``, reconstructs
+    ``build``, locates ``runs/{run_id}/출제후보_완전판.yaml``, reconstructs
     typed candidates via :func:`~maieutica.output.candidate_yaml.read_candidate_yaml`,
-    runs the auto 2nd-pass review (rules-only when ``backend`` is ``None``), and
-    writes the updated yaml back.  The LLM adversarial layer runs only when
-    ``backend`` is provided and reachable; if it is not reachable the rules-only
-    result is used (Constitution I — degrade, no hard stop).
+    runs the auto 2nd-pass review, and writes the updated yaml back.
+
+    Backend policy (FR-012 backstop):
+    - ``api`` mode runs the adversarial leap-text backstop (FR-012) — the api
+      backend is selected via :func:`_select_backend` and passed to
+      ``review_candidates``.  If the api endpoint is unreachable, the resulting
+      ``BackendUnreachableError`` propagates to the ``app()`` trap → exit 4.
+    - ``subscription``/default (no explicit backend) run rules-only — a
+      ``SubscriptionBackend`` is intentionally NOT passed (it raises
+      ``RuntimeError`` on missing review-response files, which is not the
+      degrade path).  Both modes degrade safely to the deterministic rule layer.
 
     Args:
         args: Parsed CLI namespace.
-        backend: Optional injected backend (test seam); ``None`` → rules-only.
+        backend: Optional injected backend (test seam).  When ``None``, an api
+            backend is built only if ``args.backend == "api"``; otherwise the
+            review runs rules-only.
 
     Returns:
         0 on success; 2 if the run yaml is missing (run not built yet) or input
-        validation fails.
+        validation fails; 4 if the api backend is unreachable.
     """
     from maieutica.ingest.spec_load import resolve_chapter_txt
     from maieutica.output.candidate_yaml import read_candidate_yaml, write_candidate_yaml
@@ -536,8 +545,21 @@ def _run_verify(args: argparse.Namespace, backend: LLMBackend | None = None) -> 
         print(f"ERROR [maieutica]: candidate yaml invalid — {exc}", file=sys.stderr)
         return 2
 
+    # Only api mode activates the adversarial leap-text backstop (FR-012); a
+    # SubscriptionBackend is never auto-selected here (it raises on missing
+    # review-response files — not the degrade path).
+    review_backend = backend
+    api_mode = review_backend is None and args.backend == "api"
+    if api_mode:
+        review_backend = _select_backend(args)
+
+    # api mode surfaces an unreachable backend as exit 4 (app() trap); rules-only
+    # / injected backends degrade safely.
     reviewed_quiz, reviewed_formative = review_candidates(
-        quiz_items, formative_items, backend=backend
+        quiz_items,
+        formative_items,
+        backend=review_backend,
+        degrade_on_unreachable=not api_mode,
     )
 
     write_candidate_yaml(reviewed_quiz, reviewed_formative, yaml_path)

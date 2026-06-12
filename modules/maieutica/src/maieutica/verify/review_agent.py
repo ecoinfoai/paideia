@@ -43,8 +43,6 @@ identity-preserved (no copy).
 
 from __future__ import annotations
 
-import contextlib
-
 from paideia_shared.schemas import FormativeItemCandidate, QuizItemCandidate
 
 from maieutica.generate.backend import BackendUnreachableError, LLMBackend
@@ -99,10 +97,12 @@ def _check_quiz_rules(item: QuizItemCandidate) -> str:
     if item.textbook_evidence is not None and item.textbook_evidence.status == "미확인":
         notes.append("교재근거 미확인: 답안 근거가 교재에서 확인되지 않음")
 
-    if (
-        item.leap.textbook_evidence is not None
-        and item.leap.textbook_evidence.status == "미확인"
-    ):
+    if item.leap.textbook_evidence is None:
+        # A leap with no grounding info at all is a flaw — verify_groundedness
+        # should have attached evidence; its absence means the leap was never
+        # anchored (FR-012 backstop).
+        notes.append("도약근거 없음: leap 설명에 교재 근거 정보가 전혀 없음")
+    elif item.leap.textbook_evidence.status == "미확인":
         notes.append("도약근거 미확인: leap 설명 근거가 교재에서 확인되지 않음")
 
     return "\n".join(notes)
@@ -161,21 +161,29 @@ def _build_quiz_review_prompt(item: QuizItemCandidate) -> str:
 def _apply_llm_review_quiz(
     items: list[QuizItemCandidate],
     backend: LLMBackend,
+    *,
+    degrade_on_unreachable: bool = True,
 ) -> list[QuizItemCandidate]:
     """Run LLM adversarial pass on quiz items; append findings to review_note.
 
     Each item is reviewed independently.  A non-empty LLM response is appended
     to the item's existing ``review_note`` (tagged ``[review_agent]``).
 
-    If the backend raises ``BackendUnreachableError`` on any call, all remaining
-    items are returned unchanged (degrade — no hard stop).
-
     Args:
         items: Quiz candidates (already have rule-check notes if applicable).
         backend: Reachable LLM backend.
+        degrade_on_unreachable: When ``True`` (default, Constitution I), a
+            ``BackendUnreachableError`` on any call causes all remaining items
+            to be returned unchanged (degrade — no hard stop).  When ``False``
+            (CLI api mode), the error propagates so the CLI can map it to exit
+            4.
 
     Returns:
         New list of ``QuizItemCandidate`` with any LLM findings appended.
+
+    Raises:
+        BackendUnreachableError: Only when ``degrade_on_unreachable`` is
+            ``False`` and the backend is unreachable.
     """
     from maieutica.generate.backend import GenerationRequest  # noqa: PLC0415
 
@@ -199,6 +207,9 @@ def _apply_llm_review_quiz(
         try:
             response = backend.generate(request)
         except BackendUnreachableError:
+            if not degrade_on_unreachable:
+                # CLI api mode: surface unreachability → app() trap → exit 4.
+                raise
             # Degrade: skip LLM for this and all remaining items.
             result.append(item)
             result.extend(items[len(result):])
@@ -227,6 +238,7 @@ def review_candidates(
     formative_items: list[FormativeItemCandidate],
     *,
     backend: LLMBackend | None = None,
+    degrade_on_unreachable: bool = True,
 ) -> tuple[list[QuizItemCandidate], list[FormativeItemCandidate]]:
     """Run the 2nd-pass review on quiz and formative candidates.
 
@@ -237,9 +249,11 @@ def review_candidates(
        ``review_note == ""``.
     2. **Optional LLM adversarial pass** (layer 2): only runs when ``backend``
        is provided.  Appends ``[review_agent]``-tagged findings.  If
-       ``backend`` is ``None`` or raises ``BackendUnreachableError``, layer 2
-       is silently skipped and rule-check results are returned unchanged
-       (Constitution I — degrade, no hard stop).
+       ``backend`` is ``None``, layer 2 is skipped (rules-only).  If the
+       backend raises ``BackendUnreachableError`` and
+       ``degrade_on_unreachable`` is ``True`` (default), layer 2 is silently
+       skipped and rule-check results are returned unchanged (Constitution I —
+       degrade, no hard stop).
 
     All models are frozen → ``model_copy`` is used for every update.
 
@@ -248,11 +262,19 @@ def review_candidates(
         formative_items: Formative candidates to review.
         backend: Optional LLM backend for the adversarial pass.  ``None``
             → rules-only (Constitution I degraded mode).
+        degrade_on_unreachable: When ``True`` (default), an unreachable backend
+            degrades layer 2 to rules-only.  When ``False`` (CLI api mode), the
+            ``BackendUnreachableError`` propagates so the CLI can map it to exit
+            4.
 
     Returns:
         ``(reviewed_quiz, reviewed_formative)`` — new lists with ``review_note``
         populated for items that have violations.  Clean items are
         identity-preserved (same object, no copy).
+
+    Raises:
+        BackendUnreachableError: Only when ``degrade_on_unreachable`` is
+            ``False`` and the backend is unreachable.
     """
     # ----------------------------------------------------------------
     # Layer 1: deterministic rule checks
@@ -276,9 +298,14 @@ def review_candidates(
     # ----------------------------------------------------------------
     # Layer 2: optional LLM adversarial pass (quiz items only)
     # ----------------------------------------------------------------
+    # _apply_llm_review_quiz handles BackendUnreachableError internally when
+    # degrade_on_unreachable is True (per item, returning the remaining items
+    # unchanged), so the rule-check results always survive (Constitution I).
+    # When False (CLI api mode), it re-raises so the CLI maps it to exit 4.
     if backend is not None:
-        with contextlib.suppress(BackendUnreachableError):
-            reviewed_quiz = _apply_llm_review_quiz(reviewed_quiz, backend)
+        reviewed_quiz = _apply_llm_review_quiz(
+            reviewed_quiz, backend, degrade_on_unreachable=degrade_on_unreachable
+        )
 
     return reviewed_quiz, reviewed_formative
 

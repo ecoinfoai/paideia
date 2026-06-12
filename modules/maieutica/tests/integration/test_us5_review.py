@@ -650,9 +650,19 @@ def test_cli_verify_missing_run_exits_2(tmp_path: Path) -> None:
 
 
 def test_cli_verify_after_build_exits_0_and_annotates(tmp_path: Path) -> None:
-    """verify exits 0 after a successful build and writes annotated yaml."""
+    """verify exits 0 after build, annotates a deliberately-flawed item only.
+
+    A clean build produces only clean candidates, so the "annotates" half is
+    unprovable without a flaw.  We inject one: after build, the written yaml's
+    first quiz item is mutated to ``option_length_ok=False`` (a length flaw).
+    The CLI verify pass must then annotate that item's ``review_note`` while
+    leaving the other (clean) quiz item blank.
+    """
+    import os
+
     from maieutica.cli.main import app
     from maieutica.generate.backend import SubscriptionBackend
+    from maieutica.output.candidate_yaml import read_candidate_yaml, write_candidate_yaml
     from maieutica.pipeline import build
 
     bronze, data_root = _build_bronze(tmp_path)
@@ -676,9 +686,17 @@ def test_cli_verify_after_build_exits_0_and_annotates(tmp_path: Path) -> None:
         curriculum_map_path=bronze / "curriculum_map.yaml",
     )
 
-    # Verify from CLI (rules-only, no LLM backend).
-    import os
+    yaml_path = run_dir / "출제후보_완전판.yaml"
 
+    # Inject a deliberate flaw into the FIRST quiz item (option_length_ok=False).
+    quiz_items, formative_items = read_candidate_yaml(yaml_path)
+    assert len(quiz_items) >= 2, "fixture must produce >=2 quiz items"
+    flawed_item_no = quiz_items[0].item_no
+    clean_item_no = quiz_items[1].item_no
+    quiz_items[0] = quiz_items[0].model_copy(update={"option_length_ok": False})
+    write_candidate_yaml(quiz_items, formative_items, yaml_path)
+
+    # Verify from CLI (rules-only, no LLM backend → default subscription mode).
     old_cwd = os.getcwd()
     os.chdir(tmp_path)
     try:
@@ -697,9 +715,16 @@ def test_cli_verify_after_build_exits_0_and_annotates(tmp_path: Path) -> None:
 
     assert rc == 0
 
-    # The yaml must have been rewritten with review_note fields present.
-    yaml_path = run_dir / "출제후보_완전판.yaml"
+    # The yaml must have been rewritten: flawed item annotated, clean item blank.
     doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    by_no = {d["item_no"]: d for d in doc["quiz"]}
     for d in doc["quiz"]:
-        # review_note key must be present (even if blank for clean items).
         assert "review_note" in d, f"review_note missing from quiz item {d['item_no']}"
+
+    flawed_note = by_no[flawed_item_no]["review_note"]
+    clean_note = by_no[clean_item_no]["review_note"]
+    assert flawed_note != "", "Flawed item must be annotated after verify"
+    assert "length" in flawed_note.lower() or "길이" in flawed_note, (
+        f"Flawed item review_note should name the length issue: {flawed_note!r}"
+    )
+    assert clean_note == "", "Clean item must stay blank after verify"
