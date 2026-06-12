@@ -5,7 +5,8 @@ Tests verify:
 - Missing required args (--semester, --course, --week) exit 2.
 - Invalid --backend choice exits 2.
 - Unknown subcommand exits non-zero.
-- Each subcommand with valid common args stubs out and exits 3 (not yet implemented).
+- Each subcommand with valid common args but a missing Bronze input exits 2
+  (input/config validation fault — no partial output).
 """
 
 from __future__ import annotations
@@ -88,16 +89,23 @@ def test_unknown_subcommand_exits_nonzero() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stub handlers exit 3 (not yet implemented)
+# Missing Bronze input → exit 2 (input/config validation fault)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("subcommand", ["ingest", "plan", "dry-run", "generate", "verify", "build"])
-def test_stub_handler_exits_3(subcommand: str) -> None:
-    """Each subcommand with valid common args should exit 3 (stub, not implemented)."""
+@pytest.mark.parametrize(
+    "subcommand", ["ingest", "plan", "dry-run", "generate", "verify", "build"]
+)
+def test_missing_input_exits_2(
+    subcommand: str, tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A subcommand with valid args but no Bronze generation_spec exits 2."""
+    # Run from an empty tmp cwd so the Bronze convention path resolves to a
+    # nonexistent directory → load_generation_spec raises FileNotFoundError → 2.
+    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
     rc = app([subcommand] + _COMMON)
-    assert rc == 3, (
-        f"subcommand '{subcommand}': expected exit 3 (stub not implemented), got {rc}"
+    assert rc == 2, (
+        f"subcommand '{subcommand}': expected exit 2 (missing input), got {rc}"
     )
 
 
@@ -106,23 +114,30 @@ def test_stub_handler_exits_3(subcommand: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_default_backend_accepted() -> None:
-    """Omitting --backend should default to 'subscription' and not exit 2."""
-    rc = app(["generate"] + _COMMON)
-    # stub returns 3; the point is it is NOT 2 (invalid arg)
-    assert rc != 2
+def test_default_backend_is_subscription() -> None:
+    """Omitting --backend should parse with the 'subscription' default."""
+    from maieutica.cli.main import _build_parser
+
+    args = _build_parser().parse_args(["generate"] + _COMMON)
+    assert args.backend == "subscription"
 
 
-def test_explicit_backend_api_accepted() -> None:
-    """--backend api should be a valid choice."""
-    rc = app(["generate"] + _COMMON + ["--backend", "api"])
-    assert rc != 2
+def test_explicit_backend_api_parsed() -> None:
+    """--backend api should be a valid, parseable choice."""
+    from maieutica.cli.main import _build_parser
+
+    args = _build_parser().parse_args(["generate"] + _COMMON + ["--backend", "api"])
+    assert args.backend == "api"
 
 
-def test_explicit_backend_subscription_accepted() -> None:
-    """--backend subscription should be a valid choice."""
-    rc = app(["generate"] + _COMMON + ["--backend", "subscription"])
-    assert rc != 2
+def test_explicit_backend_subscription_parsed() -> None:
+    """--backend subscription should be a valid, parseable choice."""
+    from maieutica.cli.main import _build_parser
+
+    args = _build_parser().parse_args(
+        ["generate"] + _COMMON + ["--backend", "subscription"]
+    )
+    assert args.backend == "subscription"
 
 
 # ---------------------------------------------------------------------------

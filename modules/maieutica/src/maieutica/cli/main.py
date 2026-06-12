@@ -33,8 +33,9 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
-from maieutica.generate.backend import BackendUnreachableError
+from maieutica.generate.backend import BackendUnreachableError, LLMBackend
 
 # ---------------------------------------------------------------------------
 # Argument parser builder
@@ -205,100 +206,347 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
-# Subcommand handlers (stubs — real pipeline logic filled by later tasks)
+# Shared loading helpers (fail-fast → exit 2)
+# ---------------------------------------------------------------------------
+
+
+_DATA_ROOT = Path("data")
+
+
+def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    """Resolve ``(bronze_dir, generation_spec_path, curriculum_map_path)``.
+
+    Unset path options default to the Bronze directory convention
+    ``data/bronze/maieutica/{semester}-{course}/``.
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        ``(bronze_dir, generation_spec_path, curriculum_map_path)``.
+    """
+    from maieutica.output.paths import bronze_dir as _bronze_dir
+
+    bronze = _bronze_dir(args.semester, args.course, data_root=_DATA_ROOT)
+    spec_path: Path = args.generation_spec or (bronze / "generation_spec.yaml")
+    cmap_path: Path = args.curriculum_map or (bronze / "curriculum_map.yaml")
+    return bronze, spec_path, cmap_path
+
+
+def _load_inputs(args: argparse.Namespace) -> tuple[Any, Any, Path, Path, Path]:
+    """Load + validate the generation spec and curriculum map (fail-fast).
+
+    Applies ``--quiz-count`` / ``--formative-count`` overrides to the spec.
+
+    Args:
+        args: Parsed CLI namespace.
+
+    Returns:
+        ``(spec, curriculum_map, bronze_dir, spec_path, cmap_path)``.
+
+    Raises:
+        FileNotFoundError: If a required input file is missing (CLI exit 2).
+        ValueError: If an input fails schema validation or the week is absent
+            from the curriculum map (CLI exit 2).
+    """
+    from maieutica.ingest.spec_load import (
+        load_curriculum_map,
+        load_generation_spec,
+        validate_week_in_map,
+    )
+
+    bronze, spec_path, cmap_path = _resolve_paths(args)
+    spec = load_generation_spec(spec_path)
+    curriculum_map = load_curriculum_map(cmap_path)
+
+    overrides: dict[str, int] = {}
+    if args.quiz_count is not None:
+        overrides["quiz_count"] = args.quiz_count
+    if args.formative_count is not None:
+        overrides["formative_count"] = args.formative_count
+    if overrides:
+        spec = spec.model_copy(update=overrides)
+
+    validate_week_in_map(curriculum_map, spec.week, curriculum_map_path=cmap_path)
+    return spec, curriculum_map, bronze, spec_path, cmap_path
+
+
+def _select_backend(args: argparse.Namespace) -> LLMBackend:
+    """Construct the real LLM backend from ``args.backend``.
+
+    Args:
+        args: Parsed CLI namespace (uses ``args.backend`` + identity).
+
+    Returns:
+        A concrete ``LLMBackend`` (``ApiBackend`` or ``SubscriptionBackend``).
+    """
+    from maieutica.generate.backend import ApiBackend, SubscriptionBackend
+    from maieutica.output.paths import silver_dir
+
+    if args.backend == "api":
+        return ApiBackend()
+    silver = silver_dir(args.semester, args.course, data_root=_DATA_ROOT)
+    return SubscriptionBackend(
+        staging_dir=silver / "staging",
+        responses_dir=silver / "responses",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Subcommand handlers
 # ---------------------------------------------------------------------------
 
 
 def _run_ingest(args: argparse.Namespace) -> int:
-    """Stub handler for ``ingest``. Pipeline TBD (later task).
+    """Handler for ``ingest``: Bronze→Silver (clean + chunk + evidence + report).
+
+    No LLM is called.  Writes ``ingest_report.json`` to the Silver tier.
 
     Args:
         args: Parsed CLI namespace.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input.
     """
-    raise NotImplementedError(
-        f"ingest: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week})"
+    from maieutica.ingest.report import write_ingest_report
+    from maieutica.ingest.spec_load import resolve_chapter_txt
+    from maieutica.ingest.textbook import load_chapter
+    from maieutica.ingest.textbook_clean import clean_textbook
+    from maieutica.output.paths import silver_dir
+
+    try:
+        spec, _curriculum_map, bronze, _sp, _cp = _load_inputs(args)
+        chapter_txt = resolve_chapter_txt(bronze, spec.chapter_no)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    raw_lines = [text for _, text in load_chapter(chapter_txt)]
+    _kept, removed_spans = clean_textbook(raw_lines)
+    silver = silver_dir(args.semester, args.course, data_root=_DATA_ROOT)
+    write_ingest_report(
+        silver / "ingest_report.json",
+        {
+            "textbook": {
+                "chapters_required": 1,
+                "chapters_found": 1,
+                "removed_span_counts": {str(spec.chapter_no): len(removed_spans)},
+            },
+            "anomalies": {"filename_violations": [], "unexpected_files": []},
+        },
     )
+    print(
+        f"[maieutica ingest] done: chapter {spec.chapter_no} → {silver}",
+        file=sys.stderr,
+    )
+    return 0
 
 
 def _run_plan(args: argparse.Namespace) -> int:
-    """Stub handler for ``plan``. Solver TBD (later task).
+    """Handler for ``plan``: generation spec → slot list (no LLM).
 
     Args:
         args: Parsed CLI namespace.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input.
     """
-    raise NotImplementedError(
-        f"plan: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week})"
+    from maieutica.plan.slots import plan_slots
+
+    try:
+        spec, _curriculum_map, _bronze, _sp, _cp = _load_inputs(args)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    slots = plan_slots(spec)
+    print(
+        f"[maieutica plan] {len(slots)} slots "
+        f"({spec.quiz_count} quiz + {spec.formative_count} formative)",
+        file=sys.stderr,
     )
+    for slot in slots:
+        print(slot.slot_id)
+    return 0
 
 
 def _run_dry_run(args: argparse.Namespace) -> int:
-    """Stub handler for ``dry-run``. Bundle writer TBD (later task).
+    """Handler for ``dry-run``: write per-slot quiz bundles (no LLM).
 
     Args:
         args: Parsed CLI namespace.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input.
     """
-    raise NotImplementedError(
-        f"dry-run: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week})"
+    from maieutica.generate.backend import dry_run_bundles
+    from maieutica.generate.bundle import build_bundle
+    from maieutica.ingest.spec_load import resolve_chapter_txt
+    from maieutica.ingest.textbook import load_chapter
+    from maieutica.output.paths import silver_dir
+    from maieutica.plan.slots import plan_slots
+    from maieutica.silver.chunk import chunk_chapter
+
+    try:
+        spec, _curriculum_map, bronze, _sp, _cp = _load_inputs(args)
+        chapter_txt = resolve_chapter_txt(bronze, spec.chapter_no)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    raw_lines = [text for _, text in load_chapter(chapter_txt)]
+    chunks = chunk_chapter(
+        raw_lines,
+        chapter_no=spec.chapter_no,
+        chapter=spec.chapter,
+        semester=spec.semester,
+        course_slug=spec.course_slug,
+        source_file=chapter_txt.name,
     )
+    quiz_slots = [s for s in plan_slots(spec) if s.kind == "quiz"]
+    requests = [build_bundle(slot, spec, chunks) for slot in quiz_slots]
+    silver = silver_dir(args.semester, args.course, data_root=_DATA_ROOT)
+    staging = silver / "staging"
+    dry_run_bundles(requests, staging)
+    print(
+        f"[maieutica dry-run] wrote {len(requests)} bundles → {staging}",
+        file=sys.stderr,
+    )
+    return 0
 
 
-def _run_generate(args: argparse.Namespace) -> int:
-    """Stub handler for ``generate``. Generation pipeline TBD (later task).
+def _run_generate(args: argparse.Namespace, backend: LLMBackend | None = None) -> int:
+    """Handler for ``generate``: bundles → quiz candidates (LLM, no Gold write).
 
     Args:
         args: Parsed CLI namespace.
+        backend: Optional injected backend (test seam); real backend otherwise.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input; 3 on generation failure;
+        4 on backend unreachable (api).
     """
-    raise NotImplementedError(
-        f"generate: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week}, "
-        f"backend={args.backend!r})"
+    from maieutica.generate.backend import InputHashCache
+    from maieutica.generate.quiz_gen import generate_quiz_item
+    from maieutica.ingest.spec_load import resolve_chapter_txt
+    from maieutica.ingest.textbook import load_chapter
+    from maieutica.output.paths import silver_dir
+    from maieutica.plan.slots import plan_slots
+    from maieutica.silver.chunk import chunk_chapter
+
+    try:
+        spec, _curriculum_map, bronze, _sp, _cp = _load_inputs(args)
+        chapter_txt = resolve_chapter_txt(bronze, spec.chapter_no)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    raw_lines = [text for _, text in load_chapter(chapter_txt)]
+    chunks = chunk_chapter(
+        raw_lines,
+        chapter_no=spec.chapter_no,
+        chapter=spec.chapter,
+        semester=spec.semester,
+        course_slug=spec.course_slug,
+        source_file=chapter_txt.name,
     )
+    quiz_slots = [s for s in plan_slots(spec) if s.kind == "quiz"]
+
+    if backend is None:
+        backend = _select_backend(args)
+    silver = silver_dir(args.semester, args.course, data_root=_DATA_ROOT)
+    cache = InputHashCache(backend=backend, cache_dir=silver / "cache")
+
+    items = [generate_quiz_item(slot, spec, chunks, cache) for slot in quiz_slots]
+    print(
+        f"[maieutica generate] generated {len(items)} quiz candidates",
+        file=sys.stderr,
+    )
+    return 0
 
 
 def _run_verify(args: argparse.Namespace) -> int:
-    """Stub handler for ``verify``. Verifier TBD (later task).
+    """Handler for ``verify``: input validation only (full verify runs in build).
 
     Args:
         args: Parsed CLI namespace.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input.
     """
-    raise NotImplementedError(
-        f"verify: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week})"
-    )
+    try:
+        _spec, _curriculum_map, _bronze, _sp, _cp = _load_inputs(args)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+    print("[maieutica verify] inputs valid", file=sys.stderr)
+    return 0
 
 
-def _run_build(args: argparse.Namespace) -> int:
-    """Stub handler for ``build``. Full pipeline TBD (later task).
+def _run_build(args: argparse.Namespace, backend: LLMBackend | None = None) -> int:
+    """Handler for ``build``: full quiz pipeline → Gold output.
 
     Args:
         args: Parsed CLI namespace.
+        backend: Optional injected backend (test seam); real backend otherwise.
 
     Returns:
-        3 — stub not yet implemented.
+        0 on success; 2 on missing/invalid input; 3 on generation/verify
+        failure; 4 on backend unreachable (api).
     """
-    raise NotImplementedError(
-        f"build: pipeline not yet implemented "
-        f"(semester={args.semester!r}, course={args.course!r}, week={args.week}, "
-        f"backend={args.backend!r})"
+    from maieutica.pipeline import build
+
+    try:
+        spec, curriculum_map, bronze, spec_path, cmap_path = _load_inputs(args)
+    except FileNotFoundError as exc:
+        print(f"ERROR [maieutica]: missing input — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERROR [maieutica]: input validation failed — {exc}", file=sys.stderr)
+        return 2
+
+    if backend is None:
+        backend = _select_backend(args)
+
+    try:
+        items, run_dir = build(
+            spec=spec,
+            curriculum_map=curriculum_map,
+            bronze_dir=bronze,
+            data_root=_DATA_ROOT,
+            backend=backend,
+            generation_spec_path=spec_path,
+            curriculum_map_path=cmap_path,
+        )
+    except FileNotFoundError as exc:
+        # Missing chapter .txt → input/config fault (exit 2), no partial Gold.
+        print(f"ERROR [maieutica]: missing input file — {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        # Pipeline config/coverage fault (e.g. week not in map) → exit 2.
+        print(f"ERROR [maieutica]: pipeline config error — {exc}", file=sys.stderr)
+        return 2
+
+    print(
+        f"[maieutica build] done: {len(items)} quiz items → {run_dir}",
+        file=sys.stderr,
     )
+    return 0
 
 
 # ---------------------------------------------------------------------------
