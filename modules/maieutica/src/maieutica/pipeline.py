@@ -1,4 +1,4 @@
-"""T034 — build pipeline (quiz path): ingest→silver→plan→generate→verify→output.
+"""T034 — build pipeline (quiz + formative paths): ingest→silver→plan→generate→verify→output.
 
 ``build(...)`` orchestrates the full US1 quiz-path pipeline for one chapter
 (= one week).  It mirrors ``examen.pipeline.build_exam`` but for maieutica's
@@ -11,7 +11,7 @@ Pipeline steps
    - ``resolve_chapter_txt`` — locate the chapter ``.txt`` (raises if missing).
    - ``load_chapter`` → ``clean_textbook`` (audit) and write ``ingest_report.json``.
 2. Silver: ``chunk_chapter`` → ``EvidenceIndex.from_chapter``.
-3. Plan: ``plan_slots`` → quiz + formative slots (only quiz slots are built here).
+3. Plan: ``plan_slots`` → quiz + formative slots (both kinds are built here).
 4. Generate + verify per quiz slot (each ``model_copy``-enriching the candidate):
    - ``build_bundle`` → ``generate_quiz_item`` (via ``InputHashCache``) →
      ``verify_groundedness`` → ``check_format`` → ``assign_difficulty``.
