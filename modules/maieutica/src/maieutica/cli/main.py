@@ -198,7 +198,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="전체 파이프라인 (ingest→plan→generate→verify→assemble→Gold 산출)",
         description=(
             "ingest→plan→generate→verify→assemble→output 를 순서대로 실행해\n"
-            "Gold 산출물(기말출제초안.xlsx·yaml, 출제품질리포트.md, manifest_maieutica.json)을\n"
+            "Gold 산출물(QuestionUploadExcel_{week}주차.xls, "
+            "Ch{NN}_{chapter}_FormativeTest.xlsx, 출제후보_완전판.yaml,\n"
+            "출제품질리포트.md, manifest_maieutica.json)을\n"
             "생성한다. 검증 통과 전 Gold 미작성 (헌장 V 원자성)."
         ),
     )
