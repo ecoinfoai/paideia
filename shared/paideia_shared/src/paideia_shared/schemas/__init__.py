@@ -85,6 +85,14 @@ from .student_master import StudentMaster
 from .student_pdf_bundle import StudentPDFBundle
 from .subgroup_score_comparison import SubgroupScoreComparison
 from .test_profile import DummyStudent, TestProfile
+from .maieutica import (
+    FormativeItemCandidate,
+    LeapExplanation,
+    MaieuticaGenerationSpec,
+    MaieuticaManifest,
+    MaieuticaTextbookEvidence,
+    QuizItemCandidate,
+)
 from .textbook_chunk import TextbookChunk
 
 __all__ = [
@@ -175,4 +183,11 @@ __all__ = [
     "TextbookEvidence",
     "ExamItemDraft",
     "ExamenManifest",
+    # spec 009 maieutica question-gen — 6 new models (T005-T011)
+    "MaieuticaTextbookEvidence",
+    "MaieuticaGenerationSpec",
+    "LeapExplanation",
+    "QuizItemCandidate",
+    "FormativeItemCandidate",
+    "MaieuticaManifest",
 ]
