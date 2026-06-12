@@ -1,16 +1,30 @@
-"""T040 — nested full-fidelity candidate yaml writer (``출제후보_완전판.yaml``).
+"""T048 — nested full-fidelity candidate yaml writer (``출제후보_완전판.yaml``).
 
-``write_candidate_yaml(items, path)`` serialises ``list[QuizItemCandidate]`` to a
-nested YAML file preserving full fidelity that the flattened LMS ``.xls`` cannot
-carry:
+``write_candidate_yaml(quiz_items, formative_items, path)`` serialises BOTH
+``list[QuizItemCandidate]`` and ``list[FormativeItemCandidate]`` to a single
+nested YAML file preserving full fidelity that the flattened LMS files cannot
+carry.
 
+Top-level structure::
+
+    quiz:      [list of full QuizItemCandidate model_dump dicts]
+    formative: [list of full FormativeItemCandidate model_dump dicts]
+
+Quiz section preserves:
 - ``leap.text`` — the FULL, untruncated leap (the ``.xls`` may truncate it at
   write time, but the candidate and this yaml always keep it whole).
 - ``leap.textbook_evidence`` — leap groundedness (T038), nested.
 - ``option_evidence`` — the per-option evidence list (5 entries, NOT joined).
 - ``textbook_evidence`` — the item-level groundedness, nested.
+- ``key_concept``, ``question_type``, ``difficulty``, ``review_note``,
+  ``adoption_status`` — all FR-015 metadata.
 
-The ``─ 도약 ─`` separator inside ``answer_explanation_combined`` is preserved
+Formative section preserves:
+- ``topic``, ``rubric_high``/``rubric_mid``/``rubric_low``,
+  ``support_high``/``support_mid``/``support_low``, ``keywords``,
+  ``textbook_evidence``, ``review_note``, ``adoption_status``.
+
+The ``─ 도약 ─`` separator inside quiz ``answer_explanation_combined`` is preserved
 verbatim, so a consumer can mechanically round-trip-split the combined string
 back into ``wrong_explanation`` + ``leap.text``.
 
@@ -18,36 +32,42 @@ Output determinism (R6) is provided by
 :func:`maieutica.output.determinism.dump_yaml` (``sort_keys=True``,
 ``allow_unicode=True``, one trailing newline) and the file is written atomically
 via :func:`maieutica.output.paths.atomic_write`.
-
-US4/T048 will extend this writer to ALL candidate metadata (review_note,
-adoption_status, etc.); for now it carries the full ``model_dump`` so leap +
-evidence fidelity is already guaranteed.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from paideia_shared.schemas import QuizItemCandidate
+from paideia_shared.schemas import FormativeItemCandidate, QuizItemCandidate
 
 from maieutica.output.determinism import dump_yaml
 from maieutica.output.paths import atomic_write
 
 
-def write_candidate_yaml(items: list[QuizItemCandidate], path: Path) -> None:
-    """Write quiz candidates to the nested full-fidelity ``출제후보_완전판.yaml``.
+def write_candidate_yaml(
+    quiz_items: list[QuizItemCandidate],
+    formative_items: list[FormativeItemCandidate],
+    path: Path,
+) -> None:
+    """Write quiz + formative candidates to the nested full-fidelity yaml.
 
-    Serialises each candidate with Pydantic's ``model_dump`` (preserving nested
-    ``leap`` and ``textbook_evidence`` objects), then dumps deterministically.
-    The full ``leap.text`` is always preserved (never the ``.xls``-truncated
-    form).  Written atomically — a serialisation failure leaves no partial file
-    (constitution V).
+    Serialises both candidate lists under top-level keys ``"quiz"`` and
+    ``"formative"`` using Pydantic's ``model_dump`` (preserving all nested
+    objects).  Written atomically — a serialisation failure leaves no partial
+    file (constitution V).
+
+    The full ``leap.text`` is always preserved for quiz items (never the
+    ``.xls``-truncated form).
 
     Args:
-        items: Quiz candidates to serialise.
+        quiz_items: Quiz candidates to serialise.
+        formative_items: Formative candidates to serialise.
         path: Destination yaml path.  Parent directories are created if missing.
     """
-    data = [item.model_dump(mode="python") for item in items]
+    data = {
+        "quiz": [item.model_dump(mode="python") for item in quiz_items],
+        "formative": [item.model_dump(mode="python") for item in formative_items],
+    }
     serialized = dump_yaml(data)
 
     def _write(tmp: Path) -> None:

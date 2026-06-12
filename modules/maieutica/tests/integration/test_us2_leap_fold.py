@@ -216,7 +216,11 @@ def test_us2_leap_fold_end_to_end(tmp_path: Path) -> None:
     # ----- 출제후보_완전판.yaml exists; leap.text is the FULL original -----
     full_yaml = run_dir / "출제후보_완전판.yaml"
     assert full_yaml.is_file()
-    yaml_items = yaml.safe_load(full_yaml.read_text(encoding="utf-8"))
+    doc = yaml.safe_load(full_yaml.read_text(encoding="utf-8"))
+    # T048: top-level structure is {quiz: [...], formative: [...]}.
+    assert isinstance(doc, dict), "yaml must be a mapping with 'quiz'/'formative' keys"
+    assert "quiz" in doc
+    yaml_items = doc["quiz"]
     assert len(yaml_items) == _QUIZ_COUNT
     yaml_by_no = {d["item_no"]: d for d in yaml_items}
     for item in items:

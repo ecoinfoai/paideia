@@ -80,10 +80,12 @@ from maieutica.output.paths import (
     run_gold_dir,
     silver_dir,
 )
+from maieutica.output.quality_report import build_quality_report, write_quality_report
 from maieutica.output.quiz_xls import write_quiz_xls
 from maieutica.plan.slots import plan_slots
 from maieutica.silver.chunk import chunk_chapter
 from maieutica.silver.evidence_index import EvidenceIndex
+from maieutica.verify.consistency import check_flat_nested_consistency
 from maieutica.verify.format_checks import (
     answer_no_distribution,
     check_format,
@@ -269,10 +271,22 @@ def build(
     formative_path = run_dir / formative_xlsx_filename(spec.chapter_no, spec.chapter)
     write_formative_xlsx(formative_path, formative_items)
 
-    # 5c: full-fidelity candidate yaml (full leap + per-option/leap evidence)
-    write_candidate_yaml(items, run_dir / "출제후보_완전판.yaml")
+    # 5c: consistency cross-check (fail-fast on internal contradiction before writing)
+    check_flat_nested_consistency(
+        items,
+        formative_items,
+        expected_quiz_count=len(quiz_slots),
+        expected_formative_count=len(formative_slots),
+    )
 
-    # 5d: manifest
+    # 5d: full-fidelity candidate yaml (quiz + formative, full leap + evidence)
+    write_candidate_yaml(items, formative_items, run_dir / "출제후보_완전판.yaml")
+
+    # 5e: quality report markdown
+    quality_report_text = build_quality_report(items, formative_items)
+    write_quality_report(run_dir / "출제품질리포트.md", quality_report_text)
+
+    # 5f: manifest
     generated_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     input_hashes = {chapter_txt.name: _file_sha256(chapter_txt)}
     config_ids = _build_config_ids(generation_spec_path, curriculum_map_path)
