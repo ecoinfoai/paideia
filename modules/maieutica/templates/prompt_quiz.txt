@@ -5,15 +5,14 @@
 #   {chapter_no}        — chapter number int, e.g. 8
 #   {section}           — section name, e.g. "8.2 허파꽈리와 가스교환"
 #   {week}              — week number int, e.g. 9
-#   {quiz_count}        — number of quiz items to generate, e.g. 20
 #   {textbook_context}  — verbatim extracted textbook chunk text (plain text)
 #   {key_concept}       — focal concept string extracted by the planner
 #   {slot_id}           — stable slot identifier for cache keying
 #   {question_type}     — 지식축적 | 맥락통찰 (set by slot planner)
 #
-# REFINEMENT NOTE: This is an INITIAL draft (T013).
-#   Placeholders finalized when T026/T027/T044 land.
-#   Do NOT hardcode chapter names, semester, or course identifiers.
+# REFINEMENT NOTE: Placeholders finalized by T026 (build_bundle) / T027.
+#   The body asks for exactly one item ("1문항"); there is no {quiz_count}
+#   placeholder. Do NOT hardcode chapter names, semester, or course identifiers.
 # ---------------------------------------------------------------
 
 당신은 대학 해부생리학 교과목 시험 출제 보조 AI입니다.

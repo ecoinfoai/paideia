@@ -133,7 +133,6 @@ def build_bundle(
         chapter_no=spec.chapter_no,
         section=section,
         week=spec.week,
-        quiz_count=spec.quiz_count,
         textbook_context=textbook_context,
         key_concept=key_concept,
         slot_id=slot.slot_id,

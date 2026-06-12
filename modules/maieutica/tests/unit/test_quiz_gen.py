@@ -31,8 +31,7 @@ from paideia_shared.schemas import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_GOOD_OPTION = "① 허파꽈리는 가스교환이 일어나는 호흡계통의 기본 단위이다."  # ~35 chars
-_SHORT_OPTION = "② 기관지는 공기 통로이다."  # ~25 chars (too short)
+_SHORT_OPTION = "② 기관지는 공기 통로이다."  # 15 chars (below the 30-char floor)
 
 _CANNED_QUIZ_JSON: dict[str, Any] = {
     "question_type": "지식축적",
@@ -146,7 +145,7 @@ def _generate(
         chunks = _make_chunks(chapter_no=spec.chapter_no)
     backend = FakeBackend(raw=raw)
     cache = InputHashCache(backend=backend, cache_dir=cache_dir)
-    return generate_quiz_item(slot, spec, chunks, backend, cache)
+    return generate_quiz_item(slot, spec, chunks, cache)
 
 
 # ---------------------------------------------------------------------------
@@ -222,14 +221,26 @@ class TestGenerateQuizItem:
     def test_option_length_ok_false_for_short_option(self, tmp_path: Path) -> None:
         raw = dict(_CANNED_QUIZ_JSON)
         opts = list(raw["options"])
-        opts[1] = _SHORT_OPTION  # 25 chars — below the 30-char floor
+        opts[1] = _SHORT_OPTION  # 15 chars — below the 30-char floor
         raw["options"] = opts
         item = _generate(raw=raw, cache_dir=tmp_path / "c")
         assert item.option_length_ok is False
 
-    def test_explanation_length_ok_flag_present(self, tmp_path: Path) -> None:
+    def test_explanation_length_ok_true_for_canned(self, tmp_path: Path) -> None:
+        """Canned wrong + leap are each <=200 chars → flag is True."""
         item = _generate(cache_dir=tmp_path / "c")
-        assert isinstance(item.explanation_length_ok, bool)
+        assert item.explanation_length_ok is True
+
+    def test_option_evidence_padded_with_sentinel(self, tmp_path: Path) -> None:
+        """Fewer than 5 evidence entries → padded to 5 with the sentinel."""
+        from maieutica.generate.quiz_gen import MISSING_EVIDENCE_PLACEHOLDER
+
+        raw = dict(_CANNED_QUIZ_JSON)
+        raw["option_evidence"] = ["교재: 근거1", "교재: 근거2"]  # only 2 of 5
+        item = _generate(raw=raw, cache_dir=tmp_path / "c")
+        assert len(item.option_evidence) == 5
+        assert item.option_evidence[:2] == ["교재: 근거1", "교재: 근거2"]
+        assert item.option_evidence[2:] == [MISSING_EVIDENCE_PLACEHOLDER] * 3
 
     def test_identity_fields_from_slot_and_spec(self, tmp_path: Path) -> None:
         spec = _make_spec(week=9, chapter_no=8, chapter="8장 호흡계통")
@@ -260,7 +271,7 @@ class TestGenerateQuizItem:
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "c")
         from maieutica.generate.quiz_gen import generate_quiz_item
 
-        a = generate_quiz_item(slot, spec, chunks, backend, cache)
-        b = generate_quiz_item(slot, spec, chunks, backend, cache)
+        a = generate_quiz_item(slot, spec, chunks, cache)
+        b = generate_quiz_item(slot, spec, chunks, cache)
         assert a.model_dump() == b.model_dump()
         assert backend.call_count == 1

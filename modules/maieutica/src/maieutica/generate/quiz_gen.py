@@ -43,7 +43,7 @@ Usage::
 
     from maieutica.generate.quiz_gen import generate_quiz_item
 
-    item = generate_quiz_item(slot, spec, chunks, backend, cache)
+    item = generate_quiz_item(slot, spec, chunks, cache)
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ from paideia_shared.schemas import (
     TextbookChunk,
 )
 
-from maieutica.generate.backend import InputHashCache, LLMBackend
+from maieutica.generate.backend import InputHashCache
 from maieutica.generate.bundle import build_bundle
 from maieutica.plan.slots import Slot
 
@@ -66,6 +66,10 @@ _VALID_QUESTION_TYPES = ("지식축적", "맥락통찰")
 _DEFAULT_QUESTION_TYPE = "지식축적"
 _VALID_STEM_POLARITY = ("부정형", "긍정형")
 _DEFAULT_STEM_POLARITY = "부정형"
+
+# Cross-module sentinel: a per-option evidence string the LLM did not supply.
+# verify/groundedness (T028) imports this and treats such entries as 미확인.
+MISSING_EVIDENCE_PLACEHOLDER = "(근거 미기재)"
 
 # Soft-flag thresholds (incl. spaces / codepoints).
 _OPTION_MIN_LEN = 30
@@ -77,7 +81,6 @@ def generate_quiz_item(
     slot: Slot,
     spec: MaieuticaGenerationSpec,
     chunks: list[TextbookChunk],
-    backend: LLMBackend,
     cache: InputHashCache,
 ) -> QuizItemCandidate:
     """Generate one quiz candidate for a quiz slot via the LLM backend.
@@ -86,8 +89,7 @@ def generate_quiz_item(
         slot: The planned quiz slot.
         spec: The generation specification (identity / chapter labels).
         chunks: All available TextbookChunk objects (filtered by bundle).
-        backend: LLM backend (used on cache miss only).
-        cache: InputHashCache wrapping the backend.
+        cache: InputHashCache wrapping the backend (invoked on cache miss).
 
     Returns:
         A complete, schema-valid :class:`~paideia_shared.schemas.QuizItemCandidate`
@@ -237,7 +239,7 @@ def _normalize_option_evidence(
     items = [str(x) for x in raw] if isinstance(raw, list) else []
     if len(items) >= target:
         return items[:target] if target else items
-    return items + ["(근거 미기재)"] * (target - len(items))
+    return items + [MISSING_EVIDENCE_PLACEHOLDER] * (target - len(items))
 
 
 def _check_option_lengths(options: list[str]) -> bool:
@@ -271,4 +273,4 @@ def _check_explanation_lengths(wrong_explanation: str, leap_text: str) -> bool:
     )
 
 
-__all__ = ["generate_quiz_item"]
+__all__ = ["MISSING_EVIDENCE_PLACEHOLDER", "generate_quiz_item"]
