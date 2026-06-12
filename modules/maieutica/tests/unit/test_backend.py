@@ -24,6 +24,7 @@ from maieutica.generate.backend import (
     InputHashCache,
     LLMBackend,
     SubscriptionBackend,
+    dry_run_bundles,
 )
 
 # ---------------------------------------------------------------------------
@@ -156,6 +157,69 @@ class TestInputHashCache:
         cache.generate(req_b)
 
         assert fake.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# dry_run_bundles tests (ported from examen — LLM 0, deterministic; SC-009)
+# ---------------------------------------------------------------------------
+
+
+class TestDryRunBundles:
+    def test_dry_run_writes_bundle_files(self, tmp_path: Path) -> None:
+        """dry_run_bundles writes one JSON file per request to staging."""
+        requests = [_make_request("slot-001"), _make_request("slot-002")]
+        staging = tmp_path / "staging"
+
+        dry_run_bundles(requests, staging_dir=staging)
+
+        assert len(sorted(staging.glob("*.json"))) == 2
+
+    def test_dry_run_does_not_call_backend(self, tmp_path: Path) -> None:
+        """dry_run_bundles must not call any LLM backend — zero calls."""
+        requests = [_make_request("slot-001"), _make_request("slot-002")]
+        staging = tmp_path / "staging"
+        fake = FakeBackend()
+
+        # dry_run does not accept a backend at all — it writes files only.
+        dry_run_bundles(requests, staging_dir=staging)
+
+        assert fake.call_count == 0
+
+    def test_dry_run_bundle_is_valid_json(self, tmp_path: Path) -> None:
+        """Each bundle file written by dry_run is valid JSON with expected fields."""
+        req = _make_request("slot-abc")
+        staging = tmp_path / "staging"
+
+        dry_run_bundles([req], staging_dir=staging)
+
+        files = list(staging.glob("*.json"))
+        assert len(files) == 1
+        data = json.loads(files[0].read_text(encoding="utf-8"))
+        assert data["slot_id"] == "slot-abc"
+        assert data["prompt"] == req.prompt
+        assert data["context_refs"] == req.context_refs
+        assert data["metadata"] == req.metadata
+
+    def test_dry_run_deterministic(self, tmp_path: Path) -> None:
+        """Two dry_run calls with identical inputs produce byte-identical files (SC-009)."""
+        req = _make_request("slot-det")
+        staging_a = tmp_path / "run_a"
+        staging_b = tmp_path / "run_b"
+
+        dry_run_bundles([req], staging_dir=staging_a)
+        dry_run_bundles([req], staging_dir=staging_b)
+
+        files_a = sorted(staging_a.glob("*.json"))
+        files_b = sorted(staging_b.glob("*.json"))
+        assert len(files_a) == len(files_b) == 1
+        assert files_a[0].read_bytes() == files_b[0].read_bytes()
+
+    def test_dry_run_creates_staging_dir(self, tmp_path: Path) -> None:
+        """dry_run_bundles creates staging_dir if it does not exist."""
+        staging = tmp_path / "new" / "staging" / "dir"
+        assert not staging.exists()
+        dry_run_bundles([], staging_dir=staging)
+        assert staging.exists()
 
 
 # ---------------------------------------------------------------------------
