@@ -67,6 +67,7 @@ from maieutica.ingest.report import write_ingest_report
 from maieutica.ingest.spec_load import resolve_chapter_txt, validate_week_in_map
 from maieutica.ingest.textbook import load_chapter
 from maieutica.ingest.textbook_clean import clean_textbook
+from maieutica.output.candidate_yaml import write_candidate_yaml
 from maieutica.output.manifest import build_manifest, write_manifest
 from maieutica.output.paths import (
     compute_run_id,
@@ -120,6 +121,7 @@ def build(
     backend: LLMBackend,
     generation_spec_path: Path | None = None,
     curriculum_map_path: Path | None = None,
+    answer_explanation_max: int | None = None,
 ) -> tuple[list[QuizItemCandidate], Path]:
     """Run the full quiz-path build pipeline for one chapter (one week).
 
@@ -135,6 +137,11 @@ def build(
             ``config_ids`` provenance).
         curriculum_map_path: Optional path to ``curriculum_map.yaml`` (manifest
             ``config_ids`` provenance).
+        answer_explanation_max: Optional max length for the LMS 답안설명 cell.
+            ``None`` (default, B1) writes the full basic fold — byte-identical to
+            prior output.  When set, the leap portion is truncated first at write
+            time; the candidate and ``출제후보_완전판.yaml`` always keep the full
+            leap (V4 invariant holds on the candidate).
 
     Returns:
         ``(items, run_dir)`` — the generated+verified quiz candidates and the
@@ -236,11 +243,16 @@ def build(
     )
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # 5a: LMS quiz upload .xls
+    # 5a: LMS quiz upload .xls (답안설명 may be leap-first truncated at write time)
     xls_path = run_dir / f"QuestionUploadExcel_{spec.week}주차.xls"
-    write_quiz_xls(xls_path, items, week=spec.week)
+    write_quiz_xls(
+        xls_path, items, week=spec.week, answer_explanation_max=answer_explanation_max
+    )
 
-    # 5b: manifest
+    # 5b: full-fidelity candidate yaml (full leap + per-option/leap evidence)
+    write_candidate_yaml(items, run_dir / "출제후보_완전판.yaml")
+
+    # 5c: manifest
     generated_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     input_hashes = {chapter_txt.name: _file_sha256(chapter_txt)}
     config_ids = _build_config_ids(generation_spec_path, curriculum_map_path)

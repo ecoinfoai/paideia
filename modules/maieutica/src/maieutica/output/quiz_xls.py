@@ -38,6 +38,7 @@ import xlwt
 import yaml
 from paideia_shared.schemas import QuizItemCandidate
 
+from maieutica.assemble.leap_fold import lms_answer_explanation
 from maieutica.output.paths import atomic_write
 
 # ``templates/`` lives at modules/maieutica/templates, i.e. three parents above
@@ -140,13 +141,22 @@ def _field_value(item: QuizItemCandidate, field: str) -> Any:  # noqa: ANN401
     return getattr(item, field)
 
 
-def _cell_text(item: QuizItemCandidate, column: dict[str, Any], *, week: int) -> str:
+def _cell_text(
+    item: QuizItemCandidate,
+    column: dict[str, Any],
+    *,
+    week: int,
+    answer_explanation_max: int | None,
+) -> str:
     """Compute the TEXT value for one column of one candidate.
 
     Args:
         item: The quiz candidate.
         column: The column definition (with ``field``/``format``/``constant``).
         week: Target week (for the ``예상주차`` zero-pad format).
+        answer_explanation_max: Optional max length for the 답안설명 cell.  When
+            set, the leap portion is truncated first (write-time only — the
+            candidate is never modified); ``None`` writes the full basic fold.
 
     Returns:
         The string to write as a TEXT cell.
@@ -159,6 +169,11 @@ def _cell_text(item: QuizItemCandidate, column: dict[str, Any], *, week: int) ->
     if fmt == "zero_pad3":
         # 예상주차: zero-padded 3-digit week, regardless of the candidate's field.
         return f"{week:03d}"
+
+    if column.get("field") == "answer_explanation_combined":
+        # Write-time leap-first overflow truncation (V4 stays valid on the
+        # candidate; only the cell string may be truncated).
+        return lms_answer_explanation(item, max_len=answer_explanation_max)
 
     value = _field_value(item, column["field"])
     return str(value)
@@ -184,6 +199,7 @@ def _write_data_sheet(
     week: int,
     text_style: xlwt.XFStyle,
     number_style: xlwt.XFStyle,
+    answer_explanation_max: int | None,
 ) -> None:
     """Write Sheet 1 (headers + candidate rows) onto ``book``.
 
@@ -193,6 +209,8 @@ def _write_data_sheet(
         week: Target week (for the ``예상주차`` zero-pad).
         text_style: Shared text style (one XF entry across both sheets).
         number_style: Shared numeric style for ``문제번호``.
+        answer_explanation_max: Optional 답안설명 max length (leap-first
+            truncation at write time); ``None`` = full basic fold.
     """
     column_map = _load_column_map()
     sheet = book.add_sheet(column_map["sheet"])
@@ -211,7 +229,15 @@ def _write_data_sheet(
                 sheet.write(row, col_idx, value, number_style)
             else:
                 sheet.write(
-                    row, col_idx, _cell_text(item, column, week=week), text_style
+                    row,
+                    col_idx,
+                    _cell_text(
+                        item,
+                        column,
+                        week=week,
+                        answer_explanation_max=answer_explanation_max,
+                    ),
+                    text_style,
                 )
 
 
@@ -220,6 +246,7 @@ def write_quiz_xls(
     candidates: list[QuizItemCandidate],
     *,
     week: int,
+    answer_explanation_max: int | None = None,
 ) -> None:
     """Write the LMS quiz upload ``.xls`` atomically and deterministically.
 
@@ -233,6 +260,10 @@ def write_quiz_xls(
             missing (symmetry with ``write_manifest``).
         candidates: Quiz candidates (one per data row).
         week: Target week (for the ``예상주차`` zero-pad format).
+        answer_explanation_max: Optional max length for the 답안설명 cell.  The
+            default ``None`` writes the full basic fold (byte-identical to prior
+            behaviour); when set, the leap portion is truncated first at write
+            time (the candidate is never modified — V4 stays valid).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -244,7 +275,12 @@ def write_quiz_xls(
         book = xlwt.Workbook(encoding=_WORKBOOK_ENCODING)
         _write_guide_sheet(book, text_style)
         _write_data_sheet(
-            book, candidates, week=week, text_style=text_style, number_style=number_style
+            book,
+            candidates,
+            week=week,
+            text_style=text_style,
+            number_style=number_style,
+            answer_explanation_max=answer_explanation_max,
         )
         book.save(str(tmp))
 

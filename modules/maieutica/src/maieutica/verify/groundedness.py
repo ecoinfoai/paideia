@@ -46,7 +46,16 @@ def verify_groundedness(
     2. Otherwise look the term up in ``evidence_index`` (substring search over
        the ORIGINAL textbook lines).  A hit yields ``status="확인"`` with the
        owning chunk_id + char range; no hit yields ``status="미확인"``.
-    3. Return ``item.model_copy(update={"textbook_evidence": evidence})``.
+    3. Ground the leap too (T038 / FR-012): the leap is "one step further" on
+       the SAME answer-point, so it is anchored against the chapter index by the
+       same ``key_concept`` term.  An in-range concept yields ``확인``; an
+       external new fact yields ``미확인``.  The leap evidence is attached via a
+       NESTED ``model_copy`` — first copy the leap with its new
+       ``textbook_evidence``, then copy the candidate with the new leap.  The
+       leap's ``text`` (and therefore the V4 ``answer_explanation_combined``
+       fold) is never altered.
+    4. Return the candidate copy carrying both the item-level evidence and the
+       leap-level evidence.
 
     This function never mutates ``item`` (frozen Pydantic model).
 
@@ -56,8 +65,9 @@ def verify_groundedness(
             must be built from the SAME chapter as ``item.chapter_no``.
 
     Returns:
-        A NEW ``QuizItemCandidate`` whose ``textbook_evidence`` is set to a
-        ``확인``/``미확인`` :class:`MaieuticaTextbookEvidence`.
+        A NEW ``QuizItemCandidate`` whose ``textbook_evidence`` and
+        ``leap.textbook_evidence`` are each set to a ``확인``/``미확인``
+        :class:`MaieuticaTextbookEvidence`.
     """
     key_concept = item.key_concept
 
@@ -71,7 +81,16 @@ def verify_groundedness(
     else:
         evidence = evidence_index.lookup(key_concept)
 
-    return item.model_copy(update={"textbook_evidence": evidence})
+    # The leap shares the answer-point, so it is grounded by the same evidence
+    # lookup (a NEW MaieuticaTextbookEvidence — never the same frozen instance).
+    leap_evidence = evidence.model_copy()
+    grounded_leap = item.leap.model_copy(
+        update={"textbook_evidence": leap_evidence}
+    )
+
+    return item.model_copy(
+        update={"textbook_evidence": evidence, "leap": grounded_leap}
+    )
 
 
 __all__ = ["verify_groundedness"]

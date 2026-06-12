@@ -181,3 +181,64 @@ class TestVerifyGroundedness:
         a = verify_groundedness(item, _make_index())
         b = verify_groundedness(item, _make_index())
         assert a.model_dump() == b.model_dump()
+
+
+class TestLeapGroundedness:
+    """T038: ``leap.textbook_evidence`` is also grounded (FR-012)."""
+
+    def test_leap_evidence_confirmed_for_in_range_concept(self) -> None:
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept="허파꽈리")
+        out = verify_groundedness(item, _make_index())
+        leap_ev = out.leap.textbook_evidence
+        assert leap_ev is not None
+        assert leap_ev.status == "확인"
+        assert leap_ev.chunk_id == "chunk0800"
+
+    def test_leap_evidence_unconfirmed_for_external_concept(self) -> None:
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept="미토콘드리아전자전달계")
+        out = verify_groundedness(item, _make_index())
+        leap_ev = out.leap.textbook_evidence
+        assert leap_ev is not None
+        assert leap_ev.status == "미확인"
+
+    def test_leap_evidence_unconfirmed_for_none_concept(self) -> None:
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept=None)
+        out = verify_groundedness(item, _make_index())
+        leap_ev = out.leap.textbook_evidence
+        assert leap_ev is not None
+        assert leap_ev.status == "미확인"
+
+    def test_leap_sentinel_not_searched_literally(self) -> None:
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept=MISSING_EVIDENCE_PLACEHOLDER)
+        out = verify_groundedness(item, _make_index())
+        leap_ev = out.leap.textbook_evidence
+        assert leap_ev is not None
+        assert leap_ev.status == "미확인"
+        assert leap_ev.search_term is None
+
+    def test_leap_text_and_combined_form_preserved(self) -> None:
+        """Grounding the leap must not alter leap.text or the V4 combined fold."""
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept="허파꽈리")
+        out = verify_groundedness(item, _make_index())
+        assert out.leap.text == item.leap.text
+        assert (
+            out.answer_explanation_combined
+            == f"{out.wrong_explanation} ─ 도약 ─ {out.leap.text}"
+        )
+
+    def test_original_leap_evidence_untouched(self) -> None:
+        from maieutica.verify.groundedness import verify_groundedness
+
+        item = _make_candidate(key_concept="허파꽈리")
+        verify_groundedness(item, _make_index())
+        assert item.leap.textbook_evidence is None  # frozen original untouched
