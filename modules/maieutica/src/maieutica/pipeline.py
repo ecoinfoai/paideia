@@ -243,6 +243,16 @@ def build(
     # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output under runs/{run_id}/
     # ----------------------------------------------------------------
+    # Consistency cross-check FIRST — gate the entire Gold layer on the
+    # in-memory candidates (fail-fast before any directory/file is created, so
+    # a contradiction never leaves a partial Gold output; FR-020 atomicity).
+    check_flat_nested_consistency(
+        items,
+        formative_items,
+        expected_quiz_count=len(quiz_slots),
+        expected_formative_count=len(formative_slots),
+    )
+
     run_id = compute_run_id(
         generation_spec_bytes=(
             generation_spec_path.read_bytes()
@@ -271,22 +281,14 @@ def build(
     formative_path = run_dir / formative_xlsx_filename(spec.chapter_no, spec.chapter)
     write_formative_xlsx(formative_path, formative_items)
 
-    # 5c: consistency cross-check (fail-fast on internal contradiction before writing)
-    check_flat_nested_consistency(
-        items,
-        formative_items,
-        expected_quiz_count=len(quiz_slots),
-        expected_formative_count=len(formative_slots),
-    )
-
-    # 5d: full-fidelity candidate yaml (quiz + formative, full leap + evidence)
+    # 5c: full-fidelity candidate yaml (quiz + formative, full leap + evidence)
     write_candidate_yaml(items, formative_items, run_dir / "출제후보_완전판.yaml")
 
-    # 5e: quality report markdown
+    # 5d: quality report markdown
     quality_report_text = build_quality_report(items, formative_items)
     write_quality_report(run_dir / "출제품질리포트.md", quality_report_text)
 
-    # 5f: manifest
+    # 5e: manifest
     generated_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     input_hashes = {chapter_txt.name: _file_sha256(chapter_txt)}
     config_ids = _build_config_ids(generation_spec_path, curriculum_map_path)

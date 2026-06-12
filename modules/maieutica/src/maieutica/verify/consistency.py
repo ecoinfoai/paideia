@@ -47,6 +47,8 @@ def check_flat_nested_consistency(
     - Formative count matches expected (if provided).
     - Quiz ``item_no`` values are unique.
     - Formative ``no`` values are unique.
+    - Quiz items are ordered by ``item_no`` (the flat ``.xls`` rows and nested
+      yaml entries share this row order).
     - Each quiz item's ``answer_explanation_combined`` round-trips via the
       `` ─ 도약 ─ `` separator, confirming V4 holds (flat xls cell and yaml
       field carry the same combined string).
@@ -87,6 +89,14 @@ def check_flat_nested_consistency(
         dupes = [k for k, v in Counter(quiz_item_nos).items() if v > 1]
         raise RuntimeError(
             f"Internal consistency error: duplicate quiz item_no values: {dupes}"
+        )
+
+    # 2b. Quiz items must be ordered by item_no (slot-order pipeline invariant —
+    # the flat .xls rows and nested yaml entries share this row order).
+    if quiz_item_nos != sorted(quiz_item_nos):
+        raise RuntimeError(
+            f"Internal consistency error: quiz items are not ordered by item_no: "
+            f"{quiz_item_nos}"
         )
 
     # 3. Formative no uniqueness

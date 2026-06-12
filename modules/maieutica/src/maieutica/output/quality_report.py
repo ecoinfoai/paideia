@@ -184,6 +184,7 @@ def build_quality_report(
         lines.append(f"- 형성평가 문항 수: **{formative_total}**")
         lines.append(f"- 교재 근거 확인: {f_confirmed}건 ({f_conf_ratio:.1%})")
         lines.append(f"- 미확인: {f_unconfirmed}건")
+        lines.append("")
         lines.append(f"{f_icon} 형성평가 미확인: {f_unconfirmed}건")
         lines.append("")
 
