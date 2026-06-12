@@ -39,6 +39,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 
+# MIGRATE(T016): once generate/backend.py defines BackendUnreachableError,
+# delete this class and use: from maieutica.generate.backend import BackendUnreachableError
 class BackendUnreachableError(RuntimeError):
     """Raised when the LLM api backend cannot be reached (exit-code 4)."""
 

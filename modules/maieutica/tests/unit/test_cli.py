@@ -123,3 +123,19 @@ def test_explicit_backend_subscription_accepted() -> None:
     """--backend subscription should be a valid choice."""
     rc = app(["generate"] + _COMMON + ["--backend", "subscription"])
     assert rc != 2
+
+
+# ---------------------------------------------------------------------------
+# Exit code 4 — LLM backend unreachable (api mode)
+# ---------------------------------------------------------------------------
+
+
+def test_backend_unreachable_exits_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A handler raising BackendUnreachableError must map to exit 4."""
+    from maieutica.cli import main as cli_main
+
+    def _raise(_args: object) -> int:
+        raise cli_main.BackendUnreachableError("api endpoint unreachable")
+
+    monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _raise)
+    assert cli_main.app(["generate"] + _COMMON) == 4
