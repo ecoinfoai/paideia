@@ -132,16 +132,36 @@ class TestInputHashCache:
         assert fake.call_count == 2
         assert len(list(tmp_path.glob("*.json"))) == 2
 
-    def test_cache_hit_rate(self, tmp_path: Path) -> None:
-        """cache_hit_rate() reflects hits/total; 0.0 before any call."""
+    def test_cache_hit_rate_zero_initially(self, tmp_path: Path) -> None:
+        """cache_hit_rate() returns 0.0 before any request is made."""
         fake = FakeBackend()
         cache = InputHashCache(backend=fake, cache_dir=tmp_path)
         assert cache.cache_hit_rate() == 0.0
 
+    def test_cache_hit_rate_increases_on_hit(self, tmp_path: Path) -> None:
+        """cache_hit_rate() reflects hits/total after a miss + a hit."""
+        fake = FakeBackend()
+        cache = InputHashCache(backend=fake, cache_dir=tmp_path)
         req = _make_request()
         cache.generate(req)  # miss
         cache.generate(req)  # hit
         assert cache.cache_hit_rate() == 0.5
+
+    def test_cache_persists_across_instances(self, tmp_path: Path) -> None:
+        """A cache entry written by one instance is served to a NEW instance.
+
+        This is the cross-run SC-009 guarantee: a fresh process (new
+        ``InputHashCache`` + fresh backend) replays the cached response
+        from disk without re-invoking the backend.
+        """
+        fake = FakeBackend()
+        InputHashCache(backend=fake, cache_dir=tmp_path).generate(_make_request())
+        assert fake.call_count == 1
+
+        fake2 = FakeBackend()
+        resp = InputHashCache(backend=fake2, cache_dir=tmp_path).generate(_make_request())
+        assert resp.cache_hit is True
+        assert fake2.call_count == 0
 
     def test_same_inputs_identical_cache_key(self, tmp_path: Path) -> None:
         """Identical-field requests produce the same key → second call is a hit."""
@@ -174,16 +194,22 @@ class TestDryRunBundles:
 
         assert len(sorted(staging.glob("*.json"))) == 2
 
-    def test_dry_run_does_not_call_backend(self, tmp_path: Path) -> None:
-        """dry_run_bundles must not call any LLM backend — zero calls."""
+    def test_dry_run_does_not_call_backend(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """dry_run_bundles must touch no LLM backend (헌장 I — LLM 0).
+
+        Guard the invariant by booby-trapping the Anthropic client: if
+        ``dry_run_bundles`` ever instantiates it, this raises.
+        """
+
+        def _explode(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("dry_run_bundles must not instantiate any LLM client")
+
+        monkeypatch.setattr("maieutica.generate.backend.anthropic.Anthropic", _explode)
+
         requests = [_make_request("slot-001"), _make_request("slot-002")]
-        staging = tmp_path / "staging"
-        fake = FakeBackend()
-
-        # dry_run does not accept a backend at all — it writes files only.
-        dry_run_bundles(requests, staging_dir=staging)
-
-        assert fake.call_count == 0
+        dry_run_bundles(requests, staging_dir=tmp_path / "staging")
 
     def test_dry_run_bundle_is_valid_json(self, tmp_path: Path) -> None:
         """Each bundle file written by dry_run is valid JSON with expected fields."""
@@ -335,7 +361,7 @@ class TestApiBackend:
         )
 
         backend = ApiBackend(model="claude-haiku-4-5")
-        with pytest.raises(BackendUnreachableError):
+        with pytest.raises(BackendUnreachableError, match="claude-haiku-4-5"):
             backend.generate(_make_request("slot-fail"))
 
 

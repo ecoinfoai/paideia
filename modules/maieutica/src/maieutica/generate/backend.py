@@ -16,7 +16,7 @@ Provides:
 - ``dry_run_bundles`` — writes generation-request bundles deterministically to a
   staging area WITHOUT calling any backend (헌장 I — LLM 없어도 완주).
 - ``BackendUnreachableError`` — canonical sentinel exception for exit-code-4
-  mapping (re-exported by ``maieutica.cli.main``).
+  mapping (imported by ``maieutica.cli.main``).
 
 Design notes
 ------------
