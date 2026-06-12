@@ -379,7 +379,12 @@ def _run_plan(args: argparse.Namespace) -> int:
 
 
 def _run_dry_run(args: argparse.Namespace) -> int:
-    """Handler for ``dry-run``: write per-slot quiz bundles (no LLM).
+    """Handler for ``dry-run``: write per-slot quiz + formative bundles (no LLM).
+
+    Runs the deterministic stages (ingest→chunk→plan) and writes one bundle
+    JSON per slot to the Silver staging directory.  No LLM is called (헌장 I).
+    Also writes ``ingest_report.json`` so the deterministic stages are recorded
+    as complete.
 
     Args:
         args: Parsed CLI namespace.
@@ -389,8 +394,11 @@ def _run_dry_run(args: argparse.Namespace) -> int:
     """
     from maieutica.generate.backend import dry_run_bundles
     from maieutica.generate.bundle import build_bundle
+    from maieutica.generate.formative_gen import build_formative_bundle
+    from maieutica.ingest.report import write_ingest_report
     from maieutica.ingest.spec_load import resolve_chapter_txt
     from maieutica.ingest.textbook import load_chapter
+    from maieutica.ingest.textbook_clean import clean_textbook
     from maieutica.output.paths import silver_dir
     from maieutica.plan.slots import plan_slots
     from maieutica.silver.chunk import chunk_chapter
@@ -406,6 +414,7 @@ def _run_dry_run(args: argparse.Namespace) -> int:
         return 2
 
     raw_lines = [text for _, text in load_chapter(chapter_txt)]
+    _kept, removed_spans = clean_textbook(raw_lines)
     chunks = chunk_chapter(
         raw_lines,
         chapter_no=spec.chapter_no,
@@ -414,13 +423,36 @@ def _run_dry_run(args: argparse.Namespace) -> int:
         course_slug=spec.course_slug,
         source_file=chapter_txt.name,
     )
-    quiz_slots = [s for s in plan_slots(spec) if s.kind == "quiz"]
-    requests = [build_bundle(slot, spec, chunks) for slot in quiz_slots]
+
     silver = silver_dir(args.semester, args.course, data_root=_DATA_ROOT)
+
+    # Write ingest_report so the deterministic stages are recorded as complete.
+    write_ingest_report(
+        silver / "ingest_report.json",
+        {
+            "textbook": {
+                "chapters_required": 1,
+                "chapters_found": 1,
+                "removed_span_counts": {str(spec.chapter_no): len(removed_spans)},
+            },
+            "anomalies": {"filename_violations": [], "unexpected_files": []},
+        },
+    )
+
+    slots = plan_slots(spec)
+    quiz_slots = [s for s in slots if s.kind == "quiz"]
+    formative_slots = [s for s in slots if s.kind == "formative"]
+
+    quiz_requests = [build_bundle(slot, spec, chunks) for slot in quiz_slots]
+    formative_requests = [
+        build_formative_bundle(slot, spec, chunks) for slot in formative_slots
+    ]
+
     staging = silver / "staging"
-    dry_run_bundles(requests, staging)
+    dry_run_bundles(quiz_requests + formative_requests, staging)
     print(
-        f"[maieutica dry-run] wrote {len(requests)} bundles → {staging}",
+        f"[maieutica dry-run] wrote {len(quiz_requests)} quiz + "
+        f"{len(formative_requests)} formative bundles → {staging}",
         file=sys.stderr,
     )
     return 0
