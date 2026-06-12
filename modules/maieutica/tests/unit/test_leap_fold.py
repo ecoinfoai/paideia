@@ -82,6 +82,21 @@ def test_overflow_truncates_leap_first_keeping_wrong_intact() -> None:
     assert leap_part != leap
 
 
+def test_extreme_overflow_clips_prefix_without_ellipsis() -> None:
+    """max_len smaller than the wrong-explanation → prefix clipped, no ellipsis."""
+    from maieutica.assemble.leap_fold import lms_answer_explanation
+
+    wrong = "이것은 꽤 긴 오답 설명 본문입니다"
+    leap = "도약 설명"
+    item = _candidate(wrong, leap)
+    max_len = len(wrong) - 5  # cannot even fit the wrong-explanation + separator
+    out = lms_answer_explanation(item, max_len=max_len)
+
+    assert len(out) <= max_len
+    assert not out.endswith("…")
+    assert out == f"{wrong}{_SEP}"[:max_len]
+
+
 def test_candidate_unchanged_after_truncation() -> None:
     """V4 must still hold: the candidate's combined stays the full basic fold."""
     from maieutica.assemble.leap_fold import lms_answer_explanation

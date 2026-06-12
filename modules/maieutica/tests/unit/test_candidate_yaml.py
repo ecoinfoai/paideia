@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from paideia_shared.schemas import QuizItemCandidate
+from paideia_shared.schemas import MaieuticaTextbookEvidence, QuizItemCandidate
 from paideia_shared.schemas.maieutica.leap_explanation import LeapExplanation
 
 _SEP = " ─ 도약 ─ "
@@ -67,6 +67,39 @@ def test_preserves_option_and_textbook_evidence(tmp_path: Path) -> None:
     assert "textbook_evidence" in data[0]
     assert "leap" in data[0]
     assert "textbook_evidence" in data[0]["leap"]
+
+
+def test_nested_leap_evidence_preserves_structural_keys(tmp_path: Path) -> None:
+    """A grounded leap dumps a nested evidence dict with its structural keys."""
+    from maieutica.output.candidate_yaml import write_candidate_yaml
+
+    leap_evidence = MaieuticaTextbookEvidence(
+        chunk_id="chunk0800",
+        source_file="8장 호흡계통.txt",
+        char_start=10,
+        char_end=20,
+        found_text="허파꽈리",
+        search_term="허파꽈리",
+        status="확인",
+    )
+    item = _candidate(1, "오답", "도약").model_copy(
+        update={
+            "leap": LeapExplanation(text="도약", textbook_evidence=leap_evidence),
+            "textbook_evidence": leap_evidence.model_copy(),
+        }
+    )
+    out = tmp_path / "출제후보_완전판.yaml"
+    write_candidate_yaml([item], out)
+
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
+    leap_ev = data[0]["leap"]["textbook_evidence"]
+    assert isinstance(leap_ev, dict)
+    # Structural keys are present and carry the grounded values, not just the key.
+    assert leap_ev["status"] == "확인"
+    assert leap_ev["chunk_id"] == "chunk0800"
+    assert leap_ev["found_text"] == "허파꽈리"
+    assert leap_ev["char_start"] == 10
+    assert leap_ev["char_end"] == 20
 
 
 def test_combined_round_trip_split(tmp_path: Path) -> None:

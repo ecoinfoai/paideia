@@ -83,6 +83,12 @@ def verify_groundedness(
 
     # The leap shares the answer-point, so it is grounded by the same evidence
     # lookup (a NEW MaieuticaTextbookEvidence — never the same frozen instance).
+    #
+    # Approximation (v0.1.0): leap grounding reuses the SAME key_concept lookup as
+    # the item answer-point — it does NOT scan leap.text for external facts. A leap
+    # whose key_concept is in-range but whose text introduces an external concept
+    # still gets status="확인". US5's adversarial review pass (review_agent, R8) is
+    # the backstop that scans leap.text for external/uncited content.
     leap_evidence = evidence.model_copy()
     grounded_leap = item.leap.model_copy(
         update={"textbook_evidence": leap_evidence}
