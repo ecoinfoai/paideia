@@ -16,14 +16,18 @@ Pipeline steps
    - ``build_bundle`` → ``generate_quiz_item`` (via ``InputHashCache``) →
      ``verify_groundedness`` → ``check_format`` → ``assign_difficulty``.
 5. Cross-set verify: ``detect_duplicates`` over the full candidate set.
-6. Output (all-or-nothing Gold): ``write_quiz_xls`` + ``write_manifest`` under
-   ``runs/{run_id}/``.
+6. Output: ``write_quiz_xls`` + ``write_manifest`` under ``runs/{run_id}/``.
 
 Atomicity (constitution V — 부분 산출 금지)
 ------------------------------------------
-The fail-fast ingest checks (missing chapter ``.txt`` / absent curriculum
-mapping) run BEFORE any Gold file is written, so a faulty input never leaves a
-partial Gold directory.  The CLI maps those exceptions to exit 2.
+Input validation fails BEFORE any Gold write: the fail-fast ingest checks
+(missing chapter ``.txt`` / absent curriculum mapping) raise before the run
+directory is created, so a faulty input never produces a Gold file (CLI maps
+those exceptions to exit 2).  Each of the two Gold files (``.xls`` + manifest)
+is written atomically (temp→rename), and the deterministic ``run_id`` makes
+re-runs idempotent — a re-run with the same inputs targets the same
+``runs/{run_id}/`` and recovers/overwrites a partial pair rather than
+accumulating duplicates.
 
 Determinism scope
 -----------------

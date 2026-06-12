@@ -15,7 +15,7 @@ Public API
 
 ``validate_week_in_map(cm, week, curriculum_map_path) -> None``
     Fail-fast check: target week must be present in the curriculum map.
-    Raises ``KeyError`` with the week number and file path if absent.
+    Raises ``ValueError`` with the week number and file path if absent.
 
 ``resolve_chapter_txt(bronze_dir, chapter_no) -> Path``
     Locate the chapter .txt file in ``bronze_dir``.  Matching rule: filename

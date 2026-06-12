@@ -179,11 +179,11 @@ def _build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     verify_p = sub.add_parser(
         "verify",
-        help="groundedness·보기 글자수·해설 길이·정답번호 균형·중복·2차 재검토",
+        help="입력 검증만 (전체 검증은 build 안에서 실행 — US5 T052/T053 에서 독립 배선 예정)",
         description=(
-            "생성된 문항을 원본 교재에 대한 groundedness, 형식 규칙(보기 글자수·해설 길이),\n"
-            "정답번호 균형(15~25%, 연속 ≤2), 중복 여부로 검증한다.\n"
-            "자동 2차 재검토 포함."
+            "현재는 생성사양·curriculum_map 입력 검증만 수행한다.\n"
+            "전체 검증(groundedness·형식·중복·자동 2차 재검토)은 build 파이프라인\n"
+            "안에서 실행되며, 독립 verify 서브커맨드 배선은 US5(T052/T053)에서 추가된다."
         ),
     )
     _add_common_args(verify_p)
@@ -478,7 +478,12 @@ def _run_generate(args: argparse.Namespace, backend: LLMBackend | None = None) -
 
 
 def _run_verify(args: argparse.Namespace) -> int:
-    """Handler for ``verify``: input validation only (full verify runs in build).
+    """Handler for ``verify``: input validation only.
+
+    Currently validates only the generation spec + curriculum map inputs.  The
+    full verification suite (groundedness / format / duplicates / 2nd-pass
+    review) runs inside ``build``; wiring it as a standalone ``verify``
+    subcommand is deferred to US5 (T052/T053).
 
     Args:
         args: Parsed CLI namespace.
@@ -523,6 +528,10 @@ def _run_build(args: argparse.Namespace, backend: LLMBackend | None = None) -> i
     if backend is None:
         backend = _select_backend(args)
 
+    # This inner try only catches FileNotFoundError/ValueError → exit 2.
+    # BackendUnreachableError (api, exit 4) and a bare RuntimeError
+    # (SubscriptionBackend missing response, exit 3) propagate to the app()
+    # trap, which maps them to 4/3 respectively.
     try:
         items, run_dir = build(
             spec=spec,

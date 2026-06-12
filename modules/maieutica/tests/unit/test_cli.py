@@ -154,3 +154,24 @@ def test_backend_unreachable_exits_4(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _raise)
     assert cli_main.app(["generate"] + _COMMON) == 4
+
+
+# ---------------------------------------------------------------------------
+# Exit code 3 — generation/verify step failure (RuntimeError)
+# ---------------------------------------------------------------------------
+
+
+def test_runtime_error_exits_3(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A handler raising a bare RuntimeError must map to exit 3.
+
+    Guards the ``except`` clause ORDER in ``app()``: BackendUnreachableError
+    (exit 4) subclasses RuntimeError (exit 3) and must be caught first; a
+    reorder would silently break exit 4.
+    """
+    from maieutica.cli import main as cli_main
+
+    def _raise(_args: object) -> int:
+        raise RuntimeError("generation failed")
+
+    monkeypatch.setitem(cli_main._COMMAND_HANDLERS, "generate", _raise)
+    assert cli_main.app(["generate"] + _COMMON) == 3
