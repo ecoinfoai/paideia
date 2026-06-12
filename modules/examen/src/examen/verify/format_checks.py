@@ -64,6 +64,33 @@ _OPTION_MAX_LEN = 40
 # answer_no 가 가리키는 근거에 이 마커가 있는지 검증한다.
 _WRONG_RATIONALE_MARKER = "틀린"
 
+# 보기·근거의 위치를 나타내는 동그라미 번호 접두사 (①..⑤ = U+2460..U+2464).
+_CIRCLED_DIGITS = "①②③④⑤"
+
+
+def _renumber_circled_prefixes(seq: list[str]) -> list[str]:
+    """Rewrite each string's leading circled-digit (①–⑤) to its 1-based position.
+
+    Options and distractor_rationale carry a position-denoting circled number as
+    their first character.  A positional swap moves the whole string, so the
+    prefix must be renumbered afterward — otherwise the visible numbering is
+    scrambled (e.g. ``①②⑤④③``).  Strings whose first character is not a circled
+    digit are returned unchanged (defensive — no assumption that a prefix exists).
+
+    Args:
+        seq: Option or rationale strings in display order.
+
+    Returns:
+        A new list with each leading circled digit set to match its position.
+    """
+    out: list[str] = []
+    for i, s in enumerate(seq):
+        if s and s[0] in _CIRCLED_DIGITS and i < len(_CIRCLED_DIGITS):
+            out.append(_CIRCLED_DIGITS[i] + s[1:])
+        else:
+            out.append(s)
+    return out
+
 
 def _compute_option_length_ok(options: list[str]) -> bool:
     """Check that all options are within 30–40 codepoints.
@@ -499,6 +526,11 @@ def _swap_answer_to_position(item: ExamItemDraft, new_pos: int) -> ExamItemDraft
     # Swap content
     opts[old_idx], opts[new_idx] = opts[new_idx], opts[old_idx]
     rats[old_idx], rats[new_idx] = rats[new_idx], rats[old_idx]
+
+    # 동그라미 번호 접두사는 위치를 나타내므로 스왑 후 위치에 맞게 재번호한다
+    # (보기 본문·근거는 함께 이동했으므로 정합성은 유지된다).
+    opts = _renumber_circled_prefixes(opts)
+    rats = _renumber_circled_prefixes(rats)
 
     return item.model_copy(
         update={

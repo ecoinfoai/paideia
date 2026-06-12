@@ -370,9 +370,14 @@ class TestAnswerKeyBalance:
 
         balanced = balance_answer_keys(items)
 
+        # 정답 보기의 본문(동그라미 번호 접두사 제외)은 스왑 후에도 동일해야 한다.
+        # 접두사는 위치를 나타내므로 위치 이동 시 재번호된다(본문은 불변).
+        def _body(opt: str) -> str:
+            return opt[1:] if opt and opt[0] in "①②③④⑤" else opt
+
         for orig, bal in zip(items, balanced, strict=True):
-            expected_correct = original_correct[orig.item_no]
-            actual_correct = bal.options[bal.answer_no - 1]
+            expected_correct = _body(original_correct[orig.item_no])
+            actual_correct = _body(bal.options[bal.answer_no - 1])
             assert actual_correct == expected_correct, (
                 f"item_no={orig.item_no}: correct option content changed after balance! "
                 f"Before: {expected_correct!r} → After: {actual_correct!r}"
@@ -403,6 +408,47 @@ class TestAnswerKeyBalance:
                 f"item_no={o.item_no}: balance not idempotent "
                 f"({o.answer_no} → {t.answer_no})"
             )
+
+
+class TestSwapRenumbersCircledPrefixes:
+    """옵션·근거의 동그라미 번호(①–⑤) 접두사는 위치를 나타내므로, 정답 위치
+    스왑 후에도 위치 순서(①②③④⑤)를 유지해야 한다(스크램블 금지)."""
+
+    @staticmethod
+    def _item(answer_no: int) -> ExamItemDraft:
+        return ExamItemDraft(
+            item_no=1,
+            semester=_SEMESTER,
+            course_slug=_COURSE,
+            source="formative",
+            chapter="8장 호흡계통",
+            chapter_no=8,
+            question_type="지식축적",
+            difficulty="2_보통",
+            stem_polarity="부정형",
+            text="다음 중 가장 옳지 않은 것은?",
+            options=[f"{c} 보기내용 {i+1}번 — 충분히 긴 설명 문장입니다 abcd"
+                     for i, c in enumerate("①②③④⑤")],
+            answer_no=answer_no,
+            distractor_rationale=[f"{c} 근거 {i+1}" for i, c in enumerate("①②③④⑤")],
+            wrong_explanation="오답 설명." * 30,
+            leap_explanation="도약 설명." * 30,
+            intent="출제 의도 설명 문장입니다 충분히 길게 작성." ,
+            option_length_ok=True,
+            key_concept="호흡근육",
+        )
+
+    def test_prefixes_stay_positional_after_swap(self) -> None:
+        from examen.verify.format_checks import _swap_answer_to_position
+
+        item = self._item(answer_no=3)
+        swapped = _swap_answer_to_position(item, new_pos=5)
+
+        assert swapped.answer_no == 5
+        assert [o[0] for o in swapped.options] == list("①②③④⑤")
+        assert [r[0] for r in swapped.distractor_rationale] == list("①②③④⑤")
+        # 정답 보기 본문(접두사 제외)은 스왑 전 정답 본문과 동일해야 한다.
+        assert swapped.options[4][1:] == item.options[2][1:]
 
 
 # ---------------------------------------------------------------------------
@@ -764,8 +810,13 @@ class TestBalanceAnswerKeysUnit:
                 balanced[i + 2].answer_no,
             )
             assert not (a == b == c), f"run-of-3 at {i} after balance"
-        # And correctness preserved.
+        # And correctness preserved (body unchanged; circled-number prefix is
+        # positional and renumbered on swap).
+        def _body(opt: str) -> str:
+            return opt[1:] if opt and opt[0] in "①②③④⑤" else opt
+
         for orig, bal in zip(items, balanced, strict=True):
             assert (
-                bal.options[bal.answer_no - 1] == orig.options[orig.answer_no - 1]
+                _body(bal.options[bal.answer_no - 1])
+                == _body(orig.options[orig.answer_no - 1])
             ), f"item {orig.item_no}: correct option content changed"
