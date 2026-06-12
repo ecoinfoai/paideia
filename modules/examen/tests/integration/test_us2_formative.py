@@ -492,12 +492,13 @@ class TestUS2OutOfOrderChapterBinding:
                 "(source_ref↔chapter divergence!)"
             )
 
-    def test_mismatched_chapter_distribution_raises(self, tmp_path: Path) -> None:
-        """Inventory chapter distribution differing from solver slots → located error.
+    def test_uneven_chapter_distribution_adapts(self, tmp_path: Path) -> None:
+        """전수 형성평가 인벤토리가 한 장에 쏠려도 솔버가 그 장 분포에 적응한다.
 
-        Solver gives 8장 ×2 + 9장 ×1.  We pass an inventory of all-8장 (3 items)
-        — counts match (3==3) so validate_formative_count passes, but the per-slot
-        chapter assertion must catch the divergence and raise.
+        인벤토리가 전부 8장(3개)이면 솔버는 형성 슬롯을 8장 ×3 + 9장 ×0 으로
+        배치한다.  슬롯-인벤토리 바인딩이 항상 같은 장이므로 source_ref↔chapter
+        divergence 가 발생하지 않고 build 가 성공한다(과거의 챕터-균등 강제 가정
+        제거).  pipeline 의 위치 기반 교차검증은 방어선으로 남아 발동하지 않는다.
         """
         inventory = [
             SourceInventoryEntry(
@@ -508,17 +509,14 @@ class TestUS2OutOfOrderChapterBinding:
             )
             for k in range(1, 4)  # 3 items, ALL chapter 8
         ]
-        from examen.pipeline import build_exam
+        items, _ = _run_build(tmp_path, formative_inventory=inventory)
 
-        bronze_dir = tmp_path / "data" / "bronze" / "examen" / f"{_SEMESTER}-{_COURSE}"
-        _setup_bronze(bronze_dir)
-
-        with pytest.raises(ValueError, match="일치하지 않습니다"):
-            build_exam(
-                blueprint=_make_blueprint(),
-                curriculum_map=_make_curriculum_map(),
-                bronze_dir=bronze_dir,
-                data_root=tmp_path / "data",
-                backend=FakeUS2Backend(),
-                formative_inventory=inventory,
-            )
+        formative = [i for i in items if i.source == "formative"]
+        assert len(formative) == 3
+        # 모든 형성 문항이 8장이고 source_ref↔chapter 가 일치한다(no divergence).
+        for f in formative:
+            assert f.chapter_no == 8
+            ref = f.source_ref or ""
+            assert ref.startswith("형성평가:8장")
+        # 9장에는 형성 슬롯이 배정되지 않는다(인벤토리에 9장 형성이 없으므로).
+        assert all(i.chapter_no == 8 for i in formative)

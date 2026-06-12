@@ -427,3 +427,69 @@ class TestSolveWithQuizSlots:
         assert counts["textbook"] == 13
         assert counts["formative"] == 12
         assert counts["quiz"] == 15
+
+
+class TestSolveFormativeChapterDistribution:
+    """전수 형성평가 슬롯의 장 분포는 인벤토리의 실제 장 분포를 따라야 한다.
+
+    형성평가는 실제 출제된 문항을 전수 포함하므로 각 문항의 장은 고정 데이터다.
+    솔버가 형성 슬롯을 챕터-균등으로 강제하면 pipeline 의 위치 기반(chapter-major)
+    형성 슬롯↔인벤토리 교차검증이 불균등 인벤토리에서 어긋난다.  따라서 솔버는
+    형성 슬롯 장 분포를 인벤토리에서 도출해야 한다.
+    """
+
+    def test_formative_slots_follow_inventory_chapter_counts(self) -> None:
+        from collections import Counter
+
+        from examen.plan.blueprint import solve
+
+        # 불균등 인벤토리: 10장에 형성 5개, 8·9장에 각 2개 (챕터-균등이 아님).
+        formative = (
+            _make_formative_entries(2, chapter_nos=[8])
+            + _make_formative_entries(2, chapter_nos=[9])
+            + _make_formative_entries(5, chapter_nos=[10])
+        )
+        blueprint = ExamenBlueprint(
+            semester=_SEMESTER,
+            course_slug=_COURSE,
+            exam_name="기말고사",
+            total_items=42,
+            chapters=_CHAPTERS,
+            difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
+            source_mix={"textbook": 33, "formative": 9, "quiz": 0},
+        )
+        curriculum_map = _make_curriculum_map()
+        slots = solve(blueprint, curriculum_map, formative_inventory=formative)
+
+        fcounts = Counter(s.chapter_no for s in slots if s.source == "formative")
+        assert fcounts[8] == 2
+        assert fcounts[9] == 2
+        assert fcounts[10] == 5
+
+    def test_formative_slot_order_matches_sorted_inventory(self) -> None:
+        """슬롯 순서(chapter-major)의 형성 장 시퀀스 == 장 오름차순 인벤토리 시퀀스.
+
+        이것이 pipeline 위치 기반 교차검증의 통과 조건이다.
+        """
+        from examen.plan.blueprint import solve
+
+        formative = (
+            _make_formative_entries(2, chapter_nos=[8])
+            + _make_formative_entries(2, chapter_nos=[9])
+            + _make_formative_entries(5, chapter_nos=[10])
+        )
+        blueprint = ExamenBlueprint(
+            semester=_SEMESTER,
+            course_slug=_COURSE,
+            exam_name="기말고사",
+            total_items=42,
+            chapters=_CHAPTERS,
+            difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
+            source_mix={"textbook": 33, "formative": 9, "quiz": 0},
+        )
+        curriculum_map = _make_curriculum_map()
+        slots = solve(blueprint, curriculum_map, formative_inventory=formative)
+
+        slot_seq = [s.chapter_no for s in slots if s.source == "formative"]
+        inv_seq = sorted(e.chapter_no for e in formative)
+        assert slot_seq == inv_seq

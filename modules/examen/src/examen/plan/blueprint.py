@@ -373,6 +373,19 @@ def solve(
         total_src = blueprint.source_mix.get(src, 0)
         per_source_per_chapter[src] = _even_distribute(total_src, n_chapters)
 
+    # 형성평가는 전수 포함이므로 슬롯의 장 분포를 챕터-균등으로 강제하지 않고
+    # 인벤토리의 실제 장 분포로 맞춘다.  pipeline 은 형성 슬롯(chapter-major)에
+    # 인벤토리(장 오름차순)를 위치 기반으로 바인딩하므로, 불균등 인벤토리에서도
+    # 슬롯 장 시퀀스가 인벤토리와 일치해야 조용한 오바인딩이 발생하지 않는다.
+    if formative_inventory:
+        formative_by_chapter = defaultdict(int)
+        for entry in formative_inventory:
+            if entry.chapter_no is not None:
+                formative_by_chapter[entry.chapter_no] += 1
+        per_source_per_chapter["formative"] = [
+            formative_by_chapter[ch_to_no.get(ch, 0)] for ch in chapters
+        ]
+
     # Build slot list
     slots: list[Slot] = []
     slot_counter = 0  # global index for difficulty and slot_id
