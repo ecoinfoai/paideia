@@ -26,7 +26,11 @@ slot's chapter file, not a multi-chapter aggregate.  Mirrors
 
 from __future__ import annotations
 
-from paideia_shared.schemas import MaieuticaTextbookEvidence, QuizItemCandidate
+from paideia_shared.schemas import (
+    FormativeItemCandidate,
+    MaieuticaTextbookEvidence,
+    QuizItemCandidate,
+)
 
 from maieutica.generate.quiz_gen import MISSING_EVIDENCE_PLACEHOLDER
 from maieutica.silver.evidence_index import EvidenceIndex
@@ -99,4 +103,51 @@ def verify_groundedness(
     )
 
 
-__all__ = ["verify_groundedness"]
+def ground_formative(
+    item: FormativeItemCandidate,
+    evidence_index: EvidenceIndex,
+) -> FormativeItemCandidate:
+    """Anchor a formative item's content against the chapter-scoped index.
+
+    ``generate_formative_item`` freezes a complete
+    :class:`~paideia_shared.schemas.FormativeItemCandidate` with
+    ``textbook_evidence=None``.  This stage FINALIZES that field (US3 acceptance
+    "내용이 해당 챕터 교재 근거 범위 안" / FR-002): it searches the candidate's
+    ``topic`` key term against the CHAPTER-SCOPED
+    :class:`~maieutica.silver.evidence_index.EvidenceIndex`, producing a
+    :class:`~paideia_shared.schemas.MaieuticaTextbookEvidence` with the owning
+    chunk_id and ORIGINAL char range when found (``status="확인"``), or
+    ``status="미확인"`` otherwise, and sets it via ``model_copy`` (the model is
+    frozen; in-place mutation raises).
+
+    This is the formative analogue of :func:`verify_groundedness`'s
+    ``key_concept`` approach — the same v0.1.0 approximation (a single key-term
+    substring lookup, not a full-content scan) applies.  Chapter-scope is the
+    CALLER's responsibility: pass the index built from the slot's chapter file.
+
+    Args:
+        item: The generated formative candidate (``textbook_evidence`` is
+            ``None``).
+        evidence_index: **Chapter-scoped** index over original textbook lines;
+            must be built from the SAME chapter as ``item.chapter_no``.
+
+    Returns:
+        A NEW ``FormativeItemCandidate`` whose ``textbook_evidence`` is set to a
+        ``확인``/``미확인`` :class:`MaieuticaTextbookEvidence`.
+    """
+    topic = item.topic
+
+    if not topic:
+        # No anchor term → cannot anchor; record an explicit 미확인.
+        evidence = MaieuticaTextbookEvidence(
+            source_file=evidence_index.source_file,
+            search_term=None,
+            status="미확인",
+        )
+    else:
+        evidence = evidence_index.lookup(topic)
+
+    return item.model_copy(update={"textbook_evidence": evidence})
+
+
+__all__ = ["ground_formative", "verify_groundedness"]

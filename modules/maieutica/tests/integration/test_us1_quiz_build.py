@@ -137,19 +137,53 @@ def _write_canned_responses(responses_dir: Path) -> None:
             "formative_count": _FORMATIVE_COUNT,
         }
     )
-    quiz_slots = [s for s in plan_slots(spec) if s.kind == "quiz"]
+    slots = plan_slots(spec)
+    quiz_slots = [s for s in slots if s.kind == "quiz"]
     for idx, slot in enumerate(quiz_slots):
         key_concept = _KEY_CONCEPTS[idx % len(_KEY_CONCEPTS)]
         answer_no = (idx % 5) + 1
         item_json = _quiz_item_json(slot.ordinal, key_concept, answer_no)
-        envelope = {
-            "slot_id": slot.slot_id,
-            "raw_text": json.dumps(item_json, ensure_ascii=False),
-            "model": "canned-subscription",
-        }
-        (responses_dir / f"{slot.slot_id}.json").write_text(
-            json.dumps(envelope, ensure_ascii=False), encoding="utf-8"
+        _write_envelope(responses_dir, slot.slot_id, item_json)
+
+    for slot in (s for s in slots if s.kind == "formative"):
+        _write_envelope(
+            responses_dir,
+            slot.slot_id,
+            _formative_item_json(slot.ordinal),
         )
+
+
+def _formative_item_json(no: int) -> dict:
+    """Minimal schema-valid formative item JSON for the canned response."""
+    topic = _KEY_CONCEPTS[(no - 1) % len(_KEY_CONCEPTS)]
+    return {
+        "no": no,
+        "chapter_no": _CHAPTER_NO,
+        "topic": topic,
+        "question": f"{no}번 형성문항: {topic} 원리를 200자 내외로 서술하시오.",
+        "limit": "200자 내외",
+        "model_answer": f"{topic}는 교재에 따르면 핵심 과정이다.",
+        "purpose": f"{topic} 이해 여부 확인.",
+        "keywords": [topic, "분압", "확산"],
+        "rubric_high": f"{topic} 핵심 개념 전부.",
+        "rubric_mid": f"{topic} 일부 포함.",
+        "rubric_low": f"{topic} 핵심 누락.",
+        "support_high": f"{topic}를 다음 심화 개념으로 잇는 도약 활동.",
+        "support_mid": f"{topic} 복습 지도.",
+        "support_low": f"{topic} 기본 재학습 안내.",
+    }
+
+
+def _write_envelope(responses_dir: Path, slot_id: str, item_json: dict) -> None:
+    """Write a ``responses/{slot_id}.json`` envelope for the SubscriptionBackend."""
+    envelope = {
+        "slot_id": slot_id,
+        "raw_text": json.dumps(item_json, ensure_ascii=False),
+        "model": "canned-subscription",
+    }
+    (responses_dir / f"{slot_id}.json").write_text(
+        json.dumps(envelope, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 # ---------------------------------------------------------------------------

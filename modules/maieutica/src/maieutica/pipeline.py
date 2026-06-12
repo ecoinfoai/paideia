@@ -51,6 +51,7 @@ from pathlib import Path
 
 from paideia_shared.schemas import (
     CurriculumMap,
+    FormativeItemCandidate,
     MaieuticaGenerationSpec,
     QuizItemCandidate,
 )
@@ -62,12 +63,17 @@ from maieutica.generate.backend import (
     LLMBackend,
     SubscriptionBackend,
 )
+from maieutica.generate.formative_gen import generate_formative_item
 from maieutica.generate.quiz_gen import generate_quiz_item
 from maieutica.ingest.report import write_ingest_report
 from maieutica.ingest.spec_load import resolve_chapter_txt, validate_week_in_map
 from maieutica.ingest.textbook import load_chapter
 from maieutica.ingest.textbook_clean import clean_textbook
 from maieutica.output.candidate_yaml import write_candidate_yaml
+from maieutica.output.formative_xlsx import (
+    formative_xlsx_filename,
+    write_formative_xlsx,
+)
 from maieutica.output.manifest import build_manifest, write_manifest
 from maieutica.output.paths import (
     compute_run_id,
@@ -83,7 +89,7 @@ from maieutica.verify.format_checks import (
     check_format,
     detect_duplicates,
 )
-from maieutica.verify.groundedness import verify_groundedness
+from maieutica.verify.groundedness import ground_formative, verify_groundedness
 
 # Frozen asset path (config_id provenance) — next to the quiz_xls writer's asset.
 _GUIDE_ASSET_PATH = (
@@ -201,9 +207,11 @@ def build(
     )
 
     # ----------------------------------------------------------------
-    # Step 3: plan — slots (only quiz slots are built in the quiz path)
+    # Step 3: plan — quiz + formative slots (both paths are built)
     # ----------------------------------------------------------------
-    quiz_slots = [s for s in plan_slots(spec) if s.kind == "quiz"]
+    slots = plan_slots(spec)
+    quiz_slots = [s for s in slots if s.kind == "quiz"]
+    formative_slots = [s for s in slots if s.kind == "formative"]
 
     # ----------------------------------------------------------------
     # Step 4: generate + verify each quiz slot (staged model_copy enrichment)
@@ -221,6 +229,14 @@ def build(
 
     # Cross-set duplicate detection (after the full set is collected).
     items = detect_duplicates(items)
+
+    # Formative path (US3): generate + ground each formative slot.  Independent
+    # of the quiz path — it does not perturb the quiz items or their .xls.
+    formative_items: list[FormativeItemCandidate] = []
+    for slot in formative_slots:
+        formative = generate_formative_item(slot, spec, chunks, cache)
+        formative = ground_formative(formative, evidence_index)
+        formative_items.append(formative)
 
     # ----------------------------------------------------------------
     # Step 5: all-or-nothing Gold output under runs/{run_id}/
@@ -249,10 +265,14 @@ def build(
         xls_path, items, week=spec.week, answer_explanation_max=answer_explanation_max
     )
 
-    # 5b: full-fidelity candidate yaml (full leap + per-option/leap evidence)
+    # 5b: LMS formative upload .xlsx (bhu_text_mining ExamPDFGenerator-compatible)
+    formative_path = run_dir / formative_xlsx_filename(spec.chapter_no, spec.chapter)
+    write_formative_xlsx(formative_path, formative_items)
+
+    # 5c: full-fidelity candidate yaml (full leap + per-option/leap evidence)
     write_candidate_yaml(items, run_dir / "출제후보_완전판.yaml")
 
-    # 5c: manifest
+    # 5d: manifest
     generated_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     input_hashes = {chapter_txt.name: _file_sha256(chapter_txt)}
     config_ids = _build_config_ids(generation_spec_path, curriculum_map_path)
@@ -288,7 +308,7 @@ def build(
         else None,
         cache_hit_rate=cache.cache_hit_rate(),
         quiz_count=len(items),
-        formative_count=0,
+        formative_count=len(formative_items),
         answer_no_distribution=answer_dist,
         stem_polarity_breakdown=stem_breakdown,
         difficulty_breakdown=diff_breakdown,

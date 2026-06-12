@@ -1,0 +1,93 @@
+# Formative .xlsx → FormativeItemCandidate column mapping
+# Output: bhu_text_mining ExamPDFGenerator-compatible .xlsx
+# Contract: contracts/formative_xlsx.md (FR-006/007, SC-003/009)
+# Structure authority: bronze Ch08_호흡계통_FormativeTest.{xlsx,yaml}
+#
+# Single sheet 'Formative Test': row 0 = header (14 columns below), rows 1..M = candidates.
+#
+# 14 column headers (row 0), verbatim from the real sample:
+#   ['No.', 'Chapter', 'Topic', 'Question', 'Limit', 'Model Answer', 'Purpose',
+#    'Keywords', 'Rubric(High)', 'Rubric(Mid)', 'Rubric(Low)',
+#    'Support(High)', 'Support(Mid)', 'Support(Low)']
+#
+# Cell-type contract (openpyxl roundtrip assert after write — SC-003):
+#   No.      → numeric (int)
+#   Chapter  → numeric (int)
+#   all other columns → text
+#
+# FormativeItemCandidate field → column mapping:
+#   no            → No.            (numeric cell)
+#   chapter_no    → Chapter        (numeric cell)
+#   topic         → Topic          (text cell)
+#   question      → Question       (text cell)
+#   limit         → Limit          (text cell)
+#   model_answer  → Model Answer   (text cell)
+#   purpose       → Purpose        (text cell)
+#   keywords      → Keywords       (text cell — list join by ", ")
+#   rubric_high   → Rubric(High)   (text cell)
+#   rubric_mid    → Rubric(Mid)    (text cell)
+#   rubric_low    → Rubric(Low)    (text cell)
+#   support_high  → Support(High)  (text cell — leap axis, FR-014)
+#   support_mid   → Support(Mid)   (text cell)
+#   support_low   → Support(Low)   (text cell)
+
+sheet: "Formative Test"
+header_row: 0
+keywords_separator: ", "
+columns:
+  no:
+    header: "No."
+    field: "no"
+    cell_type: "number"
+  chapter_no:
+    header: "Chapter"
+    field: "chapter_no"
+    cell_type: "number"
+  topic:
+    header: "Topic"
+    field: "topic"
+    cell_type: "text"
+  question:
+    header: "Question"
+    field: "question"
+    cell_type: "text"
+  limit:
+    header: "Limit"
+    field: "limit"
+    cell_type: "text"
+  model_answer:
+    header: "Model Answer"
+    field: "model_answer"
+    cell_type: "text"
+  purpose:
+    header: "Purpose"
+    field: "purpose"
+    cell_type: "text"
+  keywords:
+    header: "Keywords"
+    field: "keywords"
+    cell_type: "keywords"    # list join by keywords_separator
+  rubric_high:
+    header: "Rubric(High)"
+    field: "rubric_high"
+    cell_type: "text"
+  rubric_mid:
+    header: "Rubric(Mid)"
+    field: "rubric_mid"
+    cell_type: "text"
+  rubric_low:
+    header: "Rubric(Low)"
+    field: "rubric_low"
+    cell_type: "text"
+  support_high:
+    header: "Support(High)"
+    field: "support_high"
+    cell_type: "text"
+  support_mid:
+    header: "Support(Mid)"
+    field: "support_mid"
+    cell_type: "text"
+  support_low:
+    header: "Support(Low)"
+    field: "support_low"
+    cell_type: "text"
