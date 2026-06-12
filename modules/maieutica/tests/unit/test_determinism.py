@@ -11,6 +11,8 @@ import re
 import zipfile
 from pathlib import Path
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -222,8 +224,6 @@ class TestXlsByteGate:
 
     def test_gate_fails_for_nondeterministic_writer(self, tmp_path: Path) -> None:
         """gate_xls_deterministic raises AssertionError when writer embeds a timestamp."""
-
-        import pytest
         from maieutica.output.determinism import gate_xls_deterministic
 
         call_count = [0]
@@ -250,7 +250,6 @@ class TestXlsByteGate:
 
     def test_gate_cleans_up_on_failure(self, tmp_path: Path) -> None:
         """gate_xls_deterministic leaves no temp files even when assertion fails."""
-        import pytest
         from maieutica.output.determinism import gate_xls_deterministic
 
         counter = [0]
@@ -273,7 +272,12 @@ class TestXlsByteGate:
 
 class TestConfigTemplates:
     def test_quiz_column_map_loads_and_has_11_columns(self) -> None:
-        """quiz_column_map.yaml loads and contains the 11 LMS column keys."""
+        """quiz_column_map.yaml contains the 11 LMS column headers in exact order.
+
+        The LMS rejects column reordering (external contract), so the ordered
+        list of headers must equal the canonical sequence — not just the set.
+        yaml.safe_load preserves mapping insertion order (py3.7+).
+        """
         from pathlib import Path
 
         import yaml
@@ -287,8 +291,8 @@ class TestConfigTemplates:
         data = yaml.safe_load(template_path.read_text(encoding="utf-8"))
 
         columns = data.get("columns", {})
-        headers = {v["header"] for v in columns.values()}
-        expected_headers = {
+        headers = [v["header"] for v in columns.values()]
+        expected_headers = [
             "문제번호",
             "문제내용",
             "예상주차",
@@ -300,10 +304,9 @@ class TestConfigTemplates:
             "답안",
             "답안설명",
             "문항유형",
-        }
+        ]
         assert headers == expected_headers, (
-            f"Mismatch — missing: {expected_headers - headers}, "
-            f"extra: {headers - expected_headers}"
+            f"Column order mismatch — got {headers}, expected {expected_headers}"
         )
 
     def test_quiz_column_map_cell_type_contract(self) -> None:
