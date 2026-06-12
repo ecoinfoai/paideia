@@ -31,9 +31,12 @@ class QuizItemCandidate(BaseModel):
 
     Note: ``difficulty`` uses ``Literal["상","중","하"]`` — intentionally different
     from examen's ``"1_쉬움"/"2_보통"/"3_어려움"``; do not unify (spec 009 §5).
+
+    Frozen: downstream stages update ``review_note`` / ``adoption_status`` via
+    ``model_copy(update={...})`` (examen pattern), not in-place mutation.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     semester: SemesterCode
     course_slug: CourseSlug

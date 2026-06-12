@@ -25,9 +25,12 @@ class FormativeItemCandidate(BaseModel):
     ``support_high`` serves as the leap axis for high-achievers (FR-014).
     All content must stay within the chapter's textbook evidence scope
     (external knowledge prohibited, FR-002).
+
+    Frozen: downstream stages update ``review_note`` / ``adoption_status`` via
+    ``model_copy(update={...})`` (examen pattern), not in-place mutation.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     semester: SemesterCode
     course_slug: CourseSlug
