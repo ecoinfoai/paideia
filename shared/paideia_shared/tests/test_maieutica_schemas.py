@@ -261,12 +261,12 @@ class TestMaieuticaTextbookEvidence:
         with pytest.raises(ValidationError):
             MaieuticaTextbookEvidence(**_base_textbook_evidence(bad_field="x"))
 
-    def test_positive_frozen(self) -> None:
-        """Frozen model rejects attribute mutation."""
+    def test_negative_mutation_raises(self) -> None:
+        """Frozen model rejects attribute mutation (Pydantic v2 raises ValidationError)."""
         from paideia_shared.schemas.maieutica.textbook_evidence import MaieuticaTextbookEvidence
 
         ev = MaieuticaTextbookEvidence(**_base_textbook_evidence())
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ev.status = "미확인"  # type: ignore[misc]
 
 
@@ -280,13 +280,17 @@ class TestMaieuticaGenerationSpec:
 
     def test_positive_valid_explicit(self) -> None:
         """All fields provided explicitly — constructs without error."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         MaieuticaGenerationSpec(**_base_generation_spec())
 
     def test_positive_defaults(self) -> None:
         """Omitting quiz_count and formative_count applies defaults 20 and 3."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         spec = MaieuticaGenerationSpec(
             semester=_SEM,
@@ -300,35 +304,45 @@ class TestMaieuticaGenerationSpec:
 
     def test_negative_week_zero(self) -> None:
         """week=0 < 1 → ValidationError."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         with pytest.raises(ValidationError):
             MaieuticaGenerationSpec(**_base_generation_spec(week=0))
 
     def test_negative_chapter_no_zero(self) -> None:
         """chapter_no=0 < 1 → ValidationError."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         with pytest.raises(ValidationError):
             MaieuticaGenerationSpec(**_base_generation_spec(chapter_no=0))
 
     def test_negative_quiz_count_zero(self) -> None:
         """quiz_count=0 < 1 → ValidationError."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         with pytest.raises(ValidationError):
             MaieuticaGenerationSpec(**_base_generation_spec(quiz_count=0))
 
     def test_negative_formative_count_zero(self) -> None:
         """formative_count=0 < 1 → ValidationError."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         with pytest.raises(ValidationError):
             MaieuticaGenerationSpec(**_base_generation_spec(formative_count=0))
 
     def test_negative_extra_field(self) -> None:
         """extra='forbid' rejects unknown fields."""
-        from paideia_shared.schemas.maieutica.maieutica_generation_spec import MaieuticaGenerationSpec
+        from paideia_shared.schemas.maieutica.maieutica_generation_spec import (
+            MaieuticaGenerationSpec,
+        )
 
         with pytest.raises(ValidationError):
             MaieuticaGenerationSpec(**_base_generation_spec(unexpected="x"))
@@ -406,8 +420,8 @@ class TestQuizItemCandidate:
 
     def test_positive_long_wrong_explanation_constructs_with_flag_false(self) -> None:
         """wrong_explanation > 200 chars: explanation_length_ok=False, no exception."""
-        from paideia_shared.schemas.maieutica.quiz_item_candidate import QuizItemCandidate
         from paideia_shared.schemas.maieutica.leap_explanation import LeapExplanation
+        from paideia_shared.schemas.maieutica.quiz_item_candidate import QuizItemCandidate
 
         leap = LeapExplanation(text=_LEAP_TEXT_OK)
         combined = f"{_WRONG_EXPL_LONG} ─ 도약 ─ {_LEAP_TEXT_OK}"

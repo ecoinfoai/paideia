@@ -61,11 +61,14 @@ class MaieuticaTextbookEvidence(BaseModel):
     @model_validator(mode="after")
     def _v1_char_range_order(self) -> Self:
         """V1: char_end must be >= char_start when both are present."""
-        if self.char_start is not None and self.char_end is not None:
-            if self.char_end < self.char_start:
-                raise ValueError(
-                    f"V1: char_end ({self.char_end}) must be >= char_start ({self.char_start})."
-                )
+        if (
+            self.char_start is not None
+            and self.char_end is not None
+            and self.char_end < self.char_start
+        ):
+            raise ValueError(
+                f"V1: char_end ({self.char_end}) must be >= char_start ({self.char_start})."
+            )
         return self
 
     @model_validator(mode="after")

@@ -1,4 +1,4 @@
-"""LeapExplanation: "one step further" explanation for students who answered correctly (spec 009 §6).
+"""LeapExplanation: "one step further" for students who answered correctly (spec 009 §6).
 
 Nested in QuizItemCandidate.  The <=200-char length target is a SOFT goal
 flagged by the parent QuizItemCandidate.explanation_length_ok; no hard

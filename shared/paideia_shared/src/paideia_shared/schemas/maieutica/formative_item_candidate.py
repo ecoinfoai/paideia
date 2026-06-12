@@ -45,7 +45,10 @@ class FormativeItemCandidate(BaseModel):
         default_factory=list,
         description="Key scoring keywords → LMS Keywords (serialised with separator).",
     )
-    rubric_high: str = Field(..., description="High-achievement rubric criterion → LMS Rubric(High).")
+    rubric_high: str = Field(
+        ...,
+        description="High-achievement rubric criterion → LMS Rubric(High).",
+    )
     rubric_mid: str = Field(..., description="Mid-achievement rubric criterion → LMS Rubric(Mid).")
     rubric_low: str = Field(..., description="Low-achievement rubric criterion → LMS Rubric(Low).")
     support_high: str = Field(
