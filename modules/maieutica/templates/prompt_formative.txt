@@ -1,0 +1,88 @@
+# Prompt template: formative assessment (short-answer / essay) question generation
+# ---------------------------------------------------------------
+# PLACEHOLDERS (all {named} — must be present at render time):
+#   {chapter}           — chapter name, e.g. "8장 호흡계통"
+#   {chapter_no}        — chapter number int, e.g. 8
+#   {section}           — section name, e.g. "8.2 허파꽈리와 가스교환"
+#   {week}              — week number int, e.g. 9
+#   {formative_count}   — number of formative items to generate (per call), e.g. 3
+#   {textbook_context}  — verbatim extracted textbook chunk text (plain text)
+#   {key_concept}       — focal concept string extracted by the planner
+#   {slot_id}           — stable slot identifier for cache keying
+#   {topic}             — topic label, e.g. "개념이해" | "원리적용" | "비교분석"
+#
+# REFINEMENT NOTE: This is an INITIAL draft (T013).
+#   Placeholders finalized when T026/T027/T044 land.
+#   Do NOT hardcode chapter names, semester, or course identifiers.
+# ---------------------------------------------------------------
+
+당신은 대학 해부생리학 교과목 형성평가 출제 보조 AI입니다.
+아래 교재 내용만을 근거로 서술형 형성평가 문항 1개를 생성하세요.
+외부 지식, 추론, 교재에 없는 내용은 절대 사용하지 마세요.
+
+## 대상 정보
+
+- 챕터: {chapter} (챕터 번호: {chapter_no})
+- 절: {section}
+- 주차: {week}주차
+- 핵심 개념: {key_concept}
+- 출제 주제 유형: {topic}  (개념이해 / 원리적용 / 비교분석)
+- 슬롯 ID: {slot_id}
+
+## 교재 본문 (이 내용만 출처로 사용하세요)
+
+{textbook_context}
+
+## 생성 규칙
+
+### 문항 규칙
+- 학생이 200자 내외로 서술할 수 있는 개방형 질문
+- 교재 본문에 명시된 개념·사실·과정만 묻는다
+- 단순 암기보다 이해·적용을 요구하는 수준 권장
+
+### 모범답안 & 루브릭
+- `model_answer`: 교재 기반 모범 답안 (200자 내외)
+- `purpose`: 출제 의도 (이 문항으로 평가하려는 학습 목표)
+- `keywords`: 핵심 채점 키워드 목록 (3~5개)
+- 루브릭 3단계 (상/중/하):
+  - `rubric_high`: 핵심 개념 전부 + 정확한 용어 사용
+  - `rubric_mid`: 핵심 개념 일부 포함, 용어 부정확
+  - `rubric_low`: 부분적 언급 또는 핵심 누락
+- 지원 계획 3단계 (상/중/하):
+  - `support_high`: 도약형 지원 — 맞힌 학생을 다음 심화 개념으로 이끄는 활동/질문 (FR-014)
+  - `support_mid`: 보완 학습 자료·복습 포인트 제안
+  - `support_low`: 기본 개념 재학습 경로 안내
+
+### 근거 기록 (textbook_evidence)
+- 사용한 교재 문장의 chunk_id, char_start, char_end, found_text, search_term을 기록
+- 교재에서 확인된 경우 status = "확인", 그렇지 않으면 status = "미확인"
+
+## 출력 형식 (JSON, UTF-8)
+
+```json
+{{
+  "no": 1,
+  "chapter_no": {chapter_no},
+  "topic": "{topic}",
+  "question": "...",
+  "limit": "200자 내외",
+  "model_answer": "...",
+  "purpose": "...",
+  "keywords": ["...", "...", "..."],
+  "rubric_high": "...",
+  "rubric_mid": "...",
+  "rubric_low": "...",
+  "support_high": "...",
+  "support_mid": "...",
+  "support_low": "...",
+  "textbook_evidence": {{
+    "chunk_id": "...",
+    "source_file": "...",
+    "char_start": 0,
+    "char_end": 0,
+    "found_text": "...",
+    "search_term": "{key_concept}",
+    "status": "확인"
+  }}
+}}
+```

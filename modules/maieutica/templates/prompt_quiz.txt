@@ -1,0 +1,89 @@
+# Prompt template: 5-option single-answer quiz candidate generation
+# ---------------------------------------------------------------
+# PLACEHOLDERS (all {named} — must be present at render time):
+#   {chapter}           — chapter name, e.g. "8장 호흡계통"
+#   {chapter_no}        — chapter number int, e.g. 8
+#   {section}           — section name, e.g. "8.2 허파꽈리와 가스교환"
+#   {week}              — week number int, e.g. 9
+#   {quiz_count}        — number of quiz items to generate, e.g. 20
+#   {textbook_context}  — verbatim extracted textbook chunk text (plain text)
+#   {key_concept}       — focal concept string extracted by the planner
+#   {slot_id}           — stable slot identifier for cache keying
+#   {question_type}     — 지식축적 | 맥락통찰 (set by slot planner)
+#
+# REFINEMENT NOTE: This is an INITIAL draft (T013).
+#   Placeholders finalized when T026/T027/T044 land.
+#   Do NOT hardcode chapter names, semester, or course identifiers.
+# ---------------------------------------------------------------
+
+당신은 대학 해부생리학 교과목 시험 출제 보조 AI입니다.
+아래 교재 내용만을 근거로 5지선다 단일정답 퀴즈 후보 1문항을 생성하세요.
+외부 지식, 추론, 교재에 없는 내용은 절대 사용하지 마세요.
+
+## 대상 정보
+
+- 챕터: {chapter} (챕터 번호: {chapter_no})
+- 절: {section}
+- 주차: {week}주차
+- 핵심 개념: {key_concept}
+- 문항 유형: {question_type}  (지식축적 = 단일 개념 확인 / 맥락통찰 = 개념 간 관계·기능 통합)
+- 슬롯 ID: {slot_id}
+
+## 교재 본문 (이 내용만 출처로 사용하세요)
+
+{textbook_context}
+
+## 생성 규칙
+
+### 발문 원칙
+- **원칙: 부정형 발문** ("다음 중 … 가장 옳지 않은 것은?")
+  - 긍정형 허용 예외: 한글↔영어 명칭 짝짓기, 순서·단계 열거형 문항
+- 발문은 위 교재 본문에 명시된 개념·사실만 다룬다
+
+### 보기 규칙
+- 보기는 정확히 5개 (보기1~5)
+- 각 보기: 공백 포함 **30자 이상 50자 이하** — 이 범위를 벗어나면 안 됨
+- 정답 번호(answer_no): 1~5 중 하나; 균형을 고려해 반복 지양
+- 오답 4개는 교재 내용에 부합하는 **그럴듯한** 오류 또는 혼동 개념
+
+### 해설 규칙
+- `wrong_explanation` (오답 설명): 틀린 학생을 위한 해설, 공백 포함 **200자 이하**
+- `leap_explanation` (도약 설명): 맞힌 학생을 위해 다음 개념·심화로 잇는 도약형 해설, 공백 포함 **200자 이하**
+- 두 해설 모두 교재 본문 근거 명시 필수
+
+### 근거 기록 (textbook_evidence)
+- 사용한 교재 문장의 chunk_id, char_start, char_end, found_text, search_term을 기록
+- 교재에서 확인된 경우 status = "확인", 그렇지 않으면 status = "미확인"
+
+## 출력 형식 (JSON, UTF-8)
+
+```json
+{{
+  "question_type": "{question_type}",
+  "difficulty": "중",
+  "stem_polarity": "부정형",
+  "text": "다음 중 {key_concept}에 대한 설명으로 가장 옳지 않은 것은?",
+  "options": [
+    "① ...",
+    "② ...",
+    "③ ...",
+    "④ ...",
+    "⑤ ..."
+  ],
+  "answer_no": 3,
+  "option_evidence": ["...", "...", "...", "...", "..."],
+  "wrong_explanation": "...",
+  "leap_explanation": "...",
+  "intent": "...",
+  "key_concept": "{key_concept}",
+  "textbook_evidence": {{
+    "chunk_id": "...",
+    "source_file": "...",
+    "char_start": 0,
+    "char_end": 0,
+    "found_text": "...",
+    "search_term": "{key_concept}",
+    "status": "확인"
+  }}
+}}
+```
