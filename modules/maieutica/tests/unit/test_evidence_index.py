@@ -116,3 +116,27 @@ class TestEvidenceIndex:
         assert ev.chunk_id is None
         assert ev.char_start is None
         assert ev.search_term == "미토콘드리아"
+
+    def test_term_in_noise_region_only_returns_unconfirmed(self) -> None:
+        """SC-007 boundary: a term present ONLY in stripped noise (outside every
+        chunk's line range) → 미확인 via the chunk_id-None branch.
+
+        '연습문제' genuinely appears in FIXTURE_LINES (the exercise block) but
+        that line is removed by the cleaner, so no chunk covers it.  This is
+        distinct from the absent-term path (term not in the file at all)."""
+        from maieutica.silver.evidence_index import EvidenceIndex
+
+        # Precondition: the term IS present in the original file (so this
+        # exercises the noise-region branch, not the absent-term path).
+        assert any("연습문제" in line for line in FIXTURE_LINES)
+
+        idx = EvidenceIndex.from_chapter(
+            lines=FIXTURE_LINES,
+            chunks=_chunks(),
+            source_file="8장 호흡계통.txt",
+        )
+        ev = idx.lookup("연습문제")
+        assert ev.status == "미확인"
+        assert ev.chunk_id is None
+        assert ev.char_start is None
+        assert ev.search_term == "연습문제"
