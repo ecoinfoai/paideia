@@ -44,5 +44,6 @@ Python 3.11 (uv workspace, paideia umbrella): Follow standard conventions
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan:
+specs/009-maieutica-question-gen/plan.md
 <!-- SPECKIT END -->
