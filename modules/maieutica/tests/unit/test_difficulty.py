@@ -92,6 +92,13 @@ class TestAssignDifficulty:
         item = _make_candidate(stem_polarity="부정형", options=_HIGH_HOMOGENEITY_OPTIONS)
         assert assign_difficulty(item).difficulty == "상"
 
+    def test_positive_polarity_ignores_option_homogeneity(self) -> None:
+        """긍정형 short-circuits to 하 even with high-homogeneity options."""
+        from maieutica.assemble.difficulty import assign_difficulty
+
+        item = _make_candidate(stem_polarity="긍정형", options=_HIGH_HOMOGENEITY_OPTIONS)
+        assert assign_difficulty(item).difficulty == "하"
+
     def test_provisional_medium_replaced(self) -> None:
         from maieutica.assemble.difficulty import assign_difficulty
 
@@ -106,6 +113,7 @@ class TestAssignDifficulty:
         out = assign_difficulty(item)
         assert out is not item
         assert item.difficulty == "중"  # frozen original untouched
+        assert out.question_type == item.question_type  # difficulty must not touch it
 
     def test_deterministic_across_runs(self) -> None:
         from maieutica.assemble.difficulty import assign_difficulty

@@ -73,6 +73,7 @@ class TestCheckFormat:
 
         out = check_format(_make_candidate())
         assert out.option_length_ok is True
+        assert out.explanation_length_ok is True
 
     def test_option_length_ok_false_for_short_option(self) -> None:
         from maieutica.verify.format_checks import check_format

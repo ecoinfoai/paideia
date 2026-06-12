@@ -143,6 +143,7 @@ class TestVerifyGroundedness:
         assert ev is not None
         assert ev.status == "미확인"
         assert ev.chunk_id is None
+        assert ev.search_term == "미토콘드리아전자전달계"  # preserved on miss
 
     def test_none_key_concept_unconfirmed(self) -> None:
         from maieutica.verify.groundedness import verify_groundedness
@@ -163,7 +164,7 @@ class TestVerifyGroundedness:
         assert ev is not None
         assert ev.status == "미확인"
         # The sentinel must not be recorded as the search term.
-        assert ev.search_term != MISSING_EVIDENCE_PLACEHOLDER
+        assert ev.search_term is None
 
     def test_returns_new_candidate_original_unchanged(self) -> None:
         from maieutica.verify.groundedness import verify_groundedness
