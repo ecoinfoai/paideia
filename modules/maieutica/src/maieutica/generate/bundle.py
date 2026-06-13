@@ -25,6 +25,7 @@ Usage::
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -64,22 +65,77 @@ def _load_template() -> str:
     return "\n".join(body_lines).lstrip("\n")
 
 
+# Leading subsection numbering markers stripped to expose the bare concept term,
+# e.g. "1) 코" → "코", "가) 외비강" → "외비강", "2.1 가스 교환" → "가스 교환".
+_MARKER_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)+\s+|^[0-9가-힣]+[.)]\s*")
+
+# Rendered into the prompt's {avoid_list} placeholder when no prior points exist,
+# so the template always has a value and stays deterministic.
+_AVOID_NONE = "(없음)"
+
+
 def _select_chunks(
     slot: Slot,
     chunks: list[TextbookChunk],
 ) -> list[TextbookChunk]:
-    """Return chunks matching the slot's chapter, sorted deterministically.
+    """Return the slot's context chunks, sorted deterministically.
+
+    Subsection scoping (T017): when the slot carries a non-empty
+    ``subsection_chunk_id`` that resolves to a chunk in ``chunks``, ONLY that
+    one assigned subsection is returned — so each slot probes a distinct slice
+    of the chapter (research R7). Otherwise (UNASSIGNED slot, e.g. the dry-run
+    degrade path where ``assign_subsections`` was not run) this falls back to
+    the v0.1.0 behavior: every chunk of the slot's chapter.
 
     Args:
-        slot: The quiz slot whose chapter we need.
+        slot: The quiz slot (its ``subsection_chunk_id`` / ``chapter_no``).
         chunks: All available TextbookChunk objects (may span many chapters).
 
     Returns:
-        Chunks with ``chapter_no == slot.chapter_no`` sorted by
-        ``(chapter_no, line_start, chunk_id)`` for stable ordering.
+        Either ``[assigned_subsection]`` or all chapter-matched chunks, sorted
+        by ``(chapter_no, line_start, chunk_id)`` for stable ordering.
     """
+    if slot.subsection_chunk_id:
+        assigned = [c for c in chunks if c.chunk_id == slot.subsection_chunk_id]
+        if assigned:
+            return assigned
     matching = [c for c in chunks if c.chapter_no == slot.chapter_no]
     return sorted(matching, key=lambda c: (c.chapter_no, c.line_start, c.chunk_id))
+
+
+def _derive_key_concept(section_label: str | None, fallback: str) -> str:
+    """Derive a subsection concept term from a section label.
+
+    Strips a leading numbering marker (``"1) "``, ``"가) "``, ``"2.1 "``) to
+    expose the bare concept. Falls back to ``fallback`` (typically the chapter
+    name) when the label is ``None``, empty, or reduces to nothing after the
+    marker is removed.
+
+    Args:
+        section_label: The subsection's section label, or ``None``.
+        fallback: Value to return when no concept can be derived.
+
+    Returns:
+        The stripped concept term, or ``fallback``.
+    """
+    if not section_label:
+        return fallback
+    concept = _MARKER_RE.sub("", section_label).strip()
+    return concept or fallback
+
+
+def _render_avoid_list(avoid_list: list[str]) -> str:
+    """Render the avoid-list for the prompt, preserving caller order.
+
+    Args:
+        avoid_list: Prior subsection points to avoid re-asking (order kept).
+
+    Returns:
+        A newline bullet list, or :data:`_AVOID_NONE` when empty.
+    """
+    if not avoid_list:
+        return _AVOID_NONE
+    return "\n".join(f"- {point}" for point in avoid_list)
 
 
 def _derive_section(chunks: list[TextbookChunk]) -> str:
@@ -101,32 +157,52 @@ def build_bundle(
     slot: Slot,
     spec: MaieuticaGenerationSpec,
     chunks: list[TextbookChunk],
+    avoid_list: list[str] | None = None,
 ) -> GenerationRequest:
     """Build a deterministic GenerationRequest for one quiz slot.
 
     Steps:
-    1. Select chunks matching the slot's chapter and sort them deterministically.
+    1. Select the slot's context: ONLY its assigned subsection when assigned,
+       else all chapter chunks (dry-run degrade fallback). See ``_select_chunks``.
     2. Concatenate chunk texts (double-newline separated) as the prompt context.
-    3. Render the prompt template with the slot/spec fields.
-    4. Build ``context_refs`` as ``"{source_file}#{chunk_id}"`` strings in the
+    3. Derive ``key_concept``: subsection-derived when assigned (≠ chapter name),
+       else the chapter name (v0.1.0 fallback). See ``_derive_key_concept``.
+    4. Render the prompt template with the slot/spec fields, the per-item
+       ``focus``, and the rendered ``avoid_list``.
+    5. Build ``context_refs`` as ``"{source_file}#{chunk_id}"`` strings in the
        same stable order.
-    5. Build ``metadata`` for downstream traceability.
+    6. Build ``metadata`` for downstream traceability (now incl. the subsection
+       fields + avoid_list, which therefore participate in the cache key).
 
     Args:
-        slot: The planned quiz slot.
+        slot: The planned quiz slot (carries the assigned subsection, if any).
         spec: The generation specification (chapter / semester / course labels).
         chunks: All available TextbookChunk objects (filtered internally).
+        avoid_list: Prior subsection points the model must NOT re-ask, in the
+            order they were asked. ``None`` is treated as empty. Defaulted so
+            the dry-run path and ``generate_quiz_item`` (which call without it)
+            keep working; the pipeline threads a real list later (T020).
 
     Returns:
         A ``GenerationRequest`` ready for ``cache.generate(request)``.
     """
+    avoid = avoid_list if avoid_list is not None else []
+    assigned = bool(slot.subsection_chunk_id) and any(
+        c.chunk_id == slot.subsection_chunk_id for c in chunks
+    )
     selected = _select_chunks(slot, chunks)
 
     textbook_context = (
         "\n\n".join(c.text for c in selected) if selected else "(교재 본문 없음)"
     )
     section = _derive_section(selected)
-    key_concept = spec.chapter
+
+    if assigned:
+        key_concept = _derive_key_concept(slot.subsection_section, spec.chapter)
+        focus = slot.subsection_section or key_concept
+    else:
+        key_concept = spec.chapter
+        focus = spec.chapter
 
     prompt = _load_template().format(
         chapter=spec.chapter,
@@ -135,6 +211,8 @@ def build_bundle(
         week=spec.week,
         textbook_context=textbook_context,
         key_concept=key_concept,
+        focus=focus,
+        avoid_list=_render_avoid_list(avoid),
         slot_id=slot.slot_id,
         question_type=_DEFAULT_QUESTION_TYPE,
     )
@@ -148,6 +226,10 @@ def build_bundle(
         "chapter": spec.chapter,
         "chapter_no": spec.chapter_no,
         "section": section,
+        "key_concept": key_concept,
+        "subsection_chunk_id": slot.subsection_chunk_id,
+        "intra_ordinal": slot.intra_ordinal,
+        "avoid_list": list(avoid),
         "chunk_ids": [c.chunk_id for c in selected],
     }
 

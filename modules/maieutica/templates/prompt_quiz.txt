@@ -6,7 +6,9 @@
 #   {section}           — section name, e.g. "8.2 허파꽈리와 가스교환"
 #   {week}              — week number int, e.g. 9
 #   {textbook_context}  — verbatim extracted textbook chunk text (plain text)
-#   {key_concept}       — focal concept string extracted by the planner
+#   {key_concept}       — subsection-derived focal concept (NOT the chapter name)
+#   {focus}             — this item's probe point within the assigned subsection
+#   {avoid_list}        — points already asked in this subsection (do NOT re-ask)
 #   {slot_id}           — stable slot identifier for cache keying
 #   {question_type}     — 지식축적 | 맥락통찰 (set by slot planner)
 #
@@ -25,8 +27,16 @@
 - 절: {section}
 - 주차: {week}주차
 - 핵심 개념: {key_concept}
+- 출제 포커스: {focus}  (이 문항이 위 소절 안에서 다룰 지점)
 - 문항 유형: {question_type}  (지식축적 = 단일 개념 확인 / 맥락통찰 = 개념 간 관계·기능 통합)
 - 슬롯 ID: {slot_id}
+
+## 이미 출제된 포인트 (재출제 금지)
+
+아래 항목은 이 소절에서 이미 다룬 출제 포인트입니다.
+이 문항은 아래와 **다른** 사실·개념을 물어야 합니다 (동일 포인트 재출제 금지).
+
+{avoid_list}
 
 ## 교재 본문 (이 내용만 출처로 사용하세요)
 
@@ -56,12 +66,15 @@
 
 ## 출력 형식 (JSON, UTF-8)
 
+아래는 형식(키) 예시일 뿐이다. 값은 매 문항 교재 근거에 따라 새로 작성하고,
+예시의 발문·정답번호·난이도 값을 복사하지 말 것.
+
 ```json
 {{
   "question_type": "{question_type}",
-  "difficulty": "중",
-  "stem_polarity": "부정형",
-  "text": "다음 중 {key_concept}에 대한 설명으로 가장 옳지 않은 것은?",
+  "difficulty": "<교재 난이도에 맞는 상|중|하 중 하나>",
+  "stem_polarity": "<부정형|긍정형 중 하나 (위 발문 원칙 따름)>",
+  "text": "<위 출제 포커스를 묻는 발문 (예시 발문을 복사하지 말 것)>",
   "options": [
     "① ...",
     "② ...",
@@ -69,7 +82,7 @@
     "④ ...",
     "⑤ ..."
   ],
-  "answer_no": 3,
+  "answer_no": "<교재 근거에 맞는 1~5 중 하나 (특정 번호에 고정하지 말 것)>",
   "option_evidence": ["...", "...", "...", "...", "..."],
   "wrong_explanation": "...",
   "leap_explanation": "...",

@@ -82,6 +82,7 @@ def generate_quiz_item(
     spec: MaieuticaGenerationSpec,
     chunks: list[TextbookChunk],
     cache: InputHashCache,
+    avoid_list: list[str] | None = None,
 ) -> QuizItemCandidate:
     """Generate one quiz candidate for a quiz slot via the LLM backend.
 
@@ -90,6 +91,11 @@ def generate_quiz_item(
         spec: The generation specification (identity / chapter labels).
         chunks: All available TextbookChunk objects (filtered by bundle).
         cache: InputHashCache wrapping the backend (invoked on cache miss).
+        avoid_list: Prior same-subsection answer-points the model must NOT
+            re-ask, in the order they were asked (US1/R4). ``None`` is treated
+            as empty, keeping the dry-run / CLI callers (which pass none)
+            working. It is threaded into ``build_bundle`` and so participates in
+            the cache key, preserving byte-identical re-runs.
 
     Returns:
         A complete, schema-valid :class:`~paideia_shared.schemas.QuizItemCandidate`
@@ -99,7 +105,7 @@ def generate_quiz_item(
         ValueError: If the LLM response is not valid JSON, is not a JSON object,
             or carries a malformed ``answer_no``.
     """
-    request = build_bundle(slot, spec, chunks)
+    request = build_bundle(slot, spec, chunks, avoid_list=avoid_list)
     response = cache.generate(request)
     data = _parse_response(response.raw_text, slot_id=slot.slot_id)
 
