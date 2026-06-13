@@ -5,14 +5,19 @@ soft flags via ``model_copy``:
 
 - ``option_length_ok``: each option 30–50 chars incl. spaces (FR-010).
 - ``explanation_length_ok``: wrong_explanation and leap.text each <=200 (FR-011).
-- ``duplicate_flag``: candidates sharing a ``key_concept`` flagged (FR-008/009).
+- ``duplicate_flag``: anchor-duplicate candidates sharing the answer's
+  ``(textbook_evidence.chunk_id, line)`` anchor are REMOVED, first kept (FR-008).
 - answer_no distribution is RECORDED for the manifest — maieutica does NOT
   rebalance answer keys (that is examen FR-015's job).
 """
 
 from __future__ import annotations
 
-from paideia_shared.schemas import LeapExplanation, QuizItemCandidate
+from paideia_shared.schemas import (
+    LeapExplanation,
+    MaieuticaTextbookEvidence,
+    QuizItemCandidate,
+)
 
 _GOOD_OPTIONS = [
     "① 허파꽈리는 가스교환이 일어나는 호흡계통의 기본 단위이다.",
@@ -35,6 +40,7 @@ def _make_candidate(
     option_length_ok: bool = True,
     explanation_length_ok: bool = True,
     duplicate_flag: bool = False,
+    textbook_evidence: MaieuticaTextbookEvidence | None = None,
 ) -> QuizItemCandidate:
     leap = LeapExplanation(text=leap_text, textbook_evidence=None)
     opts = options if options is not None else list(_GOOD_OPTIONS)
@@ -56,7 +62,7 @@ def _make_candidate(
         option_evidence=["근거"] * 5,
         wrong_explanation=wrong_explanation,
         leap=leap,
-        textbook_evidence=None,
+        textbook_evidence=textbook_evidence,
         answer_explanation_combined=f"{wrong_explanation} ─ 도약 ─ {leap_text}",
         option_length_ok=option_length_ok,
         explanation_length_ok=explanation_length_ok,
@@ -110,31 +116,47 @@ class TestCheckFormat:
         assert item.option_length_ok is False  # frozen original untouched
 
 
+def _anchor(chunk_id: str, line: int) -> MaieuticaTextbookEvidence:
+    """Build a ``확인`` answer anchor at ``(chunk_id, line)``."""
+    return MaieuticaTextbookEvidence(
+        chunk_id=chunk_id,
+        source_file="8장 호흡계통.txt",
+        char_start=0,
+        char_end=10,
+        line=line,
+        found_text="허파꽈리는 가스교환이 일어난다.",
+        search_term="허파꽈리",
+        status="확인",
+    )
+
+
 class TestDetectDuplicates:
-    def test_shared_key_concept_flagged(self) -> None:
+    # Semantics updated for spec 010: detect_duplicates now REMOVES duplicates
+    # keyed by the answer anchor (chunk_id, line), not by key_concept (D1/D4).
+
+    def test_same_anchor_removed_first_kept(self) -> None:
         from maieutica.verify.format_checks import detect_duplicates
 
-        a = _make_candidate(item_no=1, key_concept="허파꽈리")
-        b = _make_candidate(item_no=2, key_concept="허파꽈리")
+        a = _make_candidate(item_no=1, textbook_evidence=_anchor("c8-1", 12))
+        b = _make_candidate(item_no=2, textbook_evidence=_anchor("c8-1", 12))
         out = detect_duplicates([a, b])
-        assert out[0].duplicate_flag is False  # first occurrence kept
-        assert out[1].duplicate_flag is True
+        assert [c.item_no for c in out] == [1]  # second dropped, first kept
 
-    def test_distinct_key_concept_not_flagged(self) -> None:
+    def test_distinct_anchor_not_removed(self) -> None:
         from maieutica.verify.format_checks import detect_duplicates
 
-        a = _make_candidate(item_no=1, key_concept="허파꽈리")
-        b = _make_candidate(item_no=2, key_concept="기관지")
+        a = _make_candidate(item_no=1, textbook_evidence=_anchor("c8-1", 12))
+        b = _make_candidate(item_no=2, textbook_evidence=_anchor("c8-1", 13))
         out = detect_duplicates([a, b])
-        assert all(not c.duplicate_flag for c in out)
+        assert [c.item_no for c in out] == [1, 2]  # different line = different focus
 
-    def test_none_key_concept_never_grouped(self) -> None:
+    def test_unconfirmed_anchor_never_removed(self) -> None:
         from maieutica.verify.format_checks import detect_duplicates
 
-        a = _make_candidate(item_no=1, key_concept=None)
-        b = _make_candidate(item_no=2, key_concept=None)
+        a = _make_candidate(item_no=1, textbook_evidence=None)
+        b = _make_candidate(item_no=2, textbook_evidence=None)
         out = detect_duplicates([a, b])
-        assert all(not c.duplicate_flag for c in out)
+        assert [c.item_no for c in out] == [1, 2]  # no anchor → never grouped
 
 
 class TestAnswerNoDistribution:

@@ -39,51 +39,68 @@ from maieutica.silver.evidence_index import EvidenceIndex
 def verify_groundedness(
     item: QuizItemCandidate,
     evidence_index: EvidenceIndex,
+    *,
+    subsection_chunk_id: str | None = None,
 ) -> QuizItemCandidate:
     """Anchor ``item``'s answer-point against the chapter-scoped index.
 
-    Steps:
-    1. Derive the search term from ``item.key_concept``.  If it is missing or
-       equals the :data:`~maieutica.generate.quiz_gen.MISSING_EVIDENCE_PLACEHOLDER`
-       sentinel, the answer-point is unverifiable → ``status="미확인"`` (the
-       sentinel is never searched as a literal term).
-    2. Otherwise look the term up in ``evidence_index`` (substring search over
-       the ORIGINAL textbook lines).  A hit yields ``status="확인"`` with the
-       owning chunk_id + char range; no hit yields ``status="미확인"``.
-    3. Ground the leap too (T038 / FR-012): the leap is "one step further" on
-       the SAME answer-point, so it is anchored against the chapter index by the
-       same ``key_concept`` term.  An in-range concept yields ``확인``; an
-       external new fact yields ``미확인``.  The leap evidence is attached via a
-       NESTED ``model_copy`` — first copy the leap with its new
-       ``textbook_evidence``, then copy the candidate with the new leap.  The
-       leap's ``text`` (and therefore the V4 ``answer_explanation_combined``
-       fold) is never altered.
-    4. Return the candidate copy carrying both the item-level evidence and the
-       leap-level evidence.
+    Behavior is switched by ``subsection_chunk_id``:
 
-    This function never mutates ``item`` (frozen Pydantic model).
+    - **Legacy path** (``subsection_chunk_id is None``): anchor by
+      ``item.key_concept`` over the WHOLE index.  If ``key_concept`` is missing
+      or equals the
+      :data:`~maieutica.generate.quiz_gen.MISSING_EVIDENCE_PLACEHOLDER` sentinel
+      it is unverifiable → ``status="미확인"`` (the sentinel is never searched as
+      a literal term); otherwise a whole-index substring lookup yields
+      ``확인``/``미확인``.  This path is unchanged from v0.1.0.
+    - **Answer-anchored path** (``subsection_chunk_id`` given, US1): anchor the
+      CORRECT answer option's evidence — ``option_evidence[answer_no - 1]`` —
+      SCOPED to that subsection (G1/G2).  The term is the correct option's
+      evidence string; an empty term or the sentinel → ``status="미확인"`` (G3,
+      sentinel never searched).  Otherwise a SCOPED two-direction substring
+      lookup (see :meth:`EvidenceIndex.lookup`) restricted to lines owned by
+      ``subsection_chunk_id`` yields ``확인`` (with ``chunk_id ==
+      subsection_chunk_id`` and the matched line) or ``미확인`` (G3).
+
+    The leap is grounded by copying the resulting item evidence onto
+    ``item.leap`` via a NESTED ``model_copy`` (T038 / FR-012); the leap's
+    ``text`` (and therefore the V4 ``answer_explanation_combined`` fold) is never
+    altered.  This function never mutates ``item`` (frozen Pydantic model).
 
     Args:
         item: The generated quiz candidate (``textbook_evidence`` is ``None``).
         evidence_index: **Chapter-scoped** index over original textbook lines;
             must be built from the SAME chapter as ``item.chapter_no``.
+        subsection_chunk_id: When set, switch to the answer-anchored path and
+            restrict the lookup to that subsection's chunk.
 
     Returns:
         A NEW ``QuizItemCandidate`` whose ``textbook_evidence`` and
         ``leap.textbook_evidence`` are each set to a ``확인``/``미확인``
         :class:`MaieuticaTextbookEvidence`.
     """
-    key_concept = item.key_concept
+    if subsection_chunk_id is None:
+        term = item.key_concept
+    else:
+        idx = item.answer_no - 1
+        term = (
+            item.option_evidence[idx]
+            if 0 <= idx < len(item.option_evidence)
+            else None
+        )
+    sentinel = not term or term == MISSING_EVIDENCE_PLACEHOLDER
 
-    if not key_concept or key_concept == MISSING_EVIDENCE_PLACEHOLDER:
+    if sentinel:
         # No real answer-point term → cannot anchor; do not search the sentinel.
         evidence = MaieuticaTextbookEvidence(
             source_file=evidence_index.source_file,
             search_term=None,
             status="미확인",
         )
+    elif subsection_chunk_id is None:
+        evidence = evidence_index.lookup(term)
     else:
-        evidence = evidence_index.lookup(key_concept)
+        evidence = evidence_index.lookup(term, chunk_id=subsection_chunk_id)
 
     # The leap shares the answer-point, so it is grounded by the same evidence
     # lookup (a NEW MaieuticaTextbookEvidence — never the same frozen instance).
