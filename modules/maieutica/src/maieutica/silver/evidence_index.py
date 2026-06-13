@@ -110,34 +110,77 @@ class EvidenceIndex:
                 return chunk.chunk_id
         return None
 
-    def lookup(self, term: str) -> MaieuticaTextbookEvidence:
+    @staticmethod
+    def _line_matches_scoped(text: str, term: str) -> bool:
+        """Two-direction substring match for the scoped ``lookup`` mode.
+
+        ``term`` (the answer-point evidence) may be a verbatim textbook line OR
+        a longer sentence quoting one, so match in either direction.
+
+        Args:
+            text: The candidate original line's text.
+            term: The search term.
+
+        Returns:
+            ``True`` when ``term`` contains, or is contained by, ``text``.
+        """
+        # The `stripped and` guard excludes blank lines: an empty string is a
+        # substring of EVERY term, so without it every blank line would match.
+        stripped = text.strip()
+        return term in text or (bool(stripped) and stripped in term)
+
+    def lookup(
+        self, term: str, *, chunk_id: str | None = None
+    ) -> MaieuticaTextbookEvidence:
         """Locate ``term`` and return its groundedness evidence.
 
-        The first original line containing ``term`` (ascending line order) is
-        the hit.  ``found_text`` is the full text of that line; ``char_start``
-        / ``char_end`` index the ORIGINAL newline-joined file so that
+        Two match modes by line, both scanning in ascending line order and
+        returning the FIRST hit:
+
+        - **Whole-index** (``chunk_id is None``, legacy/default): the first
+          original line that CONTAINS ``term`` as a substring is the hit.
+        - **Scoped** (``chunk_id`` given): only original lines whose owning
+          chunk equals ``chunk_id`` (by the chunk's ``[line_start, line_end]``)
+          are considered, and the match is **two-direction substring** —
+          ``term in line.text`` OR (``line.text.strip()`` non-empty AND
+          ``line.text.strip() in term``).  This is robust to the answer-point
+          evidence being phrased either as a verbatim textbook line or as a
+          longer sentence that quotes a textbook line.
+
+        ``found_text`` is the full text of the hit line; ``char_start`` /
+        ``char_end`` index the ORIGINAL newline-joined file so that
         ``original_text[char_start:char_end] == found_text``.
 
         Args:
             term: The key search term.
+            chunk_id: When set, restrict matching to lines owned by this chunk
+                and use the two-direction substring rule above; the returned
+                evidence's ``chunk_id`` is therefore always this value on a hit.
 
         Returns:
             ``MaieuticaTextbookEvidence`` with ``status="확인"`` when found
             (chunk_id + char range + found_text), otherwise ``status="미확인"``
             (chunk_id / offsets left ``None``, search_term preserved).
         """
+        scoped = chunk_id is not None
         for lineno, text in self._lines:
-            if term not in text:
-                continue
-            chunk_id = self._chunk_id_for_line(lineno)
-            if chunk_id is None:
-                # Hit lies outside every chunk's body range (e.g. removed
-                # TOC/noise region) — not a citable, grounded passage.
-                continue
+            owning_chunk_id = self._chunk_id_for_line(lineno)
+            if scoped:
+                if owning_chunk_id != chunk_id:
+                    continue
+                if not self._line_matches_scoped(text, term):
+                    continue
+            else:
+                if term not in text:
+                    continue
+                if owning_chunk_id is None:
+                    # Hit lies outside every chunk's body range (e.g. removed
+                    # TOC/noise region) — not a citable, grounded passage.
+                    continue
             char_start = self._line_char_start[lineno - 1]
             char_end = char_start + len(text)
             return MaieuticaTextbookEvidence(
-                chunk_id=chunk_id,
+                chunk_id=owning_chunk_id,
                 source_file=self.source_file,
                 char_start=char_start,
                 char_end=char_end,

@@ -18,7 +18,7 @@ class MaieuticaGenerationSpec(BaseModel):
 
     Invariants enforced at construction:
     - ``week >= 1``, ``chapter_no >= 1``
-    - ``quiz_count >= 1``, ``formative_count >= 1``
+    - ``1 <= quiz_count <= 20`` (FR-005), ``formative_count >= 1``
 
     Cross-field constraints (week/chapter_no present in CurriculumMap,
     chapter .txt exists) are enforced by the pipeline at runtime, not here,
@@ -32,9 +32,9 @@ class MaieuticaGenerationSpec(BaseModel):
     week: Annotated[int, Field(ge=1, description="Target week number (1-based).")]
     chapter_no: Annotated[int, Field(ge=1, description="Target chapter number (1-based).")]
     chapter: str = Field(..., description="Chapter display name (number + title).")
-    quiz_count: Annotated[int, Field(ge=1)] = Field(
+    quiz_count: Annotated[int, Field(ge=1, le=20)] = Field(
         default=20,
-        description="Number of quiz candidates to generate (default 20, R10).",
+        description="Number of quiz candidates to generate (1..20, default 20; FR-005/R10).",
     )
     formative_count: Annotated[int, Field(ge=1)] = Field(
         default=3,

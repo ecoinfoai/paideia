@@ -1,0 +1,13 @@
+# Synthetic curriculum map for the multi_level_chapter.txt fixture.
+# The week 9 -> chapter 8 ("8장 호흡계통") entry matches generation_spec.yaml.
+# Section labels mirror the two top-level "N." headings in the chapter text.
+semester: "2026-1"
+course_slug: anatomy
+entries:
+  - week: 9
+    chapter: "8장 호흡계통"
+    chapter_no: 8
+    subtopic: 호흡계통의 구조와 호흡 조절
+    sections:
+      - "1. 호흡계통의 구조"
+      - "2. 호흡의 조절"

@@ -1,0 +1,12 @@
+# Synthetic generation spec for the multi_level_chapter.txt fixture.
+# Values are kept consistent with curriculum_map.yaml and the chapter title
+# line in multi_level_chapter.txt (line 3: "8장 호흡계통").
+# quiz_count is a sane default (12); downstream tests may override it
+# ("quiz_count 가변" per tasks.md T002) by editing the loaded spec.
+semester: "2026-1"
+course_slug: anatomy
+week: 9
+chapter_no: 8
+chapter: "8장 호흡계통"
+quiz_count: 12
+formative_count: 3
