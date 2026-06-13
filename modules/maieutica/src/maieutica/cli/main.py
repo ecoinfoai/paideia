@@ -253,6 +253,8 @@ def _load_inputs(args: argparse.Namespace) -> tuple[Any, Any, Path, Path, Path]:
         ValueError: If an input fails schema validation or the week is absent
             from the curriculum map (CLI exit 2).
     """
+    from paideia_shared.schemas import MaieuticaGenerationSpec
+
     from maieutica.ingest.spec_load import (
         load_curriculum_map,
         load_generation_spec,
@@ -269,7 +271,11 @@ def _load_inputs(args: argparse.Namespace) -> tuple[Any, Any, Path, Path, Path]:
     if args.formative_count is not None:
         overrides["formative_count"] = args.formative_count
     if overrides:
-        spec = spec.model_copy(update=overrides)
+        # ``model_copy(update=...)`` skips field validators (pydantic v2), so
+        # re-validate the merged data through the schema to enforce the
+        # quiz_count 1..20 bound (FR-005) on the override path → ValueError → exit 2.
+        merged = {**spec.model_dump(), **overrides}
+        spec = MaieuticaGenerationSpec.model_validate(merged)
 
     validate_week_in_map(curriculum_map, spec.week, curriculum_map_path=cmap_path)
     return spec, curriculum_map, bronze, spec_path, cmap_path
@@ -402,7 +408,7 @@ def _run_dry_run(args: argparse.Namespace) -> int:
     from maieutica.ingest.textbook import load_chapter
     from maieutica.ingest.textbook_clean import clean_textbook
     from maieutica.output.paths import silver_dir
-    from maieutica.plan.slots import plan_slots
+    from maieutica.plan.slots import assign_subsections, plan_slots
     from maieutica.silver.chunk import chunk_chapter
 
     try:
@@ -445,7 +451,19 @@ def _run_dry_run(args: argparse.Namespace) -> int:
     quiz_slots = [s for s in slots if s.kind == "quiz"]
     formative_slots = [s for s in slots if s.kind == "formative"]
 
-    quiz_requests = [build_bundle(slot, spec, chunks) for slot in quiz_slots]
+    # Mirror the pipeline's deterministic prefix: 소절 배정 (subsection
+    # assignment) is now part of the deterministic stages (FR-012), so the
+    # dry-run must run it too. Each assigned quiz slot gets a subsection-scoped
+    # bundle with an EMPTY avoid_list — no generation has happened yet, so there
+    # is nothing asked to avoid (the allowed degrade). When the chapter's
+    # subsection capacity is below N, ``assign_subsections`` returns fewer slots;
+    # dry-run honestly writes bundles only for those (no crash, no silent fill).
+    assigned_quiz_slots = assign_subsections(quiz_slots, chunks)
+
+    quiz_requests = [
+        build_bundle(slot, spec, chunks, avoid_list=[])
+        for slot in assigned_quiz_slots
+    ]
     formative_requests = [
         build_formative_bundle(slot, spec, chunks) for slot in formative_slots
     ]

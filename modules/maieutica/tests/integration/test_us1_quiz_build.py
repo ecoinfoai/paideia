@@ -45,6 +45,16 @@ _FORMATIVE_COUNT = 1
 # so that verify_groundedness resolves it to status="확인" (SC-007).
 _KEY_CONCEPTS = ["폐포", "기관지", "가로막"]
 
+# Answer-anchored groundedness (US1) requires the CORRECT option's evidence to be
+# a verbatim textbook line inside the slot's assigned subsection. This fixture has
+# a single subsection, so each key_concept's distinct body line works as a
+# distinct anchor (keeping all three items 확인 with distinct anchors).
+_EVIDENCE_LINE = {
+    "폐포": "폐포는 가스 교환이 일어나는 포상 구조이다.",
+    "기관지": "기관지는 공기를 폐로 전달하는 통로이다.",
+    "가로막": "가로막은 수축하여 흉강 부피를 늘린다.",
+}
+
 # A small chapter .txt: a numbered section heading plus body lines that mention
 # each key concept.  The cleaner keeps body text and numbered headings.
 _CHAPTER_TXT = "\n".join(
@@ -64,19 +74,23 @@ _CHAPTER_TXT = "\n".join(
 def _quiz_item_json(item_no: int, key_concept: str, answer_no: int) -> dict:
     """Build a schema-valid quiz item JSON for the canned LLM response.
 
-    Options are padded to land inside the 30–50 codepoint window.
+    Options are padded to land inside the 30–50 codepoint window. The correct
+    option's evidence is a verbatim chapter line so the answer-anchored,
+    subsection-scoped groundedness check resolves it to status="확인".
     """
     options = [
         f"{marker} {key_concept} 관련 보기 {item_no}-{i} 충분한 길이를 가진 보기입니다 abcde"
         for i, marker in enumerate("①②③④⑤", start=1)
     ]
+    option_evidence = [f"{key_concept} 근거 {i}" for i in range(1, 6)]
+    option_evidence[answer_no - 1] = _EVIDENCE_LINE[key_concept]
     return {
         "question_type": "지식축적",
         "stem_polarity": "부정형",
         "text": f"{item_no}번 문제: {key_concept}에 대해 옳지 않은 것은?",
         "options": options,
         "answer_no": answer_no,
-        "option_evidence": [f"{key_concept} 근거 {i}" for i in range(1, 6)],
+        "option_evidence": option_evidence,
         "wrong_explanation": f"{key_concept} 관련 오답 설명입니다.",
         "leap_explanation": f"{key_concept} 다음 개념으로의 도약 설명입니다.",
         "key_concept": key_concept,

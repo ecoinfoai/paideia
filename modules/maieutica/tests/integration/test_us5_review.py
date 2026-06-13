@@ -67,18 +67,29 @@ _CHAPTER_TXT = "\n".join(
 # ---------------------------------------------------------------------------
 
 
+# Answer-anchored groundedness (US1): the correct option's evidence must be a
+# verbatim chapter line in the slot's assigned subsection (single subsection
+# here) so the item resolves to 확인.
+_EVIDENCE_LINE = {
+    "폐포": "폐포는 가스 교환이 일어나는 포상 구조이다.",
+    "기관지": "기관지는 공기를 폐로 전달하는 통로이다.",
+}
+
+
 def _quiz_item_json(item_no: int, key_concept: str, answer_no: int) -> dict:
     options = [
         f"{marker} {key_concept} 관련 보기 {item_no}-{i} 충분한 길이를 가진 보기입니다 abcde"
         for i, marker in enumerate("①②③④⑤", start=1)
     ]
+    option_evidence = [f"{key_concept} 근거 {i}" for i in range(1, 6)]
+    option_evidence[answer_no - 1] = _EVIDENCE_LINE[key_concept]
     return {
         "question_type": "지식축적",
         "stem_polarity": "부정형",
         "text": f"{item_no}번 문제: {key_concept}에 대해 옳지 않은 것은?",
         "options": options,
         "answer_no": answer_no,
-        "option_evidence": [f"{key_concept} 근거 {i}" for i in range(1, 6)],
+        "option_evidence": option_evidence,
         "wrong_explanation": f"{key_concept} 관련 오답 설명입니다.",
         "leap_explanation": f"{key_concept} 다음 개념으로의 도약 설명입니다.",
         "key_concept": key_concept,

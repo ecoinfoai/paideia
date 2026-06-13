@@ -54,6 +54,7 @@ from paideia_shared.schemas import (
     FormativeItemCandidate,
     MaieuticaGenerationSpec,
     QuizItemCandidate,
+    TextbookChunk,
 )
 
 from maieutica.assemble.difficulty import assign_difficulty
@@ -80,16 +81,22 @@ from maieutica.output.paths import (
     run_gold_dir,
     silver_dir,
 )
-from maieutica.output.quality_report import build_quality_report, write_quality_report
+from maieutica.output.quality_report import (
+    QuizShortfall,
+    build_quality_report,
+    write_quality_report,
+)
 from maieutica.output.quiz_xls import write_quiz_xls
-from maieutica.plan.slots import plan_slots
+from maieutica.plan.slots import assign_subsections, plan_slots
 from maieutica.silver.chunk import chunk_chapter
 from maieutica.silver.evidence_index import EvidenceIndex
 from maieutica.verify.consistency import check_flat_nested_consistency
 from maieutica.verify.format_checks import (
     answer_no_distribution,
+    balance_answer_keys,
     check_format,
     detect_duplicates,
+    is_confirmed_anchor,
 )
 from maieutica.verify.groundedness import ground_formative, verify_groundedness
 
@@ -221,16 +228,94 @@ def build(
     cache_dir = silver_base / "cache"
     cache = InputHashCache(backend=backend, cache_dir=cache_dir)
 
+    # Assign each quiz slot to a subsection (capacity-bounded, ≤3 per
+    # subsection) and return them grouped by subsection then intra_ordinal
+    # (US1). Surplus beyond min(N, 3·subsections) is dropped here; renumbering +
+    # count reconciliation below adapt the downstream invariants to the adopted
+    # count.
+    requested_quiz_count = len(quiz_slots)  # N
+    assigned_slots = assign_subsections(quiz_slots, chunks)
+    # Slots dropped by assign_subsections for lack of subsection capacity
+    # (capacity = min(N, 3·subsections)); the first shortfall cause (A4).
+    capacity_short = requested_quiz_count - len(assigned_slots)
+
+    # Per-subsection avoid-list: as we generate slots IN assigned order, each
+    # later slot in the same subsection avoids the answer-points already asked
+    # there (R4). The avoid-list flows into build_bundle and therefore into the
+    # cache key, so identical inputs reproduce byte-identically (R10/SC-004).
+    avoid_by_subsection: dict[str, list[str]] = {}
     items: list[QuizItemCandidate] = []
-    for slot in quiz_slots:
-        item = generate_quiz_item(slot, spec, chunks, cache)
-        item = verify_groundedness(item, evidence_index)
+    for slot in assigned_slots:
+        avoid_list = avoid_by_subsection.get(slot.subsection_chunk_id, [])
+        item = generate_quiz_item(slot, spec, chunks, cache, avoid_list=avoid_list)
+        # Answer-anchored, subsection-scoped groundedness (US1): an item is 확인
+        # only if its CORRECT option's evidence anchors inside its assigned
+        # subsection.
+        item = verify_groundedness(
+            item, evidence_index, subsection_chunk_id=slot.subsection_chunk_id
+        )
         item = check_format(item)
         item = assign_difficulty(item)
         items.append(item)
+        # Accumulate this subsection's asked focus so the next same-subsection
+        # slot avoids re-asking it. Prefer key_concept; fall back to the correct
+        # option's evidence (guarding the index). The token is deterministic,
+        # so the avoid-list — and thus the cache key — is reproducible.
+        answer_idx = item.answer_no - 1
+        focus = item.key_concept or (
+            item.option_evidence[answer_idx]
+            if 0 <= answer_idx < len(item.option_evidence)
+            else ""
+        )
+        if focus:
+            avoid_by_subsection.setdefault(slot.subsection_chunk_id, []).append(focus)
 
-    # Cross-set duplicate detection (after the full set is collected).
+    # Cross-set duplicate detection: remove anchor-duplicates (same answer
+    # textbook anchor) across the full set (US1, keep-first). 미확인 candidates
+    # have no anchor key, so they pass through here untouched (excluded below).
+    before_dedup = len(items)
     items = detect_duplicates(items)
+    dedup_removed = before_dedup - len(items)
+
+    # Exclude 미확인 anchors (no CONFIRMED answer evidence) BEFORE balancing so
+    # the adopted set carries 미확인 0 (SC-005 / G3) and balance/renumber operate
+    # only on adopted items. Done after dedup (anchor-dups are removed first, so
+    # the two counts don't double-count the same drop).
+    before_exclude = len(items)
+    items = [item for item in items if is_confirmed_anchor(item)]
+    unconfirmed_excluded = before_exclude - len(items)
+
+    # Balance answer positions over the FINAL adopted set (US2). Applied AFTER
+    # dedup so the .xls is upload-ready without manual answer shuffling: it
+    # breaks ≥3-in-a-row runs and keeps any single answer_no under 50%
+    # (SC-003/SC-006). Position-only — it never touches item_no or explanations,
+    # so it commutes with the renumber below; deterministic, so byte-identical
+    # re-runs hold (SC-004).
+    items = balance_answer_keys(items)
+
+    # Renumber item_no to 1..M in the final (subsection-grouped) order. After
+    # assignment + dedup the surviving item_no values (= original slot ordinals)
+    # are non-contiguous and out of order, but the consistency cross-check and
+    # the .xls rows require item_no to be unique, sorted, and 1-based. Only the
+    # int item_no changes — options/answer/explanations are untouched, so the V4
+    # fold stays intact.
+    items = [
+        item.model_copy(update={"item_no": i})
+        for i, item in enumerate(items, start=1)
+    ]
+
+    # Shortfall accounting (US3): N − M decomposed into the three causes; the
+    # invariant guarantees they sum to the shortfall so the report can state each
+    # cause with no silent omission (헌장 V / FR-015).
+    shortfall = _build_shortfall(
+        requested=requested_quiz_count,
+        produced=len(items),
+        capacity_short=capacity_short,
+        dedup_removed=dedup_removed,
+        unconfirmed_excluded=unconfirmed_excluded,
+        items=items,
+        chunks=chunks,
+    )
 
     # Formative path (US3): generate + ground each formative slot.  Independent
     # of the quiz path — it does not perturb the quiz items or their .xls.
@@ -246,10 +331,14 @@ def build(
     # Consistency cross-check FIRST — gate the entire Gold layer on the
     # in-memory candidates (fail-fast before any directory/file is created, so
     # a contradiction never leaves a partial Gold output; FR-020 atomicity).
+    # The adopted quiz count is capacity- and dedup-bounded (≤ requested N), so
+    # gate on the actual count, not the requested slot count. (Shortfall
+    # reporting of N vs M is a separate later task; the manifest already uses
+    # len(items).)
     check_flat_nested_consistency(
         items,
         formative_items,
-        expected_quiz_count=len(quiz_slots),
+        expected_quiz_count=len(items),
         expected_formative_count=len(formative_slots),
     )
 
@@ -285,7 +374,9 @@ def build(
     write_candidate_yaml(items, formative_items, run_dir / "출제후보_완전판.yaml")
 
     # 5d: quality report markdown
-    quality_report_text = build_quality_report(items, formative_items)
+    quality_report_text = build_quality_report(
+        items, formative_items, shortfall=shortfall
+    )
     write_quality_report(run_dir / "출제품질리포트.md", quality_report_text)
 
     # 5e: manifest
@@ -335,6 +426,74 @@ def build(
     write_manifest(run_dir / "manifest_maieutica.json", manifest)
 
     return items, run_dir
+
+
+def _build_shortfall(
+    *,
+    requested: int,
+    produced: int,
+    capacity_short: int,
+    dedup_removed: int,
+    unconfirmed_excluded: int,
+    items: list[QuizItemCandidate],
+    chunks: list[TextbookChunk],
+) -> QuizShortfall:
+    """Assemble the ``QuizShortfall`` for the report, asserting the sum invariant.
+
+    Groups the adopted items by their subsection (each has a confirmed
+    ``textbook_evidence.chunk_id``), mapping ``chunk_id`` → a readable label (the
+    chunk's ``section`` if set, else the ``chunk_id``).  The per-label counts are
+    ordered by chunk order for determinism (QR3) and are each ≤3 (the cap).
+
+    Args:
+        requested: ``N`` — requested quiz count.
+        produced: ``M`` — adopted item count.
+        capacity_short: Slots dropped for lack of subsection capacity.
+        dedup_removed: Anchor-duplicate removals.
+        unconfirmed_excluded: 미확인-anchor exclusions.
+        items: The final adopted (renumbered) quiz items.
+        chunks: The chapter's subsection chunks (for chunk_id → label mapping).
+
+    Returns:
+        A populated ``QuizShortfall``.
+
+    Raises:
+        RuntimeError: If the three causes do not sum to ``requested − produced``
+            (internal invariant — guards against silent over/under-counting).
+    """
+    # capacity_short + dedup_removed + unconfirmed_excluded == N − M (FR-015).
+    if capacity_short + dedup_removed + unconfirmed_excluded != requested - produced:
+        raise RuntimeError(
+            "shortfall causes must sum to N−M: "
+            f"{capacity_short}+{dedup_removed}+{unconfirmed_excluded} "
+            f"!= {requested}-{produced}"
+        )
+
+    # chunk_id → label in chunk order (deterministic); section label or chunk_id.
+    label_by_chunk: dict[str, str] = {
+        c.chunk_id: (c.section if c.section is not None else c.chunk_id)
+        for c in chunks
+    }
+    subsection_counts: dict[str, int] = {}
+    for item in items:
+        ev = item.textbook_evidence
+        # Adopted items are all confirmed anchors here, so chunk_id is set.
+        chunk_id = ev.chunk_id if ev is not None else None
+        label = label_by_chunk.get(chunk_id, chunk_id) if chunk_id else "미상"
+        subsection_counts[label] = subsection_counts.get(label, 0) + 1
+
+    single_subsection = len(chunks) == 1 and chunks[0].section is None
+
+    return QuizShortfall(
+        requested=requested,
+        produced=produced,
+        capacity_short=capacity_short,
+        dedup_removed=dedup_removed,
+        unconfirmed_excluded=unconfirmed_excluded,
+        available_subsections=len(chunks),
+        subsection_counts=subsection_counts,
+        single_subsection=single_subsection,
+    )
 
 
 def _build_config_ids(

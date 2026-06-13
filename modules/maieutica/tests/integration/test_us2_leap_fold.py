@@ -48,6 +48,15 @@ _CHAPTER_TXT = "\n".join(
     ]
 )
 
+# Verbatim subsection line per key_concept — the correct option's evidence must
+# be a verbatim line of its assigned subsection for the answer-anchored
+# groundedness check (US1) to confirm it (else it is 미확인-excluded in US3).
+_CONCEPT_EVIDENCE = {
+    "폐포": "폐포는 가스 교환이 일어나는 포상 구조이다.",
+    "기관지": "기관지는 공기를 폐로 전달하는 통로이다.",
+    "가로막": "가로막은 수축하여 흉강 부피를 늘린다.",
+}
+
 
 def _quiz_item_json(item_no: int, key_concept: str, answer_no: int) -> dict:
     options = [
@@ -60,7 +69,11 @@ def _quiz_item_json(item_no: int, key_concept: str, answer_no: int) -> dict:
         "text": f"{item_no}번 문제: {key_concept}에 대해 옳지 않은 것은?",
         "options": options,
         "answer_no": answer_no,
-        "option_evidence": [f"{key_concept} 근거 {i}" for i in range(1, 6)],
+        # Correct option's evidence = verbatim subsection line → status="확인".
+        "option_evidence": [
+            _CONCEPT_EVIDENCE[key_concept] if i == answer_no else f"{key_concept} 근거 {i}"
+            for i in range(1, 6)
+        ],
         "wrong_explanation": f"{key_concept} 관련 오답 설명입니다.",
         "leap_explanation": f"{key_concept} 다음 개념으로의 도약 설명입니다.",
         "key_concept": key_concept,
