@@ -63,6 +63,14 @@ from .histogram_bin import HistogramBin
 from .immersio_phase1_manifest import ImmersioPhase1Manifest
 from .item_statistics import DistractorLabel, ItemStatistics
 from .legacy_diff_entry import LegacyDiffEntry
+from .maieutica import (
+    FormativeItemCandidate,
+    LeapExplanation,
+    MaieuticaGenerationSpec,
+    MaieuticaManifest,
+    MaieuticaTextbookEvidence,
+    QuizItemCandidate,
+)
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .needs_map_manifest import (
@@ -175,4 +183,11 @@ __all__ = [
     "TextbookEvidence",
     "ExamItemDraft",
     "ExamenManifest",
+    # spec 009 maieutica question-gen — 6 new models (T005-T011)
+    "MaieuticaTextbookEvidence",
+    "MaieuticaGenerationSpec",
+    "LeapExplanation",
+    "QuizItemCandidate",
+    "FormativeItemCandidate",
+    "MaieuticaManifest",
 ]

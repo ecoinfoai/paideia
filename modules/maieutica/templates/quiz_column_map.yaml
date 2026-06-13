@@ -1,0 +1,82 @@
+# Quiz .xls → QuizItemCandidate column mapping
+# Output: LMS 업로드 레거시 BIFF8 .xls (cp949)
+# Contract: contracts/quiz_upload_xls.md (FR-005/007, SC-003/009)
+#
+# Sheet structure (invariant — LMS rejects any deviation):
+#   Sheet 0: '필독! - 반드시 확인해 주세요!' — frozen asset, never modified
+#   Sheet 1: 'Sheet1' — row 0 = header (11 columns below), rows 1..N = candidates
+#
+# 11 column headers (Sheet1, row 0):
+#   ['문제번호', '문제내용', '예상주차', '보기1', '보기2', '보기3', '보기4', '보기5',
+#    '답안', '답안설명', '문항유형']
+#
+# Cell-type contract (xlrd ctype assert after write — SC-003):
+#   문제번호  → XL_CELL_NUMBER  (int)
+#   답안      → XL_CELL_TEXT    (str, e.g. "3" — no leading zero needed, still text!)
+#   예상주차  → XL_CELL_TEXT    (str, zero-padded 3-digit, e.g. "009")
+#   문항유형  → XL_CELL_TEXT    (str, always "002" — single-choice MCQ)
+#   all other columns → XL_CELL_TEXT
+#
+# QuizItemCandidate field → column mapping:
+#   item_no                  → 문제번호   (numeric cell)
+#   text                     → 문제내용   (text cell)
+#   week (zero-padded f"{week:03d}") → 예상주차 (text cell, 0-padded)
+#   options[0]               → 보기1      (text cell)
+#   options[1]               → 보기2      (text cell)
+#   options[2]               → 보기3      (text cell)
+#   options[3]               → 보기4      (text cell)
+#   options[4]               → 보기5      (text cell)
+#   answer_no (str(answer_no)) → 답안     (text cell — SC-003 trap!)
+#   answer_explanation_combined → 답안설명 (text cell)
+#   (always "002")           → 문항유형   (text cell, 0-padded)
+
+sheet: "Sheet1"
+guide_sheet: "필독! - 반드시 확인해 주세요!"
+header_row: 0
+columns:
+  item_no:
+    header: "문제번호"
+    field: "item_no"
+    cell_type: "number"    # xlwt write_number(); xlrd XL_CELL_NUMBER
+  text:
+    header: "문제내용"
+    field: "text"
+    cell_type: "text"
+  week:
+    header: "예상주차"
+    field: "week"
+    cell_type: "text"
+    format: "zero_pad3"    # f"{week:03d}" — preserve leading zeros
+  options_1:
+    header: "보기1"
+    field: "options[0]"
+    cell_type: "text"
+  options_2:
+    header: "보기2"
+    field: "options[1]"
+    cell_type: "text"
+  options_3:
+    header: "보기3"
+    field: "options[2]"
+    cell_type: "text"
+  options_4:
+    header: "보기4"
+    field: "options[3]"
+    cell_type: "text"
+  options_5:
+    header: "보기5"
+    field: "options[4]"
+    cell_type: "text"
+  answer:
+    header: "답안"
+    field: "answer_no"
+    cell_type: "text"      # str(answer_no) — NOT numeric; "3" not 3 (SC-003 trap)
+  answer_explanation:
+    header: "답안설명"
+    field: "answer_explanation_combined"
+    cell_type: "text"
+  question_type_code:
+    header: "문항유형"
+    field: null            # constant "002" — single-choice MCQ
+    cell_type: "text"
+    constant: "002"
