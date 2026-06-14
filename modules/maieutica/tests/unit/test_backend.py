@@ -379,3 +379,45 @@ def test_cli_main_reexports_backend_unreachable_error() -> None:
     from maieutica.cli import main
 
     assert main.BackendUnreachableError is BackendUnreachableError
+
+
+# ---------------------------------------------------------------------------
+# v0.1.2 — subscription response edits must not be shadowed by the cache
+# ---------------------------------------------------------------------------
+
+
+def test_subscription_response_change_invalidates_cache(tmp_path: Path) -> None:
+    """Editing a SubscriptionBackend response file invalidates its cache entry.
+
+    The request-keyed cache must fold the response file's content into its key
+    for file-backed backends: an UNCHANGED response still serves from cache
+    (determinism preserved, SC-009), but an EDITED response yields the NEW text
+    on re-generate with the SAME request (no shadowing).
+    """
+    staging = tmp_path / "staging"
+    responses = tmp_path / "responses"
+    staging.mkdir()
+    responses.mkdir()
+    cache_dir = tmp_path / "cache"
+
+    req = _make_request("slot-001")
+    backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
+    cache = InputHashCache(backend=backend, cache_dir=cache_dir)
+
+    def write_resp(text: str) -> None:
+        (responses / "slot-001.json").write_text(
+            json.dumps({"slot_id": "slot-001", "raw_text": text, "model": "m"}),
+            encoding="utf-8",
+        )
+
+    write_resp("VERSION-ONE")
+    assert cache.generate(req).raw_text == "VERSION-ONE"
+
+    # Unchanged response → cache hit (determinism preserved).
+    again = cache.generate(req)
+    assert again.raw_text == "VERSION-ONE"
+    assert again.cache_hit is True
+
+    # Edited response → cache miss → NEW text (must not be shadowed).
+    write_resp("VERSION-TWO")
+    assert cache.generate(req).raw_text == "VERSION-TWO"

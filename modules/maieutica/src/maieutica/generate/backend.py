@@ -124,6 +124,22 @@ class LLMBackend(ABC):
                 (exit-4 territory).
         """
 
+    def cache_salt(self, request: GenerationRequest) -> str:
+        """Extra cache-key material that varies with an out-of-band source.
+
+        The default is empty, so request-keyed caching is unchanged for pure
+        backends (e.g. ``ApiBackend``).  File-backed backends override this to
+        fold the on-disk response content into the cache key so an edited
+        response is never shadowed by a stale cache entry (v0.1.2).
+
+        Args:
+            request: The generation request whose response source to fingerprint.
+
+        Returns:
+            A short fingerprint string, or ``""`` for no extra keying.
+        """
+        return ""
+
 
 # ---------------------------------------------------------------------------
 # Input-hash cache
@@ -187,6 +203,12 @@ class InputHashCache:
         """
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         key = _canonical_key(request)
+        # Fold any backend-supplied salt (e.g. a file-backed response's content
+        # hash) into the key so an edited out-of-band response is not shadowed
+        # by a stale cache entry. Empty salt → key unchanged (api determinism).
+        salt = self._backend.cache_salt(request)
+        if salt:
+            key = hashlib.sha256(f"{key}:{salt}".encode("utf-8")).hexdigest()
         cache_file = self._cache_dir / f"{key}.json"
 
         self._total_calls += 1
@@ -302,6 +324,26 @@ class SubscriptionBackend(LLMBackend):
             model=raw.get("model", "claude-subscription"),
             cache_hit=False,
         )
+
+    def cache_salt(self, request: GenerationRequest) -> str:
+        """Fingerprint the on-disk response so edits are not cache-shadowed.
+
+        Returns the SHA-256 of ``responses_dir/{slot_id}.json`` bytes when the
+        file is present, else ``""``.  An unchanged response keeps a stable key
+        (byte-identical re-runs, SC-009); an edited/corrected response yields a
+        fresh key so :class:`InputHashCache` re-reads it instead of replaying a
+        stale entry (v0.1.2).
+
+        Args:
+            request: The generation request whose response file to fingerprint.
+
+        Returns:
+            The hex digest of the response file, or ``""`` when it is absent.
+        """
+        resp_file = self._responses_dir / f"{request.slot_id}.json"
+        if not resp_file.exists():
+            return ""
+        return hashlib.sha256(resp_file.read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------

@@ -163,3 +163,18 @@ class TestBuildBundle:
         req = _build(spec=spec, chunks=chunks_8 + chunks_9)
         for c in chunks_9:
             assert c.text[:30] not in req.prompt
+
+
+def test_prompt_requires_verbatim_option_evidence() -> None:
+    """Prompt instructs option_evidence to be verbatim textbook quotes (FR-009/010 seam).
+
+    The groundedness verifier anchors on ``option_evidence[answer_no-1]``, so the
+    prompt must tell the model that each evidence — especially the correct
+    option's — is a verbatim contiguous textbook substring, not a paraphrase or
+    meta-note.  Without this the answer-anchor is often 미확인 and excluded.
+    """
+    req = _build()
+    p = req.prompt
+    assert "option_evidence" in p
+    assert "글자 그대로" in p
+    assert "정답 보기" in p
