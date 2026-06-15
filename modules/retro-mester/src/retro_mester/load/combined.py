@@ -51,10 +51,13 @@ def load_combined(path: Path) -> list[CombinedAnalysisRow]:
     for idx, series in df.iterrows():
         row_dict: dict = series.to_dict()
 
-        # Decode JSON-string columns.
+        # Decode JSON-string columns. A null/empty parquet cell deserializes
+        # to a float NaN (or None), never a str — guard before json.loads so a
+        # missing dict column defaults to {} instead of crashing.
         for col in _JSON_COLS:
             raw = row_dict.get(col)
-            if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+            if not isinstance(raw, str):
+                # Covers None, float NaN, and any non-string scalar.
                 row_dict[col] = {}
                 continue
             try:

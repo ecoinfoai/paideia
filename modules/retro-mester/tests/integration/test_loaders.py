@@ -145,14 +145,16 @@ def _write_items_parquet(path: Path, rows: list[dict]) -> None:
     pd.DataFrame(rows).to_parquet(path, index=False)
 
 
-def _write_examen_manifest(path: Path, blueprint: dict, curriculum_entries: dict) -> None:
-    """Write minimal manifest_examen.json with blueprint + curriculum_entries."""
+def _write_blueprint_yaml(path: Path, blueprint: dict) -> None:
+    """Write a blueprint.yaml into retro-mester's Bronze tmp dir."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "blueprint": blueprint,
-        "curriculum_entries": curriculum_entries,
-    }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(yaml.dump(blueprint, allow_unicode=True), encoding="utf-8")
+
+
+def _write_curriculum_yaml(path: Path, curriculum: dict) -> None:
+    """Write a curriculum_map.yaml into retro-mester's Bronze tmp dir."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.dump(curriculum, allow_unicode=True), encoding="utf-8")
 
 
 def _minimal_blueprint(semester: str = "2026-1", course_slug: str = "anatomy") -> dict:
@@ -279,6 +281,20 @@ class TestLoadCombined:
         for k in dcr:
             assert isinstance(k, int), f"expected int key, got {type(k)}: {k}"
 
+    def test_null_dict_column_defaults_to_empty(self, tmp_path: Path) -> None:
+        """A null/NaN dict-column cell loads to {} instead of crashing json.loads."""
+        from retro_mester.load.combined import load_combined
+
+        parquet = tmp_path / "진단×시험결합.parquet"
+        row = _combined_row()
+        # Simulate an empty parquet cell — pandas stores None → float NaN.
+        row["source_correct_rates"] = None
+        _write_combined_parquet(parquet, [row])
+
+        result = load_combined(parquet)
+
+        assert result[0].source_correct_rates == {}
+
 
 # ---------------------------------------------------------------------------
 # T014: load_items + chapter mismatch reconcile
@@ -302,6 +318,20 @@ class TestLoadItems:
         # option_distribution is decoded from JSON to dict[int, float]
         assert isinstance(result[0].option_distribution, dict)
         assert all(isinstance(k, int) for k in result[0].option_distribution)
+
+    def test_null_option_distribution_defaults_to_empty(self, tmp_path: Path) -> None:
+        """A null/NaN option_distribution cell loads to {} instead of crashing."""
+        from retro_mester.load.items import load_items
+
+        parquet = tmp_path / "문항통계.parquet"
+        row = _item_statistics_row()
+        # Simulate an empty parquet cell — pandas stores None → float NaN.
+        row["option_distribution"] = None
+        _write_items_parquet(parquet, [row])
+
+        result, _report = load_items(parquet)
+
+        assert result[0].option_distribution == {}
 
     def test_chapter_mismatch_report(self, tmp_path: Path) -> None:
         """Chapters in items but not in combined are reported in mismatch report."""
@@ -346,26 +376,39 @@ class TestLoadItems:
 
 
 # ---------------------------------------------------------------------------
-# T015: load_examen_manifest
+# T015: load_exam_spec (own Bronze blueprint.yaml + curriculum_map.yaml)
 # ---------------------------------------------------------------------------
 
 
-class TestLoadExamenManifest:
-    """T015: loads manifest_examen.json → (ExamenBlueprint, CurriculumMap)."""
+class TestLoadExamSpec:
+    """T015: loads retro-mester Bronze blueprint.yaml + curriculum_map.yaml."""
+
+    def _write_pair(
+        self,
+        bronze: Path,
+        *,
+        bp_semester: str = "2026-1",
+        bp_course: str = "anatomy",
+        cm_semester: str = "2026-1",
+        cm_course: str = "anatomy",
+    ) -> tuple[Path, Path]:
+        """Write blueprint.yaml + curriculum_map.yaml into the Bronze dir."""
+        bp_path = bronze / "blueprint.yaml"
+        cm_path = bronze / "curriculum_map.yaml"
+        _write_blueprint_yaml(bp_path, _minimal_blueprint(bp_semester, bp_course))
+        _write_curriculum_yaml(cm_path, _minimal_curriculum(cm_semester, cm_course))
+        return bp_path, cm_path
 
     def test_happy_path(self, tmp_path: Path) -> None:
-        """Valid manifest returns (ExamenBlueprint, CurriculumMap) pair."""
-        from retro_mester.load.examen import load_examen_manifest
+        """Valid Bronze YAMLs return (ExamenBlueprint, CurriculumMap) pair."""
+        from retro_mester.load.examen import load_exam_spec
 
-        manifest_path = tmp_path / "manifest_examen.json"
-        _write_examen_manifest(
-            manifest_path,
-            _minimal_blueprint(),
-            _minimal_curriculum(),
-        )
+        bronze = tmp_path / "data" / "bronze" / "retro-mester" / "2026-1-anatomy"
+        bp_path, cm_path = self._write_pair(bronze)
 
-        blueprint, curriculum = load_examen_manifest(
-            manifest_path,
+        blueprint, curriculum = load_exam_spec(
+            bp_path,
+            cm_path,
             semester="2026-1",
             course_slug="anatomy",
         )
@@ -376,52 +419,78 @@ class TestLoadExamenManifest:
         assert curriculum.semester == "2026-1"
         assert len(curriculum.entries) == 1
 
-    def test_missing_file_raises_input_error(self, tmp_path: Path) -> None:
-        """Missing manifest raises InputError naming the path."""
-        from retro_mester.load.examen import load_examen_manifest
+    def test_missing_blueprint_raises_input_error(self, tmp_path: Path) -> None:
+        """Missing blueprint.yaml raises InputError naming the path."""
+        from retro_mester.load.examen import load_exam_spec
 
-        missing = tmp_path / "no-manifest.json"
+        bronze = tmp_path / "bronze"
+        bronze.mkdir(parents=True)
+        cm_path = bronze / "curriculum_map.yaml"
+        _write_curriculum_yaml(cm_path, _minimal_curriculum())
+        missing_bp = bronze / "blueprint.yaml"
+
         with pytest.raises(InputError) as exc_info:
-            load_examen_manifest(missing, semester="2026-1", course_slug="anatomy")
-        assert str(missing) in str(exc_info.value)
+            load_exam_spec(missing_bp, cm_path, semester="2026-1", course_slug="anatomy")
+        assert str(missing_bp) in str(exc_info.value)
+
+    def test_missing_curriculum_raises_input_error(self, tmp_path: Path) -> None:
+        """Missing curriculum_map.yaml raises InputError naming the path."""
+        from retro_mester.load.examen import load_exam_spec
+
+        bronze = tmp_path / "bronze"
+        bronze.mkdir(parents=True)
+        bp_path = bronze / "blueprint.yaml"
+        _write_blueprint_yaml(bp_path, _minimal_blueprint())
+        missing_cm = bronze / "curriculum_map.yaml"
+
+        with pytest.raises(InputError) as exc_info:
+            load_exam_spec(bp_path, missing_cm, semester="2026-1", course_slug="anatomy")
+        assert str(missing_cm) in str(exc_info.value)
+
+    def test_invalid_blueprint_raises_input_error_with_path(self, tmp_path: Path) -> None:
+        """A blueprint whose source_mix sum != total_items raises InputError."""
+        from retro_mester.load.examen import load_exam_spec
+
+        bronze = tmp_path / "bronze"
+        bp_path = bronze / "blueprint.yaml"
+        cm_path = bronze / "curriculum_map.yaml"
+        bad_bp = _minimal_blueprint()
+        bad_bp["source_mix"] = {"formative": 1, "quiz": 1, "textbook": 1}  # sum != 40
+        _write_blueprint_yaml(bp_path, bad_bp)
+        _write_curriculum_yaml(cm_path, _minimal_curriculum())
+
+        with pytest.raises(InputError) as exc_info:
+            load_exam_spec(bp_path, cm_path, semester="2026-1", course_slug="anatomy")
+        assert str(bp_path) in str(exc_info.value)
 
     def test_semester_mismatch_raises_input_error(self, tmp_path: Path) -> None:
         """Blueprint semester mismatch raises InputError."""
-        from retro_mester.load.examen import load_examen_manifest
+        from retro_mester.load.examen import load_exam_spec
 
-        manifest_path = tmp_path / "manifest_examen.json"
-        _write_examen_manifest(
-            manifest_path,
-            _minimal_blueprint(semester="2025-2"),
-            _minimal_curriculum(semester="2025-2"),
+        bronze = tmp_path / "bronze"
+        bp_path, cm_path = self._write_pair(
+            bronze, bp_semester="2025-2", cm_semester="2025-2"
         )
 
         with pytest.raises(InputError) as exc_info:
-            load_examen_manifest(
-                manifest_path,
-                semester="2026-1",
-                course_slug="anatomy",
-            )
+            load_exam_spec(bp_path, cm_path, semester="2026-1", course_slug="anatomy")
         assert "2025-2" in str(exc_info.value) or "semester" in str(exc_info.value).lower()
 
     def test_course_slug_mismatch_raises_input_error(self, tmp_path: Path) -> None:
         """Blueprint course_slug mismatch raises InputError."""
-        from retro_mester.load.examen import load_examen_manifest
+        from retro_mester.load.examen import load_exam_spec
 
-        manifest_path = tmp_path / "manifest_examen.json"
-        _write_examen_manifest(
-            manifest_path,
-            _minimal_blueprint(course_slug="physiology"),
-            _minimal_curriculum(course_slug="physiology"),
+        bronze = tmp_path / "bronze"
+        bp_path, cm_path = self._write_pair(
+            bronze, bp_course="physiology", cm_course="physiology"
         )
 
         with pytest.raises(InputError) as exc_info:
-            load_examen_manifest(
-                manifest_path,
-                semester="2026-1",
-                course_slug="anatomy",
-            )
-        assert "physiology" in str(exc_info.value) or "course_slug" in str(exc_info.value).lower()
+            load_exam_spec(bp_path, cm_path, semester="2026-1", course_slug="anatomy")
+        assert (
+            "physiology" in str(exc_info.value)
+            or "course_slug" in str(exc_info.value).lower()
+        )
 
 
 # ---------------------------------------------------------------------------

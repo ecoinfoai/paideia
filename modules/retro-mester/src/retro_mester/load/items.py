@@ -64,9 +64,12 @@ def load_items(
     for idx, series in df.iterrows():
         row_dict: dict = series.to_dict()
 
-        # option_distribution: JSON string → dict[int, float]
+        # option_distribution: JSON string → dict[int, float]. A null/empty
+        # parquet cell deserializes to a float NaN (or None), never a str —
+        # guard before json.loads so a missing column defaults to {}.
         raw_od = row_dict.get("option_distribution")
-        if raw_od is None or (isinstance(raw_od, float) and pd.isna(raw_od)):
+        if not isinstance(raw_od, str):
+            # Covers None, float NaN, and any non-string scalar.
             row_dict["option_distribution"] = {}
         else:
             try:
