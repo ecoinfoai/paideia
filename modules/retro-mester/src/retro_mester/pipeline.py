@@ -54,6 +54,8 @@ from retro_mester.load import (
 from retro_mester.output.figures import render_all_figures
 from retro_mester.output.manager import archive_existing, atomic_write_text
 from retro_mester.output.manifest import build_manifest, write_manifest
+from retro_mester.llm.cache import InputHashCache
+from retro_mester.llm.insight import LLMRequiredError, build_insight
 from retro_mester.output.paths import bronze_dir, gold_dir, output_key, silver_dir
 from retro_mester.output.report_md import build_report_md
 from retro_mester.output.report_pdf import write_report_pdf
@@ -202,9 +204,12 @@ def run_retro(
             prior_year=prior_year,
             prior_yaml_path=prior_yaml_path,
             llm_mode=llm_mode,
+            require_llm=require_llm,
         )
     except InputError:
         return 2
+    except LLMRequiredError:
+        return 5
     except Exception:
         return 3
 
@@ -218,6 +223,7 @@ def _run(
     prior_year: str | None,
     prior_yaml_path: str | None,
     llm_mode: str,
+    require_llm: bool = False,
 ) -> int:
     """Inner pipeline implementation — exceptions propagate to ``run_retro``'s handler.
 
@@ -228,7 +234,9 @@ def _run(
         config_path: Optional explicit config path override.
         prior_year: Prior-year semester label for metadata (unused for audit).
         prior_yaml_path: Optional path to prior 차년도방향.yaml for audit.
-        llm_mode: LLM mode string (unused in US1–US3).
+        llm_mode: LLM mode string — ``"off"``, ``"subscription"``, ``"api"``.
+        require_llm: If True, raise ``LLMRequiredError`` (exit 5) when LLM
+            is unavailable instead of degrading gracefully.
 
     Returns:
         0 on success; raises on failure.
@@ -383,6 +391,8 @@ def _run(
     # ------------------------------------------------------------------
     # Step 3b: US3 T037-T041 — forward-contract planning
     # ------------------------------------------------------------------
+    # NOTE: forward planning runs before the LLM step so the forward
+    # summary is available as part of the insight facts (Step 3e).
     # Derive the year this forward plan is created for.
     created_for_year = next_year(semester)
 
@@ -400,6 +410,59 @@ def _run(
     forward_audit: dict | None = None
     if prior_yaml_path is not None:
         forward_audit = audit_prior(Path(prior_yaml_path), baseline)
+
+    # ------------------------------------------------------------------
+    # Step 3e: US6 T054/T055 — optional LLM insight layer
+    #
+    # SC-009 compliance: the LLM step runs AFTER all deterministic
+    # computation (Silver parquet content, xlsx, yaml, non-LLM report
+    # sections) is finalised.  The only output that varies between
+    # llm_mode="off" and llm_mode="subscription"/"api" is the
+    # ``llm_block`` string injected into the MD/PDF report.
+    #
+    # The Silver parquet write and all other Gold artefacts (xlsx, yaml,
+    # 차년도진단문항제안.md) are written *after* this step and are
+    # byte-identical regardless of llm_mode.
+    # ------------------------------------------------------------------
+    # Build structured facts from already-computed results.
+    _top_changes = [
+        {
+            "chapter": r.chapter,
+            "segment": r.segment,
+            "cause_hypothesis": r.cause_hypothesis,
+            "prescription_key": r.prescription_key,
+        }
+        for r in recs
+        if r.is_covered
+    ]
+    _alignment_flag_strs = list({f.flag for f in alignment_findings if f.flag})
+    _forward_summary = (
+        f"개선 서약 {len(ledger)}건"
+        if ledger
+        else "개선 서약 없음"
+    )
+    insight_facts: dict = {
+        "top_changes": _top_changes,
+        "alignment_flags": _alignment_flag_strs,
+        "uncovered_ratio": uncovered_ratio,
+        "forward_summary": _forward_summary,
+    }
+
+    # Cache lives under silver/.llm_cache/retro-mester/<key>/ — a sibling of
+    # the archived retro-mester dir so it SURVIVES archival across runs
+    # (FR-025 reproducibility: same input → same cached response).
+    _key = output_key(semester, course)
+    _cache_dir = data_root / "silver" / ".llm_cache" / "retro-mester" / _key
+    _llm_cache = InputHashCache(_cache_dir) if llm_mode != "off" else None
+
+    # build_insight raises LLMRequiredError if require_llm=True and
+    # backend fails — propagates to run_retro which returns exit 5.
+    llm_block_text, llm_used = build_insight(
+        insight_facts,
+        llm_mode=llm_mode,
+        require_llm=require_llm,
+        cache=_llm_cache,
+    )
 
     # ------------------------------------------------------------------
     # Step 4: Compute timestamps
@@ -437,13 +500,15 @@ def _run(
     figs_dir = gold_out / "figs"
     render_all_figures(alignment_findings, figs_dir)
 
-    # Gold — Markdown (US2 T035 + US3 T042: forward section + US4 T047: alignment)
+    # Gold — Markdown (US2 T035 + US3 T042: forward section + US4 T047: alignment
+    #         + US6 T055: LLM insight block)
     md_text = build_report_md(
         recs,
         uncovered_ratio,
         gaps,
         semester,
         course,
+        llm_block=llm_block_text,
         prescriptions=prescriptions,
         forward_ledger=ledger,
         forward_audit=forward_audit,
@@ -509,7 +574,7 @@ def _run(
     }
 
     degrade: dict[str, bool | str] = {
-        "llm_used": False,
+        "llm_used": llm_used,
         "prior_year_present": prior_yaml_path is not None,
         "granularity_note": (
             "group×chapter×item_type 3원 교차 미가용 — 인지수준 cohort 주석"
