@@ -23,12 +23,18 @@ def test_cli_run_help_exits_zero() -> None:
     assert exit_code == 0, f"Expected exit 0 from --help, got {exit_code}"
 
 
-def test_cli_run_stub_exits_zero() -> None:
-    """Assert that ``retro-mester run`` with required args exits 0 (stub handler)."""
+def test_cli_run_missing_data_exits_2() -> None:
+    """Assert that ``retro-mester run`` with missing data root exits 2.
+
+    The stub is replaced by the real pipeline (T029).  When no data directory
+    exists the pipeline encounters missing input files → InputError → exit 2.
+    """
     from retro_mester.cli.main import app
 
-    exit_code = app(["run", "--semester", "2026-1", "--course", "anatomy"])
-    assert exit_code == 0, f"Expected exit 0 from run stub, got {exit_code}"
+    exit_code = app(
+        ["run", "--semester", "2026-1", "--course", "anatomy", "--data-root", "/nonexistent/data"]
+    )
+    assert exit_code == 2, f"Expected exit 2 for missing data, got {exit_code}"
 
 
 def test_exit_code_constants() -> None:

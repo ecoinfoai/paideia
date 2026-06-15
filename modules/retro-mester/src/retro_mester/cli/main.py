@@ -126,16 +126,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_handler(args: argparse.Namespace) -> int:
-    """Stub handler for the ``run`` subcommand.
+    """Handler for the ``run`` subcommand — delegates to ``run_retro``.
 
-    Validates parsed arguments and exits 0.  Real pipeline implementation
-    will replace this stub in subsequent tasks.
+    Validates non-empty semester/course at the boundary, then calls the
+    full retro-mester pipeline.
 
     Args:
         args: Parsed CLI namespace from argparse.
 
     Returns:
-        Integer exit code.
+        Integer exit code (0 / 2 / 3 / 5).
     """
     # Validate semester/course non-empty (argparse ensures required, but guard
     # against whitespace-only values at the boundary).
@@ -152,16 +152,17 @@ def _run_handler(args: argparse.Namespace) -> int:
         )
         return EXIT_INPUT_ERROR
 
-    # TODO(pipeline): implement retro pipeline (load→segment→gaps→cause→
-    #                 validity→align→prioritize→forward→output)
-    print(
-        f"[retro-mester run] semester={args.semester} course={args.course} "
-        f"data_root={args.data_root} llm_mode={args.llm_mode} "
-        f"prior_year={args.prior_year} require_llm={args.require_llm} "
-        f"(not yet implemented — pipeline stub)",
-        file=sys.stderr,
+    from retro_mester.pipeline import run_retro
+
+    return run_retro(
+        semester=args.semester,
+        course=args.course,
+        data_root=str(args.data_root),
+        config_path=str(args.config) if args.config is not None else None,
+        prior_year=args.prior_year,
+        llm_mode=args.llm_mode,
+        require_llm=args.require_llm,
     )
-    return EXIT_SUCCESS
 
 
 # ---------------------------------------------------------------------------
