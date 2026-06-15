@@ -11,17 +11,14 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
     ItemStatistics,
     RetroMesterConfig,
     UnitGap,
 )
-from retro_mester.segment.assign import assign_segments
 from retro_mester.gaps.detect import detect_gaps
-
+from retro_mester.segment.assign import assign_segments
 
 # ---------------------------------------------------------------------------
 # Factories for minimal valid Pydantic objects

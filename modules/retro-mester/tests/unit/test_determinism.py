@@ -11,14 +11,10 @@ Tests:
 from __future__ import annotations
 
 import datetime
-import io
 import zipfile
 from pathlib import Path
-from typing import Any
 
 import openpyxl
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,7 +38,7 @@ def test_finalize_xlsx_byte_identical(tmp_path: Path) -> None:
     """Two xlsx files finalised with the same ``when`` must be byte-identical."""
     from retro_mester.output.determinism import finalize_xlsx
 
-    when = datetime.datetime(2025, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    when = datetime.datetime(2025, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 
     path_a = tmp_path / "a.xlsx"
     path_b = tmp_path / "b.xlsx"
@@ -62,7 +58,7 @@ def test_finalize_xlsx_pins_modified(tmp_path: Path) -> None:
     """``<dcterms:modified>`` must reflect the supplied ``when``."""
     from retro_mester.output.determinism import finalize_xlsx
 
-    when = datetime.datetime(2024, 6, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    when = datetime.datetime(2024, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
     path = tmp_path / "test.xlsx"
     _make_xlsx(path)
     finalize_xlsx(path, when)
@@ -79,7 +75,7 @@ def test_finalize_xlsx_pins_created(tmp_path: Path) -> None:
     """``<dcterms:created>`` must also be pinned to ``when``."""
     from retro_mester.output.determinism import finalize_xlsx
 
-    when = datetime.datetime(2024, 6, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    when = datetime.datetime(2024, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
     path = tmp_path / "test.xlsx"
     _make_xlsx(path)
     finalize_xlsx(path, when)

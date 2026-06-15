@@ -5,7 +5,8 @@ Entry point: ``build_report_md(recs, uncovered_ratio, gaps, semester, course)``.
 Section (A) 회고: a table of COVERED (is_covered=True) changes ranked 1..N
 with columns:
 
-  순위 | 단원 | 집단 | 인지수준 | 원인 가설 | 덮는 학생(n) | 덮는 학생(%) | 단원무게 | 실행난이도 | 우선순위 사분면
+  순위 | 단원 | 집단 | 인지수준 | 원인 가설
+  | 덮는 학생(n) | 덮는 학생(%) | 단원무게 | 실행난이도 | 우선순위 사분면
 
 Followed by a line stating the uncovered-gap ratio.
 

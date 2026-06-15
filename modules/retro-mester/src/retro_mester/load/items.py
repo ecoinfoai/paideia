@@ -14,9 +14,8 @@ from pathlib import Path
 from typing import TypedDict
 
 import pandas as pd
-from pydantic import ValidationError
-
 from paideia_shared.schemas import ItemStatistics
+from pydantic import ValidationError
 
 from .errors import InputError
 

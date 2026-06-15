@@ -7,10 +7,8 @@ extra-field rejection fire correctly.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import RetroManifest
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helpers

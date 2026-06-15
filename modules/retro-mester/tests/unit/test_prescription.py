@@ -11,8 +11,6 @@ low on the chapter AND hard items are present.
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
     ItemStatistics,

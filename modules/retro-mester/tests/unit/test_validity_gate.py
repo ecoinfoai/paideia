@@ -18,8 +18,6 @@ Signals verified:
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import ItemStatistics, RetroMesterConfig
 
 # -------------------------------------------------------------------------

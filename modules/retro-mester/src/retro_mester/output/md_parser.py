@@ -16,8 +16,8 @@ Inline: ``**bold**`` and ``_italic_`` only.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet

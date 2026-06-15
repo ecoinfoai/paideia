@@ -19,9 +19,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
-import pytest
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture helpers (inlined — self-contained test module)
@@ -444,7 +442,6 @@ class TestUS6LLM:
 
     def test_core_determinism_unaffected_by_llm_off(self, tmp_path: Path) -> None:
         """Two off-mode runs produce byte-identical Silver parquets (SC-009)."""
-        import shutil
 
         from retro_mester.pipeline import run_retro
 

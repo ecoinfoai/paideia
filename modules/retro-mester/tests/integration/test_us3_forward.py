@@ -18,9 +18,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Fixture constants
@@ -212,7 +210,6 @@ def _build_fixture_tree(data_root: Path) -> None:
 def _run(
     tmp_path: Path,
     *,
-    prior_year: str | None = None,
     prior_yaml_path: str | None = None,
 ) -> Path:
     """Build fixture, run pipeline, return gold dir."""
@@ -227,7 +224,6 @@ def _run(
         course=_COURSE,
         data_root=str(data_root),
         llm_mode="off",
-        prior_year=prior_year,
         prior_yaml_path=prior_yaml_path,
     )
     assert code == 0, f"Pipeline exited with code {code}"
@@ -240,7 +236,7 @@ def _run(
 
 
 class TestUS3ColdStart:
-    """US3 cold-start: prior_year=None → yaml with ledger+baseline, no audit."""
+    """US3 cold-start: prior_yaml_path=None → yaml with ledger+baseline, no audit."""
 
     def test_차년도방향_yaml_exists(self, tmp_path: Path) -> None:
         """차년도방향.yaml is created in the gold dir."""
@@ -368,8 +364,9 @@ class TestUS3AuditRoundtrip:
 
     def test_audit_results_have_met_boolean(self, tmp_path: Path) -> None:
         """Each audit result row has a boolean 'met' field."""
-        from retro_mester.pipeline import run_retro
         import shutil
+
+        from retro_mester.pipeline import run_retro
 
         data_root = self._build_data(tmp_path)
         gold = data_root / "gold" / "retro-mester" / _KEY
@@ -392,8 +389,9 @@ class TestUS3AuditRoundtrip:
 
     def test_audit_md_report_has_효과감사_section(self, tmp_path: Path) -> None:
         """MD report includes '작년 변경 효과감사' subsection when audit present."""
-        from retro_mester.pipeline import run_retro
         import shutil
+
+        from retro_mester.pipeline import run_retro
 
         data_root = self._build_data(tmp_path)
         gold = data_root / "gold" / "retro-mester" / _KEY

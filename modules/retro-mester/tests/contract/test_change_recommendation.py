@@ -7,10 +7,8 @@ and a valid construction succeeds.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import ChangeRecommendation
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helpers

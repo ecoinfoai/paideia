@@ -20,9 +20,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers (shared with test_us1_determinism.py via inline duplication

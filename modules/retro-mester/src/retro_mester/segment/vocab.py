@@ -11,6 +11,7 @@ from collections import Counter
 
 from paideia_shared.schemas import CombinedAnalysisRow, RetroMesterConfig
 from paideia_shared.schemas.retro_common import SegmentKey
+
 from retro_mester.segment.assign import assign_segments
 
 

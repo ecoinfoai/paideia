@@ -14,6 +14,7 @@ Rationale (research R3):
 from __future__ import annotations
 
 from paideia_shared.schemas import CombinedAnalysisRow, RetroMesterConfig, UnitGap
+
 from retro_mester.segment.assign import assign_segments
 
 

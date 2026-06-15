@@ -12,13 +12,10 @@ SC-009 compliance: the deterministic core is {빈틈표.parquet,
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers (duplicated from test_us1_e2e.py — self-contained)

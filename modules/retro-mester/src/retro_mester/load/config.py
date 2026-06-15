@@ -12,9 +12,8 @@ from pathlib import Path
 from typing import TypedDict
 
 import yaml
-from pydantic import ValidationError
-
 from paideia_shared.schemas import RetroMesterConfig
+from pydantic import ValidationError
 
 from .errors import InputError
 

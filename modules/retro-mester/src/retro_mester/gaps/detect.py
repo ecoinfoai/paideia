@@ -18,6 +18,7 @@ from paideia_shared.schemas import (
     RetroMesterConfig,
     UnitGap,
 )
+
 from retro_mester.cause.classify import classify_cause
 from retro_mester.segment.assign import assign_segments
 

@@ -15,8 +15,6 @@ Cliff detection rule (authoritative spec):
 
 from __future__ import annotations
 
-import json
-
 from paideia_shared.schemas import ItemStatistics, RetroMesterConfig
 
 
@@ -218,7 +216,7 @@ class TestDominantFailingLevel:
 
     def test_returns_lowest_rate_type(self) -> None:
         """Lowest rate among failing types is returned."""
-        from retro_mester.align.cliff import dominant_failing_level, chapter_item_type_rates
+        from retro_mester.align.cliff import chapter_item_type_rates, dominant_failing_level
 
         items = [
             _make_item(1, "1장", "지식축적", 0.85),
@@ -240,7 +238,7 @@ class TestDominantFailingLevel:
 
     def test_single_failing_type(self) -> None:
         """Single failing type is returned directly."""
-        from retro_mester.align.cliff import dominant_failing_level, chapter_item_type_rates
+        from retro_mester.align.cliff import chapter_item_type_rates, dominant_failing_level
 
         items = [
             _make_item(1, "1장", "지식축적", 0.80),

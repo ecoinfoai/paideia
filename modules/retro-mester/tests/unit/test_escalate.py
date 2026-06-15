@@ -10,11 +10,8 @@ is at or above threshold are NOT escalated.
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
-    ItemStatistics,
     RetroMesterConfig,
     UnitGap,
 )

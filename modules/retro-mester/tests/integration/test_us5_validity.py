@@ -26,7 +26,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
 
 # Repair prescription constant — must match implementation.

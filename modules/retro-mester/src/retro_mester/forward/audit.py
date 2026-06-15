@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
 from paideia_shared.schemas import BaselineSnapshotRow
 
 

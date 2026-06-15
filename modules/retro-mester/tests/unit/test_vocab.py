@@ -10,8 +10,6 @@ students.  None when no student in the segment has a non-null cluster_label.
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
     RetroMesterConfig,

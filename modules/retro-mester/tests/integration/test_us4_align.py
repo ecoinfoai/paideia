@@ -19,9 +19,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Fixture constants
@@ -337,7 +335,7 @@ class TestUS4CognitiveLevelPopulated:
         """UnitGap.cohort_failing_item_types is non-empty for CHAPTER_A (cliff exists)."""
         import pyarrow.parquet as pq
 
-        gold = _run(tmp_path)
+        _run(tmp_path)
         # Read silver parquet to check gaps
         data_root = tmp_path / "data"
         silver = data_root / "silver" / "retro-mester" / _KEY

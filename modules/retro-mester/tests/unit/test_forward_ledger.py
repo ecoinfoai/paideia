@@ -14,17 +14,11 @@ Verifies:
 
 from __future__ import annotations
 
-import json
-
-import pytest
-
 from paideia_shared.schemas import (
     ChangeRecommendation,
-    CombinedAnalysisRow,
     RetroMesterConfig,
     UnitGap,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -170,10 +164,9 @@ class TestBuildLedger:
 
     def test_target_value_clamped_at_1(self) -> None:
         """target_value is clamped at 1.0 when gap_threshold + 0.1 > 1.0."""
-        from retro_mester.forward.ledger import build_ledger
-
         # Build a config with gap_threshold = 0.95 → uplift would be 1.05 → clamped to 1.0
         from paideia_shared.schemas import RetroMesterConfig
+        from retro_mester.forward.ledger import build_ledger
 
         config = RetroMesterConfig(
             semester=_SEMESTER,
@@ -255,7 +248,7 @@ class TestBuildLedger:
         from retro_mester.forward.ledger import build_ledger
 
         covered = _make_rec(_CHAPTER_A, "학령기", is_covered=True, rank=1)
-        uncovered = _make_rec(_CHAPTER_B, "만학도", is_covered=False, rank=None)
+        _make_rec(_CHAPTER_B, "만학도", is_covered=False, rank=None)
         gaps = [
             _make_gap(_CHAPTER_A, "학령기"),
             _make_gap(_CHAPTER_B, "만학도"),

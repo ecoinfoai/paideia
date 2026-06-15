@@ -12,10 +12,9 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
 from paideia_shared.schemas import CombinedAnalysisRow, RetroMesterConfig, UnitGap
-
 
 # ---------------------------------------------------------------------------
 # Helpers

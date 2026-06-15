@@ -71,8 +71,8 @@ def _generate_subscription(prompt: str) -> tuple[str | None, FailureKind | None]
         ``(text, None)`` on success, ``(None, failure_kind)`` on failure.
     """
     try:
-        result = subprocess.run(
-            ["claude", "-p", prompt],
+        result = subprocess.run(  # noqa: S603 S607
+            ["claude", "-p", prompt],  # noqa: S603 S607
             capture_output=True,
             text=True,
             timeout=_TIMEOUT_SECONDS,

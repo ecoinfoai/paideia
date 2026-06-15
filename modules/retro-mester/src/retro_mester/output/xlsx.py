@@ -29,7 +29,6 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
-
 from paideia_shared.schemas.alignment_finding import AlignmentFinding
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap

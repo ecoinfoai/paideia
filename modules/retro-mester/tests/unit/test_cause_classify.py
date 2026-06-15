@@ -10,15 +10,12 @@ Tests cover the three CauseLabel outcomes:
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
     ItemStatistics,
     RetroMesterConfig,
 )
 from retro_mester.cause.classify import classify_cause
-
 
 # ---------------------------------------------------------------------------
 # Factories (copy-minimal from test_gaps_detect to avoid inter-test coupling)

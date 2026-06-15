@@ -26,7 +26,6 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless backend — no X dependency
 import matplotlib.pyplot as plt  # noqa: E402
-
 from paideia_shared.schemas.alignment_finding import AlignmentFinding
 
 from retro_mester.output.fonts import (
@@ -40,7 +39,7 @@ from retro_mester.output.fonts import (
 
 # Pinned creation date embedded in PNG metadata — makes PNGs byte-identical
 # across runs (no wall-clock datetime in the metadata path).
-_PINNED_DATE = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+_PINNED_DATE = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 
 _PNG_METADATA: dict[str, str] = {
     "Software": "paideia",
@@ -218,7 +217,7 @@ def render_alignment_map(
         import numpy as np
 
         y_pos = np.arange(n)
-        bars = ax.barh(y_pos, rates, color=colours, height=0.6)
+        ax.barh(y_pos, rates, color=colours, height=0.6)
         ax.set_yticks(y_pos)
         ax.set_yticklabels(chapters, fontsize=8)
         ax.set_xlim(0, 1.0)

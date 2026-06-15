@@ -11,12 +11,9 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-import pytest
 from openpyxl import load_workbook
-
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
-
 from retro_mester.output.xlsx import write_xlsx
 
 _WHEN = datetime.datetime(2026, 6, 15, 9, 0, 0)

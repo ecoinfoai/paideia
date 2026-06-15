@@ -23,14 +23,12 @@ from typing import Any
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 
 from retro_mester.output.determinism import parquet_write_options
 
 _GAP_SORT_KEYS = ["chapter", "segment"]
-_REC_SORT_KEYS = ["chapter", "segment"]  # secondary; rank used first (nulls last)
 
 
 def _dumps(obj: Any) -> str:  # noqa: ANN401

@@ -7,10 +7,8 @@ Literal validation for proposed_kind fire correctly.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import NextYearItemProposal
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helpers

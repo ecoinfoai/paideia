@@ -13,13 +13,9 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
-
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
-
 from retro_mester.output.silver import write_silver
-
 
 # ---------------------------------------------------------------------------
 # Minimal fixtures

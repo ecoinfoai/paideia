@@ -15,8 +15,7 @@ import datetime
 import json
 from pathlib import Path
 
-
-_WHEN = datetime.datetime(2025, 6, 15, 9, 30, 0, tzinfo=datetime.timezone.utc)
+_WHEN = datetime.datetime(2025, 6, 15, 9, 30, 0, tzinfo=datetime.UTC)
 _WHEN_ISO = "2025-06-15T09:30:00Z"
 
 
@@ -140,7 +139,7 @@ def test_write_manifest_generated_at_reflects_when_not_now(tmp_path: Path) -> No
     """generated_at_utc in the file must match ``when``, not the real clock."""
     from retro_mester.output.manifest import build_manifest, write_manifest
 
-    fixed_when = datetime.datetime(2000, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    fixed_when = datetime.datetime(2000, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
     manifest = build_manifest(when=fixed_when, **_sample_kwargs())
     dest = tmp_path / "manifest_retro.json"
     write_manifest(dest, manifest, fixed_when)

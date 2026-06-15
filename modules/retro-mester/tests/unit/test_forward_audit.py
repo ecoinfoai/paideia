@@ -13,11 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import yaml
-
-from paideia_shared.schemas import BaselineSnapshotRow, ImprovementLedgerEntry
-
+from paideia_shared.schemas import BaselineSnapshotRow
 
 # ---------------------------------------------------------------------------
 # Helpers

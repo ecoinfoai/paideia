@@ -91,23 +91,19 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="PATH",
-        help="Pipeline config YAML (default: <data-root>/bronze/retro-mester/<semester>-<course>/config.yaml)",
+        help=(
+            "Pipeline config YAML "
+            "(default: <data-root>/bronze/retro-mester/<semester>-<course>/config.yaml)"
+        ),
     )
     run_p.add_argument(
         "--prior-year",
-        type=str,
-        default=None,
-        metavar="SEMESTER",
-        help="Prior-year semester code for year-on-year alignment (e.g. '2025-1')",
-    )
-    run_p.add_argument(
-        "--prior-yaml-path",
         type=Path,
         default=None,
         metavar="PATH",
         help=(
             "Path to a prior 차년도방향.yaml for forward-contract audit. "
-            "When omitted, cold-start (no audit section emitted)."
+            "When omitted, cold-start mode (no audit section emitted)."
         ),
     )
     run_p.add_argument(
@@ -169,8 +165,7 @@ def _run_handler(args: argparse.Namespace) -> int:
         course=args.course,
         data_root=str(args.data_root),
         config_path=str(args.config) if args.config is not None else None,
-        prior_year=args.prior_year,
-        prior_yaml_path=str(args.prior_yaml_path) if args.prior_yaml_path is not None else None,
+        prior_yaml_path=str(args.prior_year) if args.prior_year is not None else None,
         llm_mode=args.llm_mode,
         require_llm=args.require_llm,
     )

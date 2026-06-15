@@ -15,8 +15,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-
-_WHEN = datetime.datetime(2025, 3, 15, 8, 0, 0, tzinfo=datetime.timezone.utc)
+_WHEN = datetime.datetime(2025, 3, 15, 8, 0, 0, tzinfo=datetime.UTC)
 _ISO = "2025-03-15T08:00:00Z"
 
 
@@ -141,7 +140,6 @@ def test_atomic_write_text_success(tmp_path: Path) -> None:
 
 def test_atomic_write_bytes_no_partial_on_error(tmp_path: Path) -> None:
     """If write_fn raises, destination is untouched and no temp file survives."""
-    from retro_mester.output.manager import atomic_write_bytes
 
     dest = tmp_path / "output.bin"
     original = b"original content"

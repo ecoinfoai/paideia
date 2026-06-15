@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from paideia_shared.schemas import CombinedAnalysisRow
 
-
 _AXES = [
     "digital_efficacy",
     "motivation",

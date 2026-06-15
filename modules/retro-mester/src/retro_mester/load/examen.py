@@ -18,9 +18,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
-
 from paideia_shared.schemas import CurriculumMap, ExamenBlueprint
+from pydantic import ValidationError
 
 from .errors import InputError
 

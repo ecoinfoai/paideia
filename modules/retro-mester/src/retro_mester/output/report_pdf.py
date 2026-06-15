@@ -17,8 +17,8 @@ from __future__ import annotations
 import contextlib
 import datetime
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -63,9 +63,9 @@ def _to_epoch(when: datetime.datetime) -> int:
         Integer Unix timestamp.
     """
     if when.tzinfo is None:
-        aware = when.replace(tzinfo=datetime.timezone.utc)
+        aware = when.replace(tzinfo=datetime.UTC)
     else:
-        aware = when.astimezone(datetime.timezone.utc)
+        aware = when.astimezone(datetime.UTC)
     return int(aware.timestamp())
 
 
@@ -119,7 +119,7 @@ def write_report_pdf(
         producer=_PRODUCER,
     )
 
-    def _pin_metadata(canvas, _doc):  # type: ignore[no-untyped-def]
+    def _pin_metadata(canvas: object, _doc: object) -> None:  # type: ignore[no-untyped-def]
         canvas.setProducer(_PRODUCER)
         canvas.setCreator(_PRODUCER)
         canvas.setTitle(_DOC_TITLE)

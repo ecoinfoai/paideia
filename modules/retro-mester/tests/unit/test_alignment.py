@@ -18,8 +18,6 @@ Alignment flag rules (authoritative spec):
 
 from __future__ import annotations
 
-import json
-
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
     ExamenBlueprint,
@@ -27,7 +25,6 @@ from paideia_shared.schemas import (
     RetroMesterConfig,
 )
 from paideia_shared.schemas.curriculum_map import CurriculumEntry, CurriculumMap
-
 
 # ---------------------------------------------------------------------------
 # Helpers

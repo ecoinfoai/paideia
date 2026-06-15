@@ -6,10 +6,7 @@ RED phase: written before implementation.  All tests must FAIL until
 
 from __future__ import annotations
 
-import pytest
-
 from paideia_shared.schemas import CombinedAnalysisRow, RetroMesterConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers

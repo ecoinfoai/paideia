@@ -11,9 +11,7 @@ from __future__ import annotations
 
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
-
 from retro_mester.output.report_md import build_report_md
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

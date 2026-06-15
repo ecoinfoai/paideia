@@ -7,10 +7,8 @@ field constraints fire correctly.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import BaselineSnapshotRow, ImprovementLedgerEntry
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # ImprovementLedgerEntry helpers

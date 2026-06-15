@@ -24,8 +24,8 @@ from paideia_shared.schemas import (
     RetroMesterConfig,
     UnitGap,
 )
-from retro_mester.output.manager import atomic_write_text
 
+from retro_mester.output.manager import atomic_write_text
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -75,10 +75,10 @@ class InputHashCache:
         except Exception:
             # Clean up temp file on failure; do not propagate — cache miss
             # is always safe (the caller will regenerate the value).
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
 
     # ------------------------------------------------------------------
     # Internal

@@ -12,15 +12,12 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
 from paideia_shared.schemas import (
     ChangeRecommendation,
     RetroMesterConfig,
     UnitGap,
 )
 from retro_mester.prioritize.rank import rank_changes
-
 
 # ---------------------------------------------------------------------------
 # Factory helpers

@@ -10,9 +10,8 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from pydantic import ValidationError
-
 from paideia_shared.schemas import CombinedAnalysisRow
+from pydantic import ValidationError
 
 from .errors import InputError
 

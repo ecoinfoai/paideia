@@ -43,6 +43,8 @@ from retro_mester.forward.next_items import propose_next_items, write_next_items
 from retro_mester.forward.write import next_year, write_forward
 from retro_mester.gaps.detect import detect_gaps
 from retro_mester.gaps.escalate import escalate_structural
+from retro_mester.llm.cache import InputHashCache
+from retro_mester.llm.insight import LLMRequiredError, build_insight
 from retro_mester.load import (
     InputError,
     load_combined,
@@ -54,14 +56,13 @@ from retro_mester.load import (
 from retro_mester.output.figures import render_all_figures
 from retro_mester.output.manager import archive_existing, atomic_write_text
 from retro_mester.output.manifest import build_manifest, write_manifest
-from retro_mester.llm.cache import InputHashCache
-from retro_mester.llm.insight import LLMRequiredError, build_insight
 from retro_mester.output.paths import bronze_dir, gold_dir, output_key, silver_dir
 from retro_mester.output.report_md import build_report_md
 from retro_mester.output.report_pdf import write_report_pdf
 from retro_mester.output.silver import write_silver
 from retro_mester.output.xlsx import write_xlsx
 from retro_mester.prioritize.rank import rank_changes
+from retro_mester.segment.assign import assign_segments
 from retro_mester.segment.vocab import segment_cluster_vocab
 from retro_mester.validity.gate import chapter_validity, validity_signals
 
@@ -85,7 +86,7 @@ _SCHEMA_VERSION = "0.1.0"
 # ---------------------------------------------------------------------------
 
 DETERMINISTIC_EPOCH: datetime.datetime = datetime.datetime(
-    2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+    2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
 )
 
 
@@ -153,7 +154,6 @@ def run_retro(
     course: str,
     data_root: str = "data",
     config_path: str | None = None,
-    prior_year: str | None = None,
     prior_yaml_path: str | None = None,
     llm_mode: str = "off",
     require_llm: bool = False,
@@ -177,11 +177,8 @@ def run_retro(
         course: Course slug, e.g. ``"anatomy"``.
         data_root: Root of the data hierarchy (default ``"data"``).
         config_path: Optional explicit path to ``retro_config.yaml``.
-        prior_year: Prior-year semester label (used for metadata /
-            ``created_for_year`` computation).  When ``None``, derived via
-            ``next_year(semester)``.
         prior_yaml_path: Optional path to a prior ``차년도방향.yaml`` for
-            audit.  When ``None``, cold-start (no audit section).
+            forward-contract audit.  When ``None``, cold-start (no audit section).
         llm_mode: LLM mode — ``"off"`` (default), ``"subscription"``,
             or ``"api"``.
         require_llm: If True, exit 5 when LLM is unavailable (unused in
@@ -201,7 +198,6 @@ def run_retro(
             course=course,
             data_root=data_root_path,
             config_path=config_path,
-            prior_year=prior_year,
             prior_yaml_path=prior_yaml_path,
             llm_mode=llm_mode,
             require_llm=require_llm,
@@ -220,7 +216,6 @@ def _run(
     course: str,
     data_root: Path,
     config_path: str | None,
-    prior_year: str | None,
     prior_yaml_path: str | None,
     llm_mode: str,
     require_llm: bool = False,
@@ -232,7 +227,6 @@ def _run(
         course: Course slug.
         data_root: Resolved data root Path.
         config_path: Optional explicit config path override.
-        prior_year: Prior-year semester label for metadata (unused for audit).
         prior_yaml_path: Optional path to prior 차년도방향.yaml for audit.
         llm_mode: LLM mode string — ``"off"``, ``"subscription"``, ``"api"``.
         require_llm: If True, raise ``LLMRequiredError`` (exit 5) when LLM
@@ -274,6 +268,8 @@ def _run(
     # Step 3: Detect gaps → escalate structural → compute prescriptions
     #         → cluster vocab → rank changes (US1/US2 T032-T036)
     # ------------------------------------------------------------------
+    # Assign segments to capture unclassified count for manifest (T060).
+    _segment_buckets, _unclassified = assign_segments(rows, config)
     gaps = detect_gaps(rows, items, config)
 
     # US2 T032: escalate chapters where baseline is also below threshold.
@@ -468,7 +464,7 @@ def _run(
     # Step 4: Compute timestamps
     # ------------------------------------------------------------------
     # Real now() — used ONLY for archival dir names and manifest.generated_at_utc
-    now_utc: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
+    now_utc: datetime.datetime = datetime.datetime.now(datetime.UTC)
 
     # DETERMINISTIC_EPOCH — used for all byte-comparable Gold artefacts
     when = DETERMINISTIC_EPOCH
@@ -567,10 +563,12 @@ def _run(
 
     counts: dict[str, float] = {
         "students": float(len(rows)),
+        "segments": float(len(_segment_buckets)),
         "gaps": float(len(gaps)),
         "recommendations": float(len(recs)),
         "covered": float(sum(1 for r in recs if r.is_covered)),
         "uncovered_ratio": uncovered_ratio,
+        "unclassified_students": float(len(_unclassified)),
     }
 
     degrade: dict[str, bool | str] = {

@@ -16,9 +16,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
-
 from retro_mester.load.errors import InputError
-
 
 # ---------------------------------------------------------------------------
 # Helpers: minimal valid row dicts
@@ -565,7 +563,7 @@ class TestReconcileConfig:
 
         cfg_path = tmp_path / "retro_config.yaml"
         _write_retro_config_yaml(cfg_path)
-        cfg = load_config(cfg_path)
+        load_config(cfg_path)
 
         # unit_importance key matches, but effort_ratings key is extraneous
         chapters: set[str] = {"1장. 해부학 서론"}
@@ -573,7 +571,6 @@ class TestReconcileConfig:
 
         # effort_ratings has "1장. 해부학 서론" — must NOT raise if it IS in chapters
         # Now use a config with an extraneous effort_rating key
-        from retro_mester.load.config import reconcile_config
         from paideia_shared.schemas import RetroMesterConfig
 
         cfg2 = RetroMesterConfig(

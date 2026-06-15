@@ -10,8 +10,6 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-import pytest
-
 from retro_mester.output.report_pdf import write_report_pdf
 
 _SAMPLE_MD = """\

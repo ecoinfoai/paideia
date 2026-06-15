@@ -17,6 +17,7 @@ from paideia_shared.schemas import (
     CombinedAnalysisRow,
     RetroMesterConfig,
 )
+
 from retro_mester.segment.assign import assign_segments
 
 

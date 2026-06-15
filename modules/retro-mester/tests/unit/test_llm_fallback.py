@@ -6,9 +6,6 @@ Tests must FAIL until ``retro_mester.llm.fallback`` and
 
 from __future__ import annotations
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Shared minimal facts fixture
 # ---------------------------------------------------------------------------
@@ -119,7 +116,6 @@ class TestBuildInsightOffMode:
 
     def test_off_mode_does_not_import_anthropic(self) -> None:
         """off mode must not import anthropic (lazy-import guard)."""
-        import sys
 
         # Ensure anthropic is NOT loaded by the off path.
         # We import build_insight and call it; if anthropic is pulled in,
