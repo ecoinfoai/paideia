@@ -1,4 +1,4 @@
-"""T028 / T035 — Gold-layer xlsx writer for retro-mester.
+"""T028 / T035 / T047 — Gold-layer xlsx writer for retro-mester.
 
 Entry point: ``write_xlsx(gaps, recs, xlsx_path, when)``.
 
@@ -6,10 +6,12 @@ Sheets:
 - ``빈틈``       — one row per UnitGap.
 - ``변경권고``   — one row per ChangeRecommendation.
 - ``집단대비``   — per chapter × segment comparison (US2 T035).
+- ``정렬``       — one row per AlignmentFinding (US4 T047).
 
 Determinism:
 - Row order: gaps sorted by (chapter, segment); recs by (rank nulls-last,
-  chapter, segment); 집단대비 sorted by (chapter, segment).
+  chapter, segment); 집단대비 sorted by (chapter, segment); 정렬 sorted by
+  (chapter).
 - Workbook creator / lastModifiedBy pinned to ``_PRODUCER``.
 - ``finalize_xlsx(xlsx_path, when)`` rewrites ``<dcterms:modified>`` and
   ``<dcterms:created>`` post-save for byte-identical output.
@@ -23,6 +25,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+from paideia_shared.schemas.alignment_finding import AlignmentFinding
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 
@@ -37,6 +40,19 @@ _CONTRAST_COLUMNS: list[str] = [
     "is_structural",
     "cause",
     "prescription",
+]
+
+_ALIGN_COLUMNS: list[str] = [
+    "semester",
+    "course_slug",
+    "chapter",
+    "taught_weeks",
+    "tested_items",
+    "learned_rate",
+    "flag",
+    "interest_gap",
+    "aversion_gap",
+    "note",
 ]
 
 _PRODUCER = "paideia/retro-mester/0.1.0"
@@ -162,12 +178,42 @@ def _build_contrast_sheet(
             ws.cell(r, c, val)
 
 
+def _build_align_sheet(
+    wb: Workbook,
+    findings: list[AlignmentFinding],
+) -> None:
+    """Build the 정렬 (alignment) sheet (US4 T047).
+
+    One row per AlignmentFinding, sorted by chapter ascending.
+    ``cognitive_profile`` (a dict) is converted to a string for readability.
+
+    Args:
+        wb: Target workbook.
+        findings: AlignmentFinding records from build_alignment.
+    """
+    ws = wb.create_sheet("정렬")
+    bold = Font(bold=True)
+
+    for c, col in enumerate(_ALIGN_COLUMNS, start=1):
+        ws.cell(1, c, col).font = bold
+
+    sorted_findings = sorted(findings, key=lambda f: f.chapter)
+    for r, finding in enumerate(sorted_findings, start=2):
+        row_dict = finding.model_dump()
+        for c, col in enumerate(_ALIGN_COLUMNS, start=1):
+            value = row_dict[col]
+            if isinstance(value, dict):
+                value = str(value)
+            ws.cell(r, c, value)
+
+
 def write_xlsx(
     gaps: list[UnitGap],
     recs: list[ChangeRecommendation],
     xlsx_path: Path,
     when: datetime.datetime,
     prescriptions: dict[tuple[str, str], str] | None = None,
+    alignment_findings: list[AlignmentFinding] | None = None,
 ) -> None:
     """Write ``빈틈``, ``변경권고``, and ``집단대비`` sheets to ``xlsx_path``.
 
@@ -184,6 +230,9 @@ def write_xlsx(
         prescriptions: Optional mapping ``(chapter, segment) → prescription``
             for the 집단대비 sheet (US2 T035).  When ``None``, the sheet is
             still written but prescription cells are empty.
+        alignment_findings: Optional list of AlignmentFinding for the 정렬
+            sheet (US4 T047).  When ``None``, the sheet is still written
+            but contains only the header row.
 
     Raises:
         FileNotFoundError: When ``xlsx_path.parent`` does not exist.
@@ -203,6 +252,7 @@ def write_xlsx(
     _build_gap_sheet(wb, gaps)
     _build_rec_sheet(wb, recs)
     _build_contrast_sheet(wb, gaps, prescriptions or {})
+    _build_align_sheet(wb, alignment_findings or [])
 
     # Pin workbook-level metadata
     wb.properties.creator = _PRODUCER
@@ -217,4 +267,4 @@ def write_xlsx(
     finalize_xlsx(xlsx_path, when)
 
 
-__all__ = ["write_xlsx"]
+__all__ = ["write_xlsx", "_build_align_sheet"]

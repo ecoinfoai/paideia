@@ -32,6 +32,9 @@ import datetime
 import hashlib
 from pathlib import Path
 
+from retro_mester.align.alignment import build_alignment
+from retro_mester.align.cliff import chapter_item_type_rates, detect_cliff, dominant_failing_level
+from retro_mester.align.interest_gap import interest_aversion_findings
 from retro_mester.cause.prescription import prescription_for, refine_cause
 from retro_mester.forward.audit import audit_prior
 from retro_mester.forward.baseline import build_baseline
@@ -48,6 +51,7 @@ from retro_mester.load import (
     load_items,
     reconcile_config,
 )
+from retro_mester.output.figures import render_all_figures
 from retro_mester.output.manager import archive_existing, atomic_write_text
 from retro_mester.output.manifest import build_manifest, write_manifest
 from retro_mester.output.paths import bronze_dir, gold_dir, output_key, silver_dir
@@ -146,17 +150,19 @@ def run_retro(
     llm_mode: str = "off",
     require_llm: bool = False,
 ) -> int:
-    """Run the full retrospective analytics pipeline (US1–US3).
+    """Run the full retrospective analytics pipeline (US1–US4).
 
     Steps:
     1. Resolve all input paths under ``data_root``.
     2. Load combined + items + exam_spec + config; reconcile config.
     3. detect_gaps → escalate_structural → prescriptions → cluster vocab
        → rank_changes (US1 + US2).
+    3c. Cognitive-cliff + alignment enrichment: enrich UnitGap.cohort_failing_item_types
+        and ChangeRecommendation.target_cognitive_level; build AlignmentFinding list (US4).
     4. Build forward baseline + ledger + next-item proposals (US3).
     5. If ``prior_yaml_path`` provided, run audit against prior ledger.
     6. Archive existing outputs (gold + silver retro dirs).
-    7. Write Silver parquet + Gold md/pdf/xlsx/yaml/md + manifest.
+    7. Write Silver parquet + Gold figs/md/pdf/xlsx/yaml/md + manifest.
 
     Args:
         semester: Semester code, e.g. ``"2026-1"``.
@@ -207,7 +213,7 @@ def _run(
     prior_yaml_path: str | None,
     llm_mode: str,
 ) -> int:
-    """Inner implementation — exceptions propagate to ``run_retro``'s handler.
+    """Inner pipeline implementation — exceptions propagate to ``run_retro``'s handler.
 
     Args:
         semester: Semester code.
@@ -252,7 +258,7 @@ def _run(
 
     # ------------------------------------------------------------------
     # Step 3: Detect gaps → escalate structural → compute prescriptions
-    #         → cluster vocab → rank changes (US2 T032-T036)
+    #         → cluster vocab → rank changes (US1/US2 T032-T036)
     # ------------------------------------------------------------------
     gaps = detect_gaps(rows, items, config)
 
@@ -290,6 +296,38 @@ def _run(
             rec.model_copy(update={"prescription_key": presc, "cluster_vocab": cv})
         )
     recs = patched_recs
+
+    # ------------------------------------------------------------------
+    # Step 3c: US4 T044/T045/T048 — cognitive-cliff + alignment enrichment
+    # ------------------------------------------------------------------
+    # Compute cliff: {chapter: [failing_item_types]} at cohort level.
+    cliff = detect_cliff(items, config)
+    item_type_rates = chapter_item_type_rates(items)
+
+    # Enrich UnitGap.cohort_failing_item_types from the cliff dict.
+    # UnitGap is frozen → rebuild via model_copy.
+    enriched_gaps: list = []
+    for gap in gaps:
+        failing_types = cliff.get(gap.chapter, [])
+        if failing_types != gap.cohort_failing_item_types:
+            gap = gap.model_copy(update={"cohort_failing_item_types": list(failing_types)})
+        enriched_gaps.append(gap)
+    gaps = enriched_gaps
+
+    # Enrich ChangeRecommendation.target_cognitive_level from dominant_failing_level.
+    enriched_recs: list = []
+    for rec in recs:
+        dominant = dominant_failing_level(rec.chapter, cliff, item_type_rates)
+        if dominant != rec.target_cognitive_level:
+            rec = rec.model_copy(update={"target_cognitive_level": dominant})
+        enriched_recs.append(rec)
+    recs = enriched_recs
+
+    # Build AlignmentFinding list for output.
+    alignment_findings = build_alignment(items, curriculum, blueprint, rows, config)
+
+    # Compute interest/aversion gap (FR-022) — attached to findings where applicable.
+    _interest_gap_data = interest_aversion_findings(rows)
 
     # ------------------------------------------------------------------
     # Step 3b: US3 T037-T041 — forward-contract planning
@@ -344,7 +382,11 @@ def _run(
     # Silver
     write_silver(gaps, recs, silver_out)
 
-    # Gold — Markdown (US2 T035 + US3 T042: forward section)
+    # Gold — figures (US4 T047: alignment PNGs, deterministic)
+    figs_dir = gold_out / "figs"
+    render_all_figures(alignment_findings, figs_dir)
+
+    # Gold — Markdown (US2 T035 + US3 T042: forward section + US4 T047: alignment)
     md_text = build_report_md(
         recs,
         uncovered_ratio,
@@ -354,14 +396,22 @@ def _run(
         prescriptions=prescriptions,
         forward_ledger=ledger,
         forward_audit=forward_audit,
+        alignment_findings=alignment_findings,
     )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
     # Gold — PDF (uses DETERMINISTIC_EPOCH for SOURCE_DATE_EPOCH)
     write_report_pdf(md_text, gold_out / "CQI회고보고서.pdf", when)
 
-    # Gold — xlsx (US2 T035: pass prescriptions for 집단대비 sheet)
-    write_xlsx(gaps, recs, gold_out / "회고분석.xlsx", when, prescriptions=prescriptions)
+    # Gold — xlsx (US2 T035 + US4 T047: 정렬 sheet)
+    write_xlsx(
+        gaps,
+        recs,
+        gold_out / "회고분석.xlsx",
+        when,
+        prescriptions=prescriptions,
+        alignment_findings=alignment_findings,
+    )
 
     # Gold — 차년도방향.yaml (US3 T039)
     write_forward(

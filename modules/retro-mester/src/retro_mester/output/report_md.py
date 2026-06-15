@@ -22,6 +22,7 @@ No individual student names or IDs appear.
 
 from __future__ import annotations
 
+from paideia_shared.schemas.alignment_finding import AlignmentFinding
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.retro_forward import ImprovementLedgerEntry
 from paideia_shared.schemas.unit_gap import UnitGap
@@ -252,6 +253,69 @@ def _build_forward_section(
     return lines
 
 
+def _build_alignment_section(
+    findings: list[AlignmentFinding],
+) -> list[str]:
+    """Build section (D) 인지수준·정렬 (US4 T047).
+
+    Emits a table of alignment findings with chapter, flag, taught/tested counts,
+    and learned_rate.  Cliffs are highlighted in the note column.
+
+    Args:
+        findings: AlignmentFinding list from build_alignment.
+
+    Returns:
+        List of Markdown line strings.
+    """
+    lines: list[str] = []
+    lines.append("## (D) 인지수준·정렬")
+    lines.append("")
+    lines.append(
+        "각 단원의 교수-평가 정렬 상태와 인지수준 분포를 요약합니다.  "
+        "'인지수준절벽'은 지식축적 대비 이해·적용 수준의 정답률이 크게 낮은 경우입니다."
+    )
+    lines.append("")
+
+    if not findings:
+        lines.append("정렬 분석 데이터가 없습니다.")
+        lines.append("")
+        return lines
+
+    headers = ("단원", "정렬 플래그", "교수주차", "출제문항", "코호트 정답률")
+    sep = "| " + " | ".join("---" for _ in headers) + " |"
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append(sep)
+
+    for f in sorted(findings, key=lambda x: x.chapter):
+        lines.append(
+            "| "
+            + " | ".join([
+                f.chapter,
+                f.flag,
+                str(f.taught_weeks),
+                str(f.tested_items),
+                f"{f.learned_rate:.2f}",
+            ])
+            + " |"
+        )
+
+    lines.append("")
+
+    # Cliff chapters summary
+    cliff_chapters = [f.chapter for f in findings if f.flag == "인지수준절벽"]
+    if cliff_chapters:
+        lines.append("**인지수준절벽 단원:**")
+        for ch in sorted(cliff_chapters):
+            f = next(x for x in findings if x.chapter == ch)
+            profile_str = ", ".join(
+                f"{t}: {r:.2f}" for t, r in sorted(f.cognitive_profile.items())
+            )
+            lines.append(f"- {ch}: 인지수준별 정답률 [{profile_str}]")
+        lines.append("")
+
+    return lines
+
+
 def build_report_md(
     recs: list[ChangeRecommendation],
     uncovered_ratio: float,
@@ -263,6 +327,7 @@ def build_report_md(
     prescriptions: dict[tuple[str, str], str] | None = None,
     forward_ledger: list[ImprovementLedgerEntry] | None = None,
     forward_audit: dict | None = None,
+    alignment_findings: list[AlignmentFinding] | None = None,
 ) -> str:
     """Build the Markdown retrospective report (US1 + US2 + US3 sections).
 
@@ -295,6 +360,8 @@ def build_report_md(
         forward_audit: Optional audit dict from ``audit_prior``.  Included in
             section (B) as 작년 변경 효과감사.  Ignored when
             ``forward_ledger`` is ``None``.
+        alignment_findings: Optional list of ``AlignmentFinding`` for section
+            (D) 인지수준·정렬 (US4 T047).  When ``None``, section (D) is omitted.
 
     Returns:
         Deterministic Markdown string ready to be written to ``.md`` or
@@ -350,6 +417,10 @@ def build_report_md(
     # Section (C): group-differentiated strategy (US2 T035)
     if prescriptions is not None:
         lines.extend(_build_group_strategy_section(gaps, prescriptions))
+
+    # Section (D): 인지수준·정렬 (US4 T047)
+    if alignment_findings is not None:
+        lines.extend(_build_alignment_section(alignment_findings))
 
     return "\n".join(lines)
 
