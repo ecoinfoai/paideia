@@ -33,6 +33,11 @@ import hashlib
 from pathlib import Path
 
 from retro_mester.cause.prescription import prescription_for, refine_cause
+from retro_mester.forward.audit import audit_prior
+from retro_mester.forward.baseline import build_baseline
+from retro_mester.forward.ledger import build_ledger
+from retro_mester.forward.next_items import propose_next_items, write_next_items_md
+from retro_mester.forward.write import next_year, write_forward
 from retro_mester.gaps.detect import detect_gaps
 from retro_mester.gaps.escalate import escalate_structural
 from retro_mester.load import (
@@ -137,26 +142,36 @@ def run_retro(
     data_root: str = "data",
     config_path: str | None = None,
     prior_year: str | None = None,
+    prior_yaml_path: str | None = None,
     llm_mode: str = "off",
     require_llm: bool = False,
 ) -> int:
-    """Run the full US1 retrospective analytics pipeline.
+    """Run the full retrospective analytics pipeline (US1–US3).
 
     Steps:
     1. Resolve all input paths under ``data_root``.
     2. Load combined + items + exam_spec + config; reconcile config.
-    3. detect_gaps → rank_changes.
-    4. Archive existing outputs (gold + silver retro dirs).
-    5. Write Silver parquet + Gold md/pdf/xlsx + manifest.
+    3. detect_gaps → escalate_structural → prescriptions → cluster vocab
+       → rank_changes (US1 + US2).
+    4. Build forward baseline + ledger + next-item proposals (US3).
+    5. If ``prior_yaml_path`` provided, run audit against prior ledger.
+    6. Archive existing outputs (gold + silver retro dirs).
+    7. Write Silver parquet + Gold md/pdf/xlsx/yaml/md + manifest.
 
     Args:
         semester: Semester code, e.g. ``"2026-1"``.
         course: Course slug, e.g. ``"anatomy"``.
         data_root: Root of the data hierarchy (default ``"data"``).
         config_path: Optional explicit path to ``retro_config.yaml``.
-        prior_year: Prior-year semester for YoY alignment (not used in US1).
-        llm_mode: LLM mode — ``"off"`` (US1), ``"subscription"``, or ``"api"``.
-        require_llm: If True, exit 5 when LLM is unavailable (not used in US1).
+        prior_year: Prior-year semester label (used for metadata /
+            ``created_for_year`` computation).  When ``None``, derived via
+            ``next_year(semester)``.
+        prior_yaml_path: Optional path to a prior ``차년도방향.yaml`` for
+            audit.  When ``None``, cold-start (no audit section).
+        llm_mode: LLM mode — ``"off"`` (default), ``"subscription"``,
+            or ``"api"``.
+        require_llm: If True, exit 5 when LLM is unavailable (unused in
+            US1–US3).
 
     Returns:
         Integer exit code:
@@ -173,6 +188,7 @@ def run_retro(
             data_root=data_root_path,
             config_path=config_path,
             prior_year=prior_year,
+            prior_yaml_path=prior_yaml_path,
             llm_mode=llm_mode,
         )
     except InputError:
@@ -188,6 +204,7 @@ def _run(
     data_root: Path,
     config_path: str | None,
     prior_year: str | None,
+    prior_yaml_path: str | None,
     llm_mode: str,
 ) -> int:
     """Inner implementation — exceptions propagate to ``run_retro``'s handler.
@@ -197,8 +214,9 @@ def _run(
         course: Course slug.
         data_root: Resolved data root Path.
         config_path: Optional explicit config path override.
-        prior_year: Prior-year semester (unused in US1).
-        llm_mode: LLM mode string (unused in US1).
+        prior_year: Prior-year semester label for metadata (unused for audit).
+        prior_yaml_path: Optional path to prior 차년도방향.yaml for audit.
+        llm_mode: LLM mode string (unused in US1–US3).
 
     Returns:
         0 on success; raises on failure.
@@ -274,6 +292,27 @@ def _run(
     recs = patched_recs
 
     # ------------------------------------------------------------------
+    # Step 3b: US3 T037-T041 — forward-contract planning
+    # ------------------------------------------------------------------
+    # Derive the year this forward plan is created for.
+    created_for_year = next_year(semester)
+
+    # T037: build per-(segment × chapter) baseline snapshot.
+    baseline = build_baseline(rows, config)
+
+    # T038: build improvement ledger from covered recommendations.
+    covered_recs = [r for r in recs if r.is_covered]
+    ledger = build_ledger(covered_recs, gaps, config, created_for_year=created_for_year)
+
+    # T041: propose next-year diagnostic items.
+    proposals = propose_next_items(gaps, rows, config)
+
+    # T040: optional audit against prior-year yaml.
+    forward_audit: dict | None = None
+    if prior_yaml_path is not None:
+        forward_audit = audit_prior(Path(prior_yaml_path), baseline)
+
+    # ------------------------------------------------------------------
     # Step 4: Compute timestamps
     # ------------------------------------------------------------------
     # Real now() — used ONLY for archival dir names and manifest.generated_at_utc
@@ -305,9 +344,16 @@ def _run(
     # Silver
     write_silver(gaps, recs, silver_out)
 
-    # Gold — Markdown (US2 T035: pass prescriptions for 집단별 전략 section)
+    # Gold — Markdown (US2 T035 + US3 T042: forward section)
     md_text = build_report_md(
-        recs, uncovered_ratio, gaps, semester, course, prescriptions=prescriptions
+        recs,
+        uncovered_ratio,
+        gaps,
+        semester,
+        course,
+        prescriptions=prescriptions,
+        forward_ledger=ledger,
+        forward_audit=forward_audit,
     )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
@@ -316,6 +362,20 @@ def _run(
 
     # Gold — xlsx (US2 T035: pass prescriptions for 집단대비 sheet)
     write_xlsx(gaps, recs, gold_out / "회고분석.xlsx", when, prescriptions=prescriptions)
+
+    # Gold — 차년도방향.yaml (US3 T039)
+    write_forward(
+        gold_out / "차년도방향.yaml",
+        ledger=ledger,
+        baseline=baseline,
+        semester=semester,
+        course_slug=course,
+        created_for_year=created_for_year,
+        audit=forward_audit,
+    )
+
+    # Gold — 차년도진단문항제안.md (US3 T041)
+    write_next_items_md(gold_out / "차년도진단문항제안.md", proposals)
 
     # Gold — manifest (uses real now_utc for generated_at_utc)
     inputs: dict[str, str] = {
@@ -348,7 +408,7 @@ def _run(
 
     degrade: dict[str, bool | str] = {
         "llm_used": False,
-        "prior_year_present": prior_year is not None,
+        "prior_year_present": prior_yaml_path is not None,
         "granularity_note": (
             "group×chapter×item_type 3원 교차 미가용 — 인지수준 cohort 주석"
         ),

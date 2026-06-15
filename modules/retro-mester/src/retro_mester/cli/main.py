@@ -101,6 +101,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Prior-year semester code for year-on-year alignment (e.g. '2025-1')",
     )
     run_p.add_argument(
+        "--prior-yaml-path",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a prior 차년도방향.yaml for forward-contract audit. "
+            "When omitted, cold-start (no audit section emitted)."
+        ),
+    )
+    run_p.add_argument(
         "--llm-mode",
         type=str,
         choices=("off", "subscription", "api"),
@@ -160,6 +170,7 @@ def _run_handler(args: argparse.Namespace) -> int:
         data_root=str(args.data_root),
         config_path=str(args.config) if args.config is not None else None,
         prior_year=args.prior_year,
+        prior_yaml_path=str(args.prior_yaml_path) if args.prior_yaml_path is not None else None,
         llm_mode=args.llm_mode,
         require_llm=args.require_llm,
     )

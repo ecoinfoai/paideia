@@ -1,4 +1,4 @@
-"""T026 / T035 — Deterministic Markdown report builder for retro-mester.
+"""T026 / T035 / T042 — Deterministic Markdown report builder for retro-mester.
 
 Entry point: ``build_report_md(recs, uncovered_ratio, gaps, semester, course)``.
 
@@ -8,6 +8,10 @@ with columns:
   순위 | 단원 | 집단 | 인지수준 | 원인 가설 | 덮는 학생(n) | 덮는 학생(%) | 단원무게 | 실행난이도 | 우선순위 사분면
 
 Followed by a line stating the uncovered-gap ratio.
+
+Section (B) 내년 준비 예견 (US3 T042): carry-forward cohort traits and ledger
+summary; optional 작년 변경 효과감사 subsection when audit data is present.
+FR-016: explicitly states NO micro YoY extrapolation.
 
 Section (C) 집단별 전략 (US2 T035): group-differentiated strategy tables
 for 학령기 and 만학도, listing prescription per chapter gap.
@@ -19,6 +23,7 @@ No individual student names or IDs appear.
 from __future__ import annotations
 
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
+from paideia_shared.schemas.retro_forward import ImprovementLedgerEntry
 from paideia_shared.schemas.unit_gap import UnitGap
 
 _TABLE_HEADERS = (
@@ -124,6 +129,129 @@ def _build_group_strategy_section(
     return lines
 
 
+def _build_forward_section(
+    ledger: list[ImprovementLedgerEntry],
+    audit: dict | None,
+    gaps: list[UnitGap],
+) -> list[str]:
+    """Build section (B) 내년 준비 예견 (US3 T042).
+
+    Emits:
+    - Coarse cohort trait carry-forward prose (FR-016 compliant — no micro
+      YoY extrapolation).
+    - Ledger summary table (entry_id, chapter, segment, baseline, target).
+    - Optional '작년 변경 효과감사' subsection when audit is provided.
+
+    FR-016: This section explicitly states that no micro year-over-year
+    extrapolation is performed.  Trends are described only at the coarse
+    cohort level (e.g. heterogeneous mix assumption).
+
+    Args:
+        ledger: Improvement ledger entries for next year.
+        audit: Optional audit dict from ``audit_prior``.  ``None`` → cold-start.
+        gaps: Current-year gaps for cohort trait inference.
+
+    Returns:
+        List of Markdown line strings.
+    """
+    lines: list[str] = []
+    lines.append("## (B) 내년 준비 예견")
+    lines.append("")
+
+    # FR-016 disclaimer
+    lines.append(
+        "> **주의**: 본 절은 연도간 미시적 외삽(YoY extrapolation)을 수행하지 않습니다.  "
+    )
+    lines.append(
+        "> 코호트 특성은 현재 학기 데이터에서 추론한 조건부 가정이며, "
+        "다음 학기 실제 코호트와 다를 수 있습니다."
+    )
+    lines.append("")
+
+    # Coarse cohort trait carry-forward
+    is_structural_any = any(g.is_structural for g in gaps)
+    segments_present = sorted({g.segment for g in gaps})
+    multi_segment = len(segments_present) > 1
+
+    lines.append("### 코호트 특성 이월 가정")
+    lines.append("")
+    if multi_segment:
+        lines.append(
+            f"이질혼합(bio-weak·{'/'.join(segments_present)}) 구조가 "
+            "차년도에도 유지될 것으로 가정합니다."
+        )
+    else:
+        lines.append("단일 집단 구조가 차년도에도 유지될 것으로 가정합니다.")
+    if is_structural_any:
+        lines.append(
+            "구조적 빈틈이 확인되었습니다 — 교수법·교재 수준 개선 없이는 "
+            "다음 학기에도 유사한 패턴이 나타날 수 있습니다."
+        )
+    lines.append("")
+
+    # Ledger summary table
+    lines.append("### 개선 서약 요약")
+    lines.append("")
+    if ledger:
+        hdr = ("서약 ID", "단원", "집단", "현 기준치", "목표치", "측정 시점")
+        sep = "| " + " | ".join("---" for _ in hdr) + " |"
+        lines.append("| " + " | ".join(hdr) + " |")
+        lines.append(sep)
+        for e in ledger:
+            lines.append(
+                "| "
+                + " | ".join([
+                    e.entry_id[:8] + "…",
+                    e.chapter,
+                    e.segment,
+                    f"{e.baseline_value:.2f}",
+                    f"{e.target_value:.2f}",
+                    e.measure_at,
+                ])
+                + " |"
+            )
+        lines.append("")
+    else:
+        lines.append("개선 서약 없음 (커버된 권고 없음).")
+        lines.append("")
+
+    # Optional audit subsection
+    if audit is not None:
+        lines.append("### 작년 변경 효과감사")
+        lines.append("")
+        prior_year = audit.get("prior_year", "N/A")
+        lines.append(f"기준: {prior_year} 학기 서약")
+        lines.append("")
+        results = audit.get("results", [])
+        if results:
+            ahdr = ("서약 ID", "이전 기준치", "목표치", "금년 실제값", "달성")
+            asep = "| " + " | ".join("---" for _ in ahdr) + " |"
+            lines.append("| " + " | ".join(ahdr) + " |")
+            lines.append(asep)
+            for r in results:
+                this_val = r.get("this_year_value")
+                val_str = f"{this_val:.2f}" if this_val is not None else "N/A"
+                met_str = "✓" if r.get("met") else "✗"
+                eid = str(r.get("entry_id", ""))
+                lines.append(
+                    "| "
+                    + " | ".join([
+                        eid[:8] + "…" if len(eid) > 8 else eid,
+                        f"{r.get('prior_baseline', 0.0):.2f}",
+                        f"{r.get('prior_target', 0.0):.2f}",
+                        val_str,
+                        met_str,
+                    ])
+                    + " |"
+                )
+            lines.append("")
+        else:
+            lines.append("감사 결과 없음.")
+            lines.append("")
+
+    return lines
+
+
 def build_report_md(
     recs: list[ChangeRecommendation],
     uncovered_ratio: float,
@@ -133,13 +261,18 @@ def build_report_md(
     *,
     llm_block: str | None = None,
     prescriptions: dict[tuple[str, str], str] | None = None,
+    forward_ledger: list[ImprovementLedgerEntry] | None = None,
+    forward_audit: dict | None = None,
 ) -> str:
-    """Build the Markdown retrospective report (US1 sections + US2 집단별 전략).
+    """Build the Markdown retrospective report (US1 + US2 + US3 sections).
 
     Generates a deterministic Markdown string covering:
     - Section (A): covered recommendations ranked 1..N in a table, followed
       by a summary line for uncovered gaps.
-    - Section (B): optional LLM-generated narrative (US2+ when provided).
+    - Section (B): 내년 준비 예견 (US3 T042) — emitted when
+      ``forward_ledger`` is provided.  Includes optional 작년 변경 효과감사
+      subsection when ``forward_audit`` is not ``None``.
+      FR-016: explicitly states no micro YoY extrapolation.
     - Section (C): 집단별 전략 — group-differentiated strategy tables for
       each segment present in ``gaps`` (US2 T035; emitted when
       ``prescriptions`` is provided).
@@ -154,9 +287,14 @@ def build_report_md(
         semester: Semester code, e.g. ``"2026-1"``.
         course: Course slug, e.g. ``"anatomy"``.
         llm_block: Optional LLM-generated narrative block for US2+.
-            When ``None``, section (B) is omitted.
+            When ``None``, section (B) LLM prose is omitted.
         prescriptions: Optional mapping ``(chapter, segment) → prescription``
             for section (C).  When ``None``, section (C) is omitted.
+        forward_ledger: Optional list of ``ImprovementLedgerEntry`` instances
+            for section (B).  When ``None``, section (B) is omitted.
+        forward_audit: Optional audit dict from ``audit_prior``.  Included in
+            section (B) as 작년 변경 효과감사.  Ignored when
+            ``forward_ledger`` is ``None``.
 
     Returns:
         Deterministic Markdown string ready to be written to ``.md`` or
@@ -198,9 +336,13 @@ def build_report_md(
     )
     lines.append("")
 
-    # Optional LLM block (US2+)
+    # Section (B): 내년 준비 예견 (US3 T042)
+    if forward_ledger is not None:
+        lines.extend(_build_forward_section(forward_ledger, forward_audit, gaps))
+
+    # Optional LLM block (reserved for future US)
     if llm_block is not None:
-        lines.append("## (B) 심층 분석")
+        lines.append("## (B-LLM) 심층 분석")
         lines.append("")
         lines.append(llm_block)
         lines.append("")
