@@ -1,11 +1,10 @@
-"""Segment assignment for retro-mester analysis (T021, US1).
+"""Segment assignment for retro-mester analysis (T021, US1; T031 US2).
 
 Partitions CombinedAnalysisRow records into per-segment buckets using the
 ``group_roster`` from RetroMesterConfig.  Students not listed in the roster
 are excluded from all segment buckets and returned separately as ``unclassified``.
 
-US2 (T031) will extend this module to designate the baseline segment and
-support multi-cohort comparisons.
+T031 (US2): adds ``baseline_segment`` accessor.
 """
 
 from __future__ import annotations
@@ -25,9 +24,6 @@ def assign_segments(
     Students not present in ``config.group_roster`` are placed in the
     ``unclassified`` list and are **not** included in any segment bucket.
     Downstream gap detection must operate only on classified students.
-
-    US2 note: baseline designation (``config.baseline_segment``) and multi-cohort
-    handling will be wired here in T031.
 
     Args:
         rows: All ``CombinedAnalysisRow`` records loaded for this run.
@@ -53,4 +49,22 @@ def assign_segments(
     return dict(buckets), unclassified
 
 
-__all__ = ["assign_segments"]
+def baseline_segment(config: RetroMesterConfig) -> SegmentKey:
+    """Return the designated baseline segment from config.
+
+    The baseline segment is used as the reference point for structural
+    escalation (T032): when the baseline segment is also below the gap
+    threshold on a chapter, all gaps for that chapter are escalated to
+    ``is_structural=True``.
+
+    Args:
+        config: Active ``RetroMesterConfig``.
+
+    Returns:
+        The ``SegmentKey`` configured as the analysis baseline
+        (default: ``"만학도"``).
+    """
+    return config.baseline_segment
+
+
+__all__ = ["assign_segments", "baseline_segment"]

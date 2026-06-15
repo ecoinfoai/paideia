@@ -1,14 +1,15 @@
-"""T028 — Gold-layer xlsx writer for retro-mester.
+"""T028 / T035 — Gold-layer xlsx writer for retro-mester.
 
 Entry point: ``write_xlsx(gaps, recs, xlsx_path, when)``.
 
 Sheets:
 - ``빈틈``       — one row per UnitGap.
 - ``변경권고``   — one row per ChangeRecommendation.
+- ``집단대비``   — per chapter × segment comparison (US2 T035).
 
 Determinism:
 - Row order: gaps sorted by (chapter, segment); recs by (rank nulls-last,
-  chapter, segment).
+  chapter, segment); 집단대비 sorted by (chapter, segment).
 - Workbook creator / lastModifiedBy pinned to ``_PRODUCER``.
 - ``finalize_xlsx(xlsx_path, when)`` rewrites ``<dcterms:modified>`` and
   ``<dcterms:created>`` post-save for byte-identical output.
@@ -26,6 +27,17 @@ from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 
 from retro_mester.output.determinism import finalize_xlsx
+
+# Columns for the US2 집단대비 (group comparison) sheet.
+_CONTRAST_COLUMNS: list[str] = [
+    "chapter",
+    "segment",
+    "segment_mean_rate",
+    "n_below",
+    "is_structural",
+    "cause",
+    "prescription",
+]
 
 _PRODUCER = "paideia/retro-mester/0.1.0"
 
@@ -112,13 +124,52 @@ def _build_rec_sheet(wb: Workbook, recs: list[ChangeRecommendation]) -> None:
             ws.cell(row_idx, c, row_dict[col])
 
 
+def _build_contrast_sheet(
+    wb: Workbook,
+    gaps: list[UnitGap],
+    prescriptions: dict[tuple[str, str], str],
+) -> None:
+    """Build the 집단대비 (group comparison) sheet (US2 T035).
+
+    One row per (chapter, segment) gap showing the key metrics and the
+    group-specific prescription.  No student IDs are written.
+
+    Args:
+        wb: Target workbook.
+        gaps: All UnitGap records (already escalated by escalate_structural).
+        prescriptions: Mapping (chapter, segment) → prescription string;
+            built in the pipeline before calling write_xlsx.
+    """
+    ws = wb.create_sheet("집단대비")
+    bold = Font(bold=True)
+
+    for c, col in enumerate(_CONTRAST_COLUMNS, start=1):
+        ws.cell(1, c, col).font = bold
+
+    sorted_gaps = sorted(gaps, key=lambda g: (g.chapter, g.segment))
+    for r, gap in enumerate(sorted_gaps, start=2):
+        presc = prescriptions.get((gap.chapter, gap.segment), "")
+        row_values = [
+            gap.chapter,
+            gap.segment,
+            gap.segment_mean_rate,
+            gap.n_below,
+            gap.is_structural,
+            gap.cause,
+            presc,
+        ]
+        for c, val in enumerate(row_values, start=1):
+            ws.cell(r, c, val)
+
+
 def write_xlsx(
     gaps: list[UnitGap],
     recs: list[ChangeRecommendation],
     xlsx_path: Path,
     when: datetime.datetime,
+    prescriptions: dict[tuple[str, str], str] | None = None,
 ) -> None:
-    """Write ``빈틈`` and ``변경권고`` sheets to ``xlsx_path``.
+    """Write ``빈틈``, ``변경권고``, and ``집단대비`` sheets to ``xlsx_path``.
 
     Never calls ``datetime.now()`` internally.  ``finalize_xlsx`` is
     called after ``save()`` to pin ``<dcterms:modified>`` and
@@ -130,6 +181,9 @@ def write_xlsx(
         recs: List of ChangeRecommendation records.
         xlsx_path: Destination ``.xlsx`` path. Parent directory must exist.
         when: Timestamp for workbook metadata and determinism pin.
+        prescriptions: Optional mapping ``(chapter, segment) → prescription``
+            for the 집단대비 sheet (US2 T035).  When ``None``, the sheet is
+            still written but prescription cells are empty.
 
     Raises:
         FileNotFoundError: When ``xlsx_path.parent`` does not exist.
@@ -148,6 +202,7 @@ def write_xlsx(
 
     _build_gap_sheet(wb, gaps)
     _build_rec_sheet(wb, recs)
+    _build_contrast_sheet(wb, gaps, prescriptions or {})
 
     # Pin workbook-level metadata
     wb.properties.creator = _PRODUCER

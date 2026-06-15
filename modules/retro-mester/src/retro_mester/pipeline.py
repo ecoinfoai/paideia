@@ -1,13 +1,14 @@
-"""T029 — US1 retro-mester pipeline: load → detect → rank → output.
+"""T029 / T035–T036 — retro-mester pipeline: load → detect → escalate → rank → output.
 
 Entry point: ``run_retro(...) -> int`` (exit code).
 
 Steps:
 1. Resolve input paths under ``data_root``.
 2. Load combined + items + exam_spec + config; call ``reconcile_config``.
-3. ``detect_gaps`` → ``rank_changes``.
-4. Write Silver (빈틈표.parquet, 변경권고.parquet) and Gold
-   (CQI회고보고서.md/.pdf, 회고분석.xlsx, manifest_retro.json).
+3. ``detect_gaps`` → ``escalate_structural`` (US2 T032) → ``rank_changes``.
+4. Compute per-(chapter,segment) prescriptions (US2 T033) and cluster vocab (US2 T034).
+5. Write Silver (빈틈표.parquet, 변경권고.parquet) and Gold
+   (CQI회고보고서.md/.pdf, 회고분석.xlsx with 집단대비 sheet, manifest_retro.json).
 
 Determinism
 -----------
@@ -31,7 +32,9 @@ import datetime
 import hashlib
 from pathlib import Path
 
+from retro_mester.cause.prescription import prescription_for, refine_cause
 from retro_mester.gaps.detect import detect_gaps
+from retro_mester.gaps.escalate import escalate_structural
 from retro_mester.load import (
     InputError,
     load_combined,
@@ -48,6 +51,7 @@ from retro_mester.output.report_pdf import write_report_pdf
 from retro_mester.output.silver import write_silver
 from retro_mester.output.xlsx import write_xlsx
 from retro_mester.prioritize.rank import rank_changes
+from retro_mester.segment.vocab import segment_cluster_vocab
 
 # ---------------------------------------------------------------------------
 # Module / schema versions
@@ -229,10 +233,45 @@ def _run(
     reconcile_config(config, chapters, student_ids)
 
     # ------------------------------------------------------------------
-    # Step 3: Detect gaps and rank changes
+    # Step 3: Detect gaps → escalate structural → compute prescriptions
+    #         → cluster vocab → rank changes (US2 T032-T036)
     # ------------------------------------------------------------------
     gaps = detect_gaps(rows, items, config)
+
+    # US2 T032: escalate chapters where baseline is also below threshold.
+    gaps = escalate_structural(gaps, rows, config)
+
+    # US2 T033: refine cause per gap and compute per-(chapter,segment) prescriptions.
+    refined_gaps = []
+    prescriptions: dict[tuple[str, str], str] = {}
+    for gap in gaps:
+        refined_cause, extra_signals = refine_cause(gap, rows, items, config)
+        # Rebuild gap with refined cause (UnitGap is frozen).
+        if refined_cause != gap.cause:
+            merged_signals = {**gap.cause_signals, **extra_signals}
+            gap = gap.model_copy(update={"cause": refined_cause, "cause_signals": merged_signals})
+        else:
+            # Still merge extra_signals for traceability.
+            merged_signals = {**gap.cause_signals, **extra_signals}
+            gap = gap.model_copy(update={"cause_signals": merged_signals})
+        refined_gaps.append(gap)
+        prescriptions[(gap.chapter, gap.segment)] = prescription_for(gap.cause, gap.segment)
+    gaps = refined_gaps
+
+    # US2 T034: cluster vocabulary per segment.
+    vocab = segment_cluster_vocab(rows, config)
+
     recs, uncovered_ratio = rank_changes(gaps, config)
+
+    # US2 T035: patch prescription_key and cluster_vocab onto recommendations.
+    patched_recs = []
+    for rec in recs:
+        presc = prescriptions.get((rec.chapter, rec.segment), rec.prescription_key)
+        cv = vocab.get(rec.segment)
+        patched_recs.append(
+            rec.model_copy(update={"prescription_key": presc, "cluster_vocab": cv})
+        )
+    recs = patched_recs
 
     # ------------------------------------------------------------------
     # Step 4: Compute timestamps
@@ -266,15 +305,17 @@ def _run(
     # Silver
     write_silver(gaps, recs, silver_out)
 
-    # Gold — Markdown
-    md_text = build_report_md(recs, uncovered_ratio, gaps, semester, course)
+    # Gold — Markdown (US2 T035: pass prescriptions for 집단별 전략 section)
+    md_text = build_report_md(
+        recs, uncovered_ratio, gaps, semester, course, prescriptions=prescriptions
+    )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
     # Gold — PDF (uses DETERMINISTIC_EPOCH for SOURCE_DATE_EPOCH)
     write_report_pdf(md_text, gold_out / "CQI회고보고서.pdf", when)
 
-    # Gold — xlsx (uses DETERMINISTIC_EPOCH for finalize_xlsx pinning)
-    write_xlsx(gaps, recs, gold_out / "회고분석.xlsx", when)
+    # Gold — xlsx (US2 T035: pass prescriptions for 집단대비 sheet)
+    write_xlsx(gaps, recs, gold_out / "회고분석.xlsx", when, prescriptions=prescriptions)
 
     # Gold — manifest (uses real now_utc for generated_at_utc)
     inputs: dict[str, str] = {
