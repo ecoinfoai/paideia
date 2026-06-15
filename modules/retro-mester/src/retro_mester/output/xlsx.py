@@ -1,4 +1,4 @@
-"""T028 / T035 / T047 — Gold-layer xlsx writer for retro-mester.
+"""T028 / T035 / T047 / T051 — Gold-layer xlsx writer for retro-mester.
 
 Entry point: ``write_xlsx(gaps, recs, xlsx_path, when)``.
 
@@ -7,14 +7,19 @@ Sheets:
 - ``변경권고``   — one row per ChangeRecommendation.
 - ``집단대비``   — per chapter × segment comparison (US2 T035).
 - ``정렬``       — one row per AlignmentFinding (US4 T047).
+- ``타당도``     — per-chapter validity verdict + psychometric signals (US5 T051).
 
 Determinism:
 - Row order: gaps sorted by (chapter, segment); recs by (rank nulls-last,
   chapter, segment); 집단대비 sorted by (chapter, segment); 정렬 sorted by
-  (chapter).
+  (chapter); 타당도 sorted by (chapter).
 - Workbook creator / lastModifiedBy pinned to ``_PRODUCER``.
 - ``finalize_xlsx(xlsx_path, when)`` rewrites ``<dcterms:modified>`` and
   ``<dcterms:created>`` post-save for byte-identical output.
+
+Note: ``변경권고`` rows where ``validity == "문항수선"`` carry the repair
+prescription (not a re-teaching prescription) — annotated via the
+``validity`` and ``prescription_key`` columns.
 """
 
 from __future__ import annotations
@@ -178,6 +183,46 @@ def _build_contrast_sheet(
             ws.cell(r, c, val)
 
 
+_VALIDITY_COLUMNS: list[str] = [
+    "chapter",
+    "verdict",
+    "mean_discrimination",
+    "low_disc_share",
+    "bad_distractor_share",
+]
+
+
+def _build_validity_sheet(
+    wb: Workbook,
+    validity_table: list[dict],
+) -> None:
+    """Build the 타당도 (assessment-validity) sheet (US5 T051).
+
+    One row per chapter showing the ValidityVerdict and the three numeric
+    psychometric signals used to derive it.  Rows are sorted by chapter
+    ascending.
+
+    Note: rows where ``verdict == "문항수선"`` signal that the chapter's
+    items need revision before instructional prescriptions are meaningful;
+    the corresponding ``변경권고`` rows carry the repair prescription
+    instead of a re-teaching prescription (SC-006).
+
+    Args:
+        wb: Target workbook.
+        validity_table: List of dicts with keys matching ``_VALIDITY_COLUMNS``,
+            one per chapter.  When empty, only the header row is written.
+    """
+    ws = wb.create_sheet("타당도")
+    bold = Font(bold=True)
+
+    for c, col in enumerate(_VALIDITY_COLUMNS, start=1):
+        ws.cell(1, c, col).font = bold
+
+    for r, row in enumerate(sorted(validity_table, key=lambda d: d["chapter"]), start=2):
+        for c, col in enumerate(_VALIDITY_COLUMNS, start=1):
+            ws.cell(r, c, row.get(col))
+
+
 def _build_align_sheet(
     wb: Workbook,
     findings: list[AlignmentFinding],
@@ -214,8 +259,9 @@ def write_xlsx(
     when: datetime.datetime,
     prescriptions: dict[tuple[str, str], str] | None = None,
     alignment_findings: list[AlignmentFinding] | None = None,
+    validity_table: list[dict] | None = None,
 ) -> None:
-    """Write ``빈틈``, ``변경권고``, and ``집단대비`` sheets to ``xlsx_path``.
+    """Write ``빈틈``, ``변경권고``, ``집단대비``, ``정렬``, ``타당도`` sheets.
 
     Never calls ``datetime.now()`` internally.  ``finalize_xlsx`` is
     called after ``save()`` to pin ``<dcterms:modified>`` and
@@ -233,6 +279,11 @@ def write_xlsx(
         alignment_findings: Optional list of AlignmentFinding for the 정렬
             sheet (US4 T047).  When ``None``, the sheet is still written
             but contains only the header row.
+        validity_table: Optional list of per-chapter validity dicts for the
+            타당도 sheet (US5 T051).  Each dict must have keys:
+            ``chapter``, ``verdict``, ``mean_discrimination``,
+            ``low_disc_share``, ``bad_distractor_share``.  When ``None``,
+            the sheet is written with only the header row.
 
     Raises:
         FileNotFoundError: When ``xlsx_path.parent`` does not exist.
@@ -253,6 +304,7 @@ def write_xlsx(
     _build_rec_sheet(wb, recs)
     _build_contrast_sheet(wb, gaps, prescriptions or {})
     _build_align_sheet(wb, alignment_findings or [])
+    _build_validity_sheet(wb, validity_table or [])
 
     # Pin workbook-level metadata
     wb.properties.creator = _PRODUCER
@@ -267,4 +319,4 @@ def write_xlsx(
     finalize_xlsx(xlsx_path, when)
 
 
-__all__ = ["write_xlsx", "_build_align_sheet"]
+__all__ = ["write_xlsx", "_build_align_sheet", "_build_validity_sheet"]

@@ -61,6 +61,12 @@ from retro_mester.output.silver import write_silver
 from retro_mester.output.xlsx import write_xlsx
 from retro_mester.prioritize.rank import rank_changes
 from retro_mester.segment.vocab import segment_cluster_vocab
+from retro_mester.validity.gate import chapter_validity, validity_signals
+
+# Repair prescription used when a chapter's validity is "문항수선" (T050 / SC-006).
+# This constant is the ONLY prescription emitted for such chapters; re-teaching
+# prescriptions are suppressed because the instrument cannot be trusted.
+_REPAIR_PRESCRIPTION = "문항 재검토·교체 — 학습 처방 보류"
 
 # ---------------------------------------------------------------------------
 # Module / schema versions
@@ -330,6 +336,51 @@ def _run(
     _interest_gap_data = interest_aversion_findings(rows)
 
     # ------------------------------------------------------------------
+    # Step 3d: US5 T049/T050 — psychometric validity gate
+    # ------------------------------------------------------------------
+    # Compute per-chapter ValidityVerdict from item-level CTT statistics.
+    validity_verdicts = chapter_validity(items, config)
+
+    # Build per-chapter signals for the 타당도 xlsx sheet (T051).
+    _items_by_chapter: dict[str, list] = {}
+    for it in items:
+        _items_by_chapter.setdefault(it.chapter, []).append(it)
+    validity_table: list[dict] = []
+    for ch in sorted(validity_verdicts.keys()):
+        sigs = validity_signals(_items_by_chapter.get(ch, []), config)
+        validity_table.append({
+            "chapter": ch,
+            "verdict": validity_verdicts[ch],
+            **sigs,
+        })
+
+    # Enrich UnitGap.validity (replaces provisional "판정불가").
+    validity_enriched_gaps: list = []
+    for gap in gaps:
+        verdict = validity_verdicts.get(gap.chapter, "판정불가")
+        if verdict != gap.validity:
+            gap = gap.model_copy(update={"validity": verdict})
+        validity_enriched_gaps.append(gap)
+    gaps = validity_enriched_gaps
+
+    # Enrich ChangeRecommendation: mirror validity from gap; for "문항수선"
+    # chapters, override prescription_key with the repair string (SC-006).
+    # Re-teaching prescriptions are suppressed — the instrument must be fixed
+    # before instructional re-design is meaningful.
+    chapter_validity_map: dict[str, str] = {
+        gap.chapter: gap.validity for gap in gaps
+    }
+    validity_enriched_recs: list = []
+    for rec in recs:
+        rec_validity = chapter_validity_map.get(rec.chapter, "판정불가")
+        updates: dict = {"validity": rec_validity}
+        if rec_validity == "문항수선":
+            updates["prescription_key"] = _REPAIR_PRESCRIPTION
+        rec = rec.model_copy(update=updates)
+        validity_enriched_recs.append(rec)
+    recs = validity_enriched_recs
+
+    # ------------------------------------------------------------------
     # Step 3b: US3 T037-T041 — forward-contract planning
     # ------------------------------------------------------------------
     # Derive the year this forward plan is created for.
@@ -403,7 +454,7 @@ def _run(
     # Gold — PDF (uses DETERMINISTIC_EPOCH for SOURCE_DATE_EPOCH)
     write_report_pdf(md_text, gold_out / "CQI회고보고서.pdf", when)
 
-    # Gold — xlsx (US2 T035 + US4 T047: 정렬 sheet)
+    # Gold — xlsx (US2 T035 + US4 T047: 정렬 sheet + US5 T051: 타당도 sheet)
     write_xlsx(
         gaps,
         recs,
@@ -411,6 +462,7 @@ def _run(
         when,
         prescriptions=prescriptions,
         alignment_findings=alignment_findings,
+        validity_table=validity_table,
     )
 
     # Gold — 차년도방향.yaml (US3 T039)
