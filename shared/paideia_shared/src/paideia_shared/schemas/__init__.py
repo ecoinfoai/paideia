@@ -94,6 +94,22 @@ from .student_pdf_bundle import StudentPDFBundle
 from .subgroup_score_comparison import SubgroupScoreComparison
 from .test_profile import DummyStudent, TestProfile
 from .textbook_chunk import TextbookChunk
+from .retro_common import (
+    AlignmentFlag,
+    CauseLabel,
+    EffortLevel,
+    ImportanceLevel,
+    PriorityQuadrant,
+    SegmentKey,
+    ValidityVerdict,
+)
+from .retro_config import RetroMesterConfig
+from .unit_gap import UnitGap
+from .change_recommendation import ChangeRecommendation
+from .alignment_finding import AlignmentFinding
+from .nextyear_item import NextYearItemProposal, ProposedItemKind
+from .retro_forward import BaselineSnapshotRow, ImprovementLedgerEntry
+from .retro_manifest import RetroManifest
 
 __all__ = [
     "CanonicalStudentId",
@@ -190,4 +206,21 @@ __all__ = [
     "QuizItemCandidate",
     "FormativeItemCandidate",
     "MaieuticaManifest",
+    # spec 010 retro-mester CQI — Literals + 8 models (T005-T012)
+    "SegmentKey",
+    "ImportanceLevel",
+    "EffortLevel",
+    "CauseLabel",
+    "ValidityVerdict",
+    "AlignmentFlag",
+    "PriorityQuadrant",
+    "RetroMesterConfig",
+    "UnitGap",
+    "ChangeRecommendation",
+    "AlignmentFinding",
+    "ProposedItemKind",
+    "NextYearItemProposal",
+    "ImprovementLedgerEntry",
+    "BaselineSnapshotRow",
+    "RetroManifest",
 ]
