@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
-import pytest
 
 from immersio.email.pipeline import run_email_dispatch
 
@@ -44,8 +41,7 @@ def test_self_test_without_send_allowed_as_dry_run(email_fixture) -> None:
     v0.1.0 rejection)."""
     rc = run_email_dispatch(_args(self_test=5, send=False))
     assert rc == 0, (
-        f"dry-run + self-test should exit 0 (v0.1.1 spec.md Edge Cases — "
-        f"dry-run wins); got rc={rc}"
+        f"dry-run + self-test should exit 0 (v0.1.1 spec.md Edge Cases — dry-run wins); got rc={rc}"
     )
 
 

@@ -255,9 +255,7 @@ def _run_build(data_root: Path) -> tuple[list, Path]:
 
     spec = load_generation_spec(bronze / "generation_spec.yaml")
     curriculum_map = load_curriculum_map(bronze / "curriculum_map.yaml")
-    backend = SubscriptionBackend(
-        staging_dir=silver / "staging", responses_dir=responses_dir
-    )
+    backend = SubscriptionBackend(staging_dir=silver / "staging", responses_dir=responses_dir)
     return build(
         spec=spec,
         curriculum_map=curriculum_map,
@@ -319,9 +317,7 @@ def test_cached_rebuild_makes_zero_llm_recalls(tmp_path: Path) -> None:
     _items2, run2 = _run_build(data_root)
     assert run1 == run2, "deterministic run_id must be stable across rebuilds"
 
-    manifest = json.loads(
-        (run2 / "manifest_maieutica.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((run2 / "manifest_maieutica.json").read_text(encoding="utf-8"))
     assert manifest["cache_hit_rate"] == 1.0, (
         "second build must be fully cache-served (0 LLM re-calls) under the "
         f"serial avoid_list — got {manifest['cache_hit_rate']!r}"

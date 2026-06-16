@@ -8,7 +8,9 @@ import pytest
 from immersio.ingest import IngestValidationError, run_ingest
 
 
-def test_two_violations_collected(corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path) -> None:
+def test_two_violations_collected(
+    corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path
+) -> None:
     # 1. Mutate mapping to reference a non-existent CSV column.
     mapping_text = corrupt_mapping.read_text(encoding="utf-8")
     corrupt_mapping.write_text(

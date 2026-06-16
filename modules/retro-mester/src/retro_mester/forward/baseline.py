@@ -61,9 +61,7 @@ def build_baseline(
     for segment in sorted(buckets.keys()):
         seg_rows = buckets[segment]
         for chapter in sorted(all_chapters):
-            students_with_data = [
-                r for r in seg_rows if chapter in r.chapter_correct_rates
-            ]
+            students_with_data = [r for r in seg_rows if chapter in r.chapter_correct_rates]
             if not students_with_data:
                 continue
 

@@ -6,19 +6,16 @@ Spec 004 contracts/xlsx_sheets.md §2 + research §R-04 (결시 제외).
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
-
 from paideia_shared.schemas import HistogramBin
 
 
 def _is_valid_score(value: object) -> bool:
     if value is None:
         return False
-    if isinstance(value, float) and math.isnan(value):
-        return False
-    return True
+    return not (isinstance(value, float) and math.isnan(value))
 
 
 def compute_score_histogram(

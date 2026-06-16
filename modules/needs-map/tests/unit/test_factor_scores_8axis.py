@@ -14,7 +14,6 @@ import typing
 
 from paideia_shared.schemas import FactorScoreRow
 
-
 _EXPECTED_AXES = (
     "digital_efficacy",
     "motivation",

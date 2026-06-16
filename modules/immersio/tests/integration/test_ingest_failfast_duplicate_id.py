@@ -65,4 +65,3 @@ def test_duplicate_student_id_cli_returns_exit_code_4(
     )
     assert code == 4
     assert not (out / "2026-1-anatomy").exists()
-

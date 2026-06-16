@@ -81,11 +81,7 @@ class DiagnosticResponse(BaseModel):
                 f"DiagnosticResponse V3: axis_kind='freetext' requires value_text "
                 f"(student_id={self.student_id!r}, axis={self.axis!r})."
             )
-        if (
-            self.value_int is not None
-            or self.value_bool is not None
-            or self.option_key is not None
-        ):
+        if self.value_int is not None or self.value_bool is not None or self.option_key is not None:
             raise ValueError(
                 f"DiagnosticResponse V3: axis_kind='freetext' must leave "
                 f"value_int/value_bool/option_key as None "

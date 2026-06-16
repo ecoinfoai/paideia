@@ -19,9 +19,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 HEADER: tuple[str, ...] = (
-    ("학번", "이름")
-    + tuple(f"W{week:02d}" for week in range(1, 17))
-    + ("비고",)
+    ("학번", "이름") + tuple(f"W{week:02d}" for week in range(1, 17)) + ("비고",)
 )
 
 

@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import hashlib
 import io
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from immersio.email.composer import build_email_draft
 from immersio.email.confirm_gate import confirm_first_n
 from paideia_shared.schemas import (
@@ -86,9 +85,7 @@ _STUDENT_FIXTURE: list[tuple[str, str, str]] = [
 
 def _make_drafts(tmp_path: Path, n: int):
     """첫 n 명의 (draft, bundle) 쌍 생성. n ≤ len(_STUDENT_FIXTURE)."""
-    assert n <= len(_STUDENT_FIXTURE), (
-        f"fixture only covers {len(_STUDENT_FIXTURE)} students"
-    )
+    assert n <= len(_STUDENT_FIXTURE), f"fixture only covers {len(_STUDENT_FIXTURE)} students"
     drafts = []
     profile = _profile()
     for i, (sid, name_kr, email) in enumerate(_STUDENT_FIXTURE[:n]):
@@ -108,7 +105,7 @@ def _make_drafts(tmp_path: Path, n: int):
             student_id=sid,
             email=email,
             source_row_index=i,
-            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
         )
         draft = build_email_draft(
             profile=profile,
@@ -204,10 +201,7 @@ def test_production_gate_count_and_skip_list(
     FAIL.
     """
     # ── 0. fixture 사전 invariant (PreSendSummary validator 가 강제하지만 명시) ─
-    assert (
-        sendable_count + len(idempotent_skipped_sids) + cohort_outside_count
-        == total_targets
-    ), (
+    assert sendable_count + len(idempotent_skipped_sids) + cohort_outside_count == total_targets, (
         f"[{scenario_id}] fixture bucket sum invariant violated: "
         f"sendable({sendable_count}) + skip({len(idempotent_skipped_sids)}) "
         f"+ outside({cohort_outside_count}) != total({total_targets})"
@@ -240,8 +234,7 @@ def test_production_gate_count_and_skip_list(
 
     # ── 1. 헤더 줄 ────────────────────────────────────────────────────
     assert "[immersio email] 확인 게이트" in lines, (
-        f"[{scenario_id}] 헤더 줄 부재.\n"
-        f"--- stdout ---\n{text}\n--- end ---"
+        f"[{scenario_id}] 헤더 줄 부재.\n--- stdout ---\n{text}\n--- end ---"
     )
 
     # ── 2. 4-bucket 카운트 줄 — 정확한 텍스트 ─────────────────────────
@@ -260,9 +253,7 @@ def test_production_gate_count_and_skip_list(
     # ── 3. 학번 명단 줄 — skip 카운트별 분기 ──────────────────────────
     if expected_sid_line_present:
         # 형식: "  이미 발송된 첫 3 학번: sid1, sid2, sid3"
-        expected_sid_line = (
-            "  이미 발송된 첫 3 학번: " + ", ".join(expected_sids_in_line)
-        )
+        expected_sid_line = "  이미 발송된 첫 3 학번: " + ", ".join(expected_sids_in_line)
         assert expected_sid_line in lines, (
             f"[{scenario_id}] 학번 명단 줄 부재.\n"
             f"  expected: {expected_sid_line!r}\n"
@@ -281,12 +272,10 @@ def test_production_gate_count_and_skip_list(
                 f"{len(matching)}\n  matched: {matching!r}"
             )
             assert "0000000004" not in matching[0], (
-                f"[{scenario_id}] cap 위반 — 학번 4번째가 명단 줄에 노출:\n"
-                f"  line: {matching[0]!r}"
+                f"[{scenario_id}] cap 위반 — 학번 4번째가 명단 줄에 노출:\n  line: {matching[0]!r}"
             )
             assert "0000000005" not in matching[0], (
-                f"[{scenario_id}] cap 위반 — 학번 5번째가 명단 줄에 노출:\n"
-                f"  line: {matching[0]!r}"
+                f"[{scenario_id}] cap 위반 — 학번 5번째가 명단 줄에 노출:\n  line: {matching[0]!r}"
             )
     else:
         # skip 0건 — 명단 줄이 *어떤 형식으로도* 나타나면 안 됨 (§3 + FR-C04b).

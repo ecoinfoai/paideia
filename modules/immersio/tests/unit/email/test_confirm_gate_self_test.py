@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import hashlib
 import io
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from immersio.email.composer import build_email_draft
 from immersio.email.confirm_gate import confirm_first_n
 from paideia_shared.schemas import (
@@ -106,7 +105,7 @@ def _make_drafts(tmp_path: Path, n: int):
             student_id=sid,
             email=email,
             source_row_index=i,
-            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
         )
         draft = build_email_draft(
             profile=profile,
@@ -181,11 +180,8 @@ def test_self_test_gate_output(
         f"[{scenario_id}] line 0 mismatch: {lines[0]!r}"
     )
     assert lines[1] == (
-        "*** 주의: 현재 본인 테스트(SELF-TEST) 모드입니다. "
-        "학생 메일함 도달 0건. ***"
-    ), (
-        f"[{scenario_id}] line 1 (강조 라인 1) mismatch: {lines[1]!r}"
-    )
+        "*** 주의: 현재 본인 테스트(SELF-TEST) 모드입니다. 학생 메일함 도달 0건. ***"
+    ), f"[{scenario_id}] line 1 (강조 라인 1) mismatch: {lines[1]!r}"
     assert lines[2] == f"*** 본인({OPERATOR_EMAIL}) 메일함으로만 발송됩니다. ***", (
         f"[{scenario_id}] line 2 (강조 라인 2) mismatch: {lines[2]!r}"
     )
@@ -232,8 +228,7 @@ def test_self_test_gate_output(
         )
         row = matching[0]
         assert row.endswith(operator_suffix), (
-            f"[{scenario_id}] 학번 {sid} 행이 {operator_suffix!r} 로 끝나지 않음:\n"
-            f"  row: {row!r}"
+            f"[{scenario_id}] 학번 {sid} 행이 {operator_suffix!r} 로 끝나지 않음:\n  row: {row!r}"
         )
         # 표본 라인은 학생 이름·이메일을 포함 (v0.1.0 그대로).
         assert f"이름={name_kr}" in row, (

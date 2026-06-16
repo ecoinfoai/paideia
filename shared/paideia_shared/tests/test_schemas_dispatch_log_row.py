@@ -8,17 +8,16 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import (
     CohortLabel,
     DispatchLogRow,
     DispatchMode,
     DispatchStatus,
 )
+from pydantic import ValidationError
 
 
 def _valid_row_kwargs() -> dict:
@@ -28,7 +27,7 @@ def _valid_row_kwargs() -> dict:
         email="student@example.com",
         pdf_filename="1234567890_홍길동.pdf",
         pdf_sha256="a" * 64,
-        attempt_at_kst=datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc),
+        attempt_at_kst=datetime(2026, 5, 1, 12, 0, 0, tzinfo=UTC),
         mode=DispatchMode.PRODUCTION,
         status=DispatchStatus.SUCCESS,
         smtp_message_id="<abc@example.com>",

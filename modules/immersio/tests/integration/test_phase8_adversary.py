@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from immersio import fonts as _fonts
 from immersio.analyze.pipeline import (
     PipelineArgs,
@@ -172,12 +171,18 @@ def test_p7_calendar_out_of_range_rejected_by_cli(tmp_path: Path, capsys) -> Non
     rc = cli_app(
         [
             "analyze",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--silver-dir", str(silver_root),
-            "--gold-dir", str(tmp_path / "gold"),
-            "--legacy-xlsx", str(tmp_path / "no-such-legacy.xlsx"),
-            "--created-at-utc", "2026-13-99T25:61:61Z",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--silver-dir",
+            str(silver_root),
+            "--gold-dir",
+            str(tmp_path / "gold"),
+            "--legacy-xlsx",
+            str(tmp_path / "no-such-legacy.xlsx"),
+            "--created-at-utc",
+            "2026-13-99T25:61:61Z",
             "--no-needs-map",
         ]
     )
@@ -195,12 +200,18 @@ def test_p7_valid_iso8601_accepted_by_cli(tmp_path: Path) -> None:
     rc = cli_app(
         [
             "analyze",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--silver-dir", str(silver_root),
-            "--gold-dir", str(tmp_path / "gold"),
-            "--legacy-xlsx", str(tmp_path / "no-such-legacy.xlsx"),
-            "--created-at-utc", "2026-04-29T00:00:00Z",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--silver-dir",
+            str(silver_root),
+            "--gold-dir",
+            str(tmp_path / "gold"),
+            "--legacy-xlsx",
+            str(tmp_path / "no-such-legacy.xlsx"),
+            "--created-at-utc",
+            "2026-04-29T00:00:00Z",
             "--no-needs-map",
         ]
     )
@@ -216,12 +227,18 @@ def test_p7_regex_fail_rejected_by_cli(tmp_path: Path, capsys) -> None:
     rc = cli_app(
         [
             "analyze",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--silver-dir", str(silver_root),
-            "--gold-dir", str(tmp_path / "gold"),
-            "--legacy-xlsx", str(tmp_path / "no-such-legacy.xlsx"),
-            "--created-at-utc", "not-a-date",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--silver-dir",
+            str(silver_root),
+            "--gold-dir",
+            str(tmp_path / "gold"),
+            "--legacy-xlsx",
+            str(tmp_path / "no-such-legacy.xlsx"),
+            "--created-at-utc",
+            "not-a-date",
             "--no-needs-map",
         ]
     )

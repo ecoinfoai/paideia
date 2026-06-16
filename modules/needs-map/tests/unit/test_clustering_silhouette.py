@@ -9,7 +9,9 @@ import pytest
 _AXES_3 = ("motivation", "study_strategy", "feedback_seeking")
 
 
-def _make_blobs(n_per_cluster: int = 12, n_clusters: int = 3, n_axes: int = 3, seed: int = 7) -> pd.DataFrame:
+def _make_blobs(
+    n_per_cluster: int = 12, n_clusters: int = 3, n_axes: int = 3, seed: int = 7
+) -> pd.DataFrame:
     """3-axis blobs using v0.1.1 vocabulary (motivation/study_strategy/feedback_seeking)."""
     rng = np.random.default_rng(seed)
     centers = rng.uniform(-3, 3, size=(n_clusters, n_axes))

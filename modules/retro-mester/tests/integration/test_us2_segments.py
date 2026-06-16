@@ -23,8 +23,8 @@ _SEMESTER = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEMESTER}-{_COURSE}"
 
-_CHAPTER_A = "1장. 해부학 서론"    # structural: both segments below threshold
-_CHAPTER_B = "2장. 세포와 조직"    # non-structural: only 학령기 below
+_CHAPTER_A = "1장. 해부학 서론"  # structural: both segments below threshold
+_CHAPTER_B = "2장. 세포와 조직"  # non-structural: only 학령기 below
 
 _STUDENT_IDS = {
     "2026000001": "학령기",
@@ -205,9 +205,7 @@ def _build_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_A: 0.30, _CHAPTER_B: 0.70}, cluster_label="습관중심"),
         _combined_row("2026000004", {_CHAPTER_A: 0.25, _CHAPTER_B: 0.75}, cluster_label="습관중심"),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     # Hard items on both chapters (needed to trigger 내용난이도 refine)
     item_rows = [
@@ -315,7 +313,15 @@ class TestUS2Segments:
         ws = wb["집단대비"]
 
         headers = {ws.cell(1, c).value for c in range(1, ws.max_column + 1)}
-        required = {"chapter", "segment", "segment_mean_rate", "n_below", "is_structural", "cause", "prescription"}
+        required = {
+            "chapter",
+            "segment",
+            "segment_mean_rate",
+            "n_below",
+            "is_structural",
+            "cause",
+            "prescription",
+        }
         missing = required - headers
         assert not missing, f"집단대비 sheet missing columns: {missing}"
 
@@ -349,7 +355,9 @@ class TestUS2Segments:
         cause_col = headers.index("cause") + 1
 
         # Collect rows per chapter
-        data: dict[str, dict[str, tuple[str, str]]] = {}  # chapter → segment → (cause, prescription)
+        data: dict[
+            str, dict[str, tuple[str, str]]
+        ] = {}  # chapter → segment → (cause, prescription)
         for r in range(2, ws.max_row + 1):
             ch = ws.cell(r, ch_col).value
             seg = ws.cell(r, seg_col).value
@@ -374,9 +382,7 @@ class TestUS2Segments:
         md_text = (gold / "CQI회고보고서.md").read_text(encoding="utf-8")
 
         for sid in _STUDENT_IDS:
-            assert sid not in md_text, (
-                f"SC-010: Student ID {sid!r} must NOT appear in MD report"
-            )
+            assert sid not in md_text, f"SC-010: Student ID {sid!r} must NOT appear in MD report"
 
     def test_no_student_id_in_xlsx(self, tmp_path: Path) -> None:
         """SC-010: No student ID appears in any xlsx sheet."""
@@ -407,10 +413,7 @@ class TestUS2Segments:
         headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
         vocab_col = headers.index("cluster_vocab") + 1
 
-        vocab_values = [
-            ws.cell(r, vocab_col).value
-            for r in range(2, ws.max_row + 1)
-        ]
+        vocab_values = [ws.cell(r, vocab_col).value for r in range(2, ws.max_row + 1)]
         # At least one covered rec should have a non-null vocab (from fixture cluster labels)
         assert any(v is not None for v in vocab_values), (
             "Expected at least one non-null cluster_vocab in recommendations"

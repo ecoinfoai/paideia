@@ -16,7 +16,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from immersio.combine.report_md import build_us1_report
 from paideia_shared.schemas import (
     CombinedAnalysisManifest,
@@ -25,7 +24,6 @@ from paideia_shared.schemas import (
     RegressionFitSummary,
 )
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
-
 
 _SHA = "0" * 64
 
@@ -224,7 +222,9 @@ def test_sections_4_and_5_placeholders_for_us1_only_run(tmp_path: Path) -> None:
     # §4 군집별 / §5 부분군 are out of scope here — should be either absent
     # or marked as placeholder ("(US2/US4 미수행)").
     # We accept either form, but they must NOT carry full content.
-    assert "## 4. 군집별" not in text or "(US2 미수행)" in text or "준비 중" in text or "TBD" in text
+    assert (
+        "## 4. 군집별" not in text or "(US2 미수행)" in text or "준비 중" in text or "TBD" in text
+    )
 
 
 def test_caption_100_percent_for_figures(tmp_path: Path) -> None:

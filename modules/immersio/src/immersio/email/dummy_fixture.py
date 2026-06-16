@@ -54,9 +54,7 @@ def generate_dummy_pdfs(
         PDFs. Filenames follow ``{student_id}_{name_kr}.pdf``.
     """
     if not isinstance(output_dir, Path):
-        raise TypeError(
-            f"output_dir must be Path, got {type(output_dir).__name__}"
-        )
+        raise TypeError(f"output_dir must be Path, got {type(output_dir).__name__}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []

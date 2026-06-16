@@ -21,7 +21,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from immersio import fonts as _fonts
 from immersio.analyze.pipeline import PipelineArgs, run_immersio_phase1
 
@@ -169,9 +168,7 @@ _SECTION_HEADERS = (
 )
 
 
-def test_pdf_page_count_within_acceptance_band(
-    dense_silver: Path, gold_root: Path
-) -> None:
+def test_pdf_page_count_within_acceptance_band(dense_silver: Path, gold_root: Path) -> None:
     """SC-005 (a) — PDF 페이지 수 buildable proxy band.
 
     Spec SC-005(a) 의 운영자 환경 band 는 [8, 15] (정보 부족 vs 회의
@@ -214,9 +211,7 @@ def test_md_section_order_is_canonical(dense_silver: Path, gold_root: Path) -> N
     assert indices == sorted(indices), "9 sections not in canonical order"
 
 
-def test_pdf_text_contains_all_nine_sections(
-    dense_silver: Path, gold_root: Path
-) -> None:
+def test_pdf_text_contains_all_nine_sections(dense_silver: Path, gold_root: Path) -> None:
     """SC-005 (b) — PDF 본문 (extracted text) 에도 9 섹션이 모두 존재."""
     pypdf = pytest.importorskip("pypdf")
     rc = run_immersio_phase1(_make_args(dense_silver, gold_root))
@@ -231,9 +226,7 @@ def test_pdf_text_contains_all_nine_sections(
         assert tag in full_text, f"missing PDF tag: {tag}"
 
 
-def test_md_references_both_figures_and_overall_table(
-    dense_silver: Path, gold_root: Path
-) -> None:
+def test_md_references_both_figures_and_overall_table(dense_silver: Path, gold_root: Path) -> None:
     """SC-005 (c) — fig1/fig2 image references + 표 헤더 line 등장."""
     rc = run_immersio_phase1(_make_args(dense_silver, gold_root))
     assert rc == 0
@@ -248,9 +241,7 @@ def test_md_references_both_figures_and_overall_table(
     assert "구간_끝" in body
 
 
-def test_no_llm_module_imported_during_render(
-    dense_silver: Path, gold_root: Path
-) -> None:
+def test_no_llm_module_imported_during_render(dense_silver: Path, gold_root: Path) -> None:
     """SC-005 (d) + SC-006 — pipeline 렌더 중 LLM 모듈 import 0."""
     forbidden = ("anthropic", "openai", "instructor")
     pre = {m for m in sys.modules if m.startswith(forbidden)}
@@ -260,9 +251,7 @@ def test_no_llm_module_imported_during_render(
     assert not (post - pre), f"forbidden LLM module imported: {post - pre}"
 
 
-def test_no_freeform_llm_disclaimer_strings_in_md(
-    dense_silver: Path, gold_root: Path
-) -> None:
+def test_no_freeform_llm_disclaimer_strings_in_md(dense_silver: Path, gold_root: Path) -> None:
     """SC-005 (d) — md 본문에 LLM 자유 코멘트 흔적 0."""
     rc = run_immersio_phase1(_make_args(dense_silver, gold_root))
     assert rc == 0

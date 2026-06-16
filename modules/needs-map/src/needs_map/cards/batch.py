@@ -46,9 +46,7 @@ def _resolve_weak_axis(student_row: pd.Series) -> str | None:
     return min(z_scores, key=lambda k: z_scores[k])
 
 
-def _categories_for_student(
-    free_text_rows: list[FreeTextRow], student_id: str
-) -> list[str]:
+def _categories_for_student(free_text_rows: list[FreeTextRow], student_id: str) -> list[str]:
     cats: list[str] = []
     for row in free_text_rows:
         if row.student_id != student_id:
@@ -155,11 +153,7 @@ def generate_all_cards(
         master = sm_lookup.get(sid, {})
         fs_row = fs_lookup.get(sid)
         section_raw = master.get("section") if master else None
-        section = (
-            None
-            if isinstance(section_raw, float) and pd.isna(section_raw)
-            else section_raw
-        )
+        section = None if isinstance(section_raw, float) and pd.isna(section_raw) else section_raw
         on_roster = bool(master.get("on_roster")) if master else False
         responded = fs_row is not None
         name_kr = master.get("name_kr") if master else None

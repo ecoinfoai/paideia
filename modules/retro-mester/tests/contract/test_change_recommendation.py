@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _covered_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -49,6 +50,7 @@ def _uncovered_kwargs() -> dict:
 # Valid construction — covered
 # ---------------------------------------------------------------------------
 
+
 def test_valid_covered_recommendation() -> None:
     """A covered recommendation (rank 1-5, is_covered=True) is accepted."""
     rec = ChangeRecommendation(**_covered_kwargs())
@@ -69,6 +71,7 @@ def test_valid_covered_all_ranks(rank: int) -> None:
 # Valid construction — uncovered
 # ---------------------------------------------------------------------------
 
+
 def test_valid_uncovered_recommendation() -> None:
     """An uncovered recommendation (rank=None, is_covered=False) is accepted."""
     rec = ChangeRecommendation(**_uncovered_kwargs())
@@ -79,6 +82,7 @@ def test_valid_uncovered_recommendation() -> None:
 # ---------------------------------------------------------------------------
 # V1: is_covered=True ⇒ rank in [1,5]
 # ---------------------------------------------------------------------------
+
 
 def test_v1_covered_rank_none() -> None:
     """V1: is_covered=True with rank=None raises ValidationError."""
@@ -101,6 +105,7 @@ def test_v1_covered_rank_out_of_range(bad_rank: int) -> None:
 # V2: is_covered=False ⇒ rank is None
 # ---------------------------------------------------------------------------
 
+
 def test_v2_uncovered_rank_not_none() -> None:
     """V2: is_covered=False with a non-None rank raises ValidationError."""
     kw = _uncovered_kwargs()
@@ -112,6 +117,7 @@ def test_v2_uncovered_rank_not_none() -> None:
 # ---------------------------------------------------------------------------
 # Extra-field rejection + frozen
 # ---------------------------------------------------------------------------
+
 
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""

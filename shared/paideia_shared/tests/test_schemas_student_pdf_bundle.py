@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import pytest
+from paideia_shared.schemas import StudentPDFBundle
 from pydantic import ValidationError
 
-from paideia_shared.schemas import StudentPDFBundle
 
-
-def _make_pdf(tmp_path, name: str = "1234567890_홍길동.pdf") -> "tuple":
+def _make_pdf(tmp_path, name: str = "1234567890_홍길동.pdf") -> tuple:
     path = tmp_path / name
     path.write_bytes(b"%PDF-1.4\nfake content\n%%EOF\n")
     return path, name

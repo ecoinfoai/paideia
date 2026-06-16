@@ -211,9 +211,7 @@ def _make_quiz_inventory(n: int = 30) -> list[SourceInventoryEntry]:
         count = per_chapter + (1 if i < remainder else 0)
         for j in range(count):
             row += 1
-            stem = (
-                f"{chapter_no}장 {j+1}번: 해당 계통에 관한 설명 중 옳지 않은 것은?"
-            )
+            stem = f"{chapter_no}장 {j + 1}번: 해당 계통에 관한 설명 중 옳지 않은 것은?"
             entries.append(
                 SourceInventoryEntry(
                     semester=_SEMESTER,
@@ -246,10 +244,10 @@ def _make_formative_inventory() -> list[SourceInventoryEntry]:
                     semester=_SEMESTER,
                     course_slug=_COURSE,
                     source="formative",
-                    source_ref=f"형성평가:{chapter_no}장#{j+1}",
+                    source_ref=f"형성평가:{chapter_no}장#{j + 1}",
                     chapter_no=chapter_no,
                     week=week,
-                    stem=f"{chapter_no}장 형성평가 {j+1}번: 해당 계통 구조 설명.",
+                    stem=f"{chapter_no}장 형성평가 {j + 1}번: 해당 계통 구조 설명.",
                     model_answer="모범답안: 해당 계통은 여러 기관으로 구성된다.",
                     keywords=["기관", "기능"],
                     rubric={
@@ -278,7 +276,9 @@ def _write_chapter_fixture(bronze_dir: Path, chapter_no: int, chapter_name: str)
 
 def _setup_bronze(bronze_dir: Path) -> None:
     bronze_dir.mkdir(parents=True, exist_ok=True)
-    for chapter_no, chapter_name in zip(_CHAPTER_NOS, [c.split(" ", 1)[1] for c in _CHAPTERS], strict=False):
+    for chapter_no, chapter_name in zip(
+        _CHAPTER_NOS, [c.split(" ", 1)[1] for c in _CHAPTERS], strict=False
+    ):
         _write_chapter_fixture(bronze_dir, chapter_no, chapter_name)
 
 
@@ -335,9 +335,7 @@ class TestUS3QuizItemCount:
         """Number of quiz items == blueprint.source_mix['quiz'] (15)."""
         items, _ = _run_build(tmp_path)
         quiz_items = [i for i in items if i.source == "quiz"]
-        assert len(quiz_items) == _N_QUIZ, (
-            f"Expected {_N_QUIZ} quiz items, got {len(quiz_items)}"
-        )
+        assert len(quiz_items) == _N_QUIZ, f"Expected {_N_QUIZ} quiz items, got {len(quiz_items)}"
 
     def test_all_three_sources_present(self, tmp_path: Path) -> None:
         """Items come from all three sources: textbook, formative, quiz."""
@@ -356,11 +354,10 @@ class TestUS3QuizChapterBalance:
         items, _ = _run_build(tmp_path)
         quiz_items = [i for i in items if i.source == "quiz"]
         from collections import Counter
+
         counts = list(Counter(i.chapter_no for i in quiz_items).values())
         assert counts, "No quiz items found"
-        assert max(counts) - min(counts) <= 1, (
-            f"Quiz chapter distribution not even: {counts}"
-        )
+        assert max(counts) - min(counts) <= 1, f"Quiz chapter distribution not even: {counts}"
 
     def test_all_chapters_represented_in_quiz(self, tmp_path: Path) -> None:
         """All 6 chapters have at least 1 quiz item (chapter-even with 15 items / 6 chapters)."""
@@ -376,10 +373,9 @@ class TestUS3QuizChapterBalance:
         """All chapters have total item counts (max diff ≤ 1) across the whole exam."""
         items, _ = _run_build(tmp_path)
         from collections import Counter
+
         counts = list(Counter(i.chapter_no for i in items).values())
-        assert max(counts) - min(counts) <= 1, (
-            f"Whole-exam chapter distribution not even: {counts}"
-        )
+        assert max(counts) - min(counts) <= 1, f"Whole-exam chapter distribution not even: {counts}"
 
 
 class TestUS3QuizVariationWording:
@@ -425,13 +421,13 @@ class TestUS3WholeExamDifficulty:
         medium = sum(1 for i in items if i.difficulty == "2_보통")
         hard = sum(1 for i in items if i.difficulty == "3_어려움")
         assert abs(easy / total - 0.45) < 0.05, (
-            f"Easy ratio {easy/total:.2f} far from target 0.45"
+            f"Easy ratio {easy / total:.2f} far from target 0.45"
         )
         assert abs(medium / total - 0.35) < 0.05, (
-            f"Medium ratio {medium/total:.2f} far from target 0.35"
+            f"Medium ratio {medium / total:.2f} far from target 0.35"
         )
         assert abs(hard / total - 0.20) < 0.05, (
-            f"Hard ratio {hard/total:.2f} far from target 0.20"
+            f"Hard ratio {hard / total:.2f} far from target 0.20"
         )
 
 
@@ -450,9 +446,7 @@ class TestUS3ItemNoUniqueness:
         """item_no values span 1..40 globally."""
         items, _ = _run_build(tmp_path)
         item_nos = sorted(i.item_no for i in items)
-        assert item_nos == list(range(1, 41)), (
-            f"item_no should be 1..40, got {item_nos}"
-        )
+        assert item_nos == list(range(1, 41)), f"item_no should be 1..40, got {item_nos}"
 
 
 class TestUS3QuizSubsetSelection:

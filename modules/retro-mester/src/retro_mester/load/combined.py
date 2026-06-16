@@ -79,9 +79,7 @@ def load_combined(path: Path) -> list[CombinedAnalysisRow]:
         try:
             rows.append(CombinedAnalysisRow.model_validate(row_dict))
         except ValidationError as exc:
-            raise InputError(
-                f"Validation failed in {path} row {idx}: {exc}"
-            ) from exc
+            raise InputError(f"Validation failed in {path} row {idx}: {exc}") from exc
 
     return rows
 

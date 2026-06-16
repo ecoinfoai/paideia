@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -33,6 +34,7 @@ def _valid_kwargs() -> dict:
 # ---------------------------------------------------------------------------
 # Valid construction
 # ---------------------------------------------------------------------------
+
 
 def test_valid_construction() -> None:
     """A fully specified AlignmentFinding is accepted."""
@@ -64,6 +66,7 @@ def test_valid_construction_note_defaults_empty() -> None:
 # Literal validation
 # ---------------------------------------------------------------------------
 
+
 def test_invalid_flag_rejected() -> None:
     """A non-Literal flag value raises ValidationError."""
     kw = _valid_kwargs()
@@ -75,6 +78,7 @@ def test_invalid_flag_rejected() -> None:
 # ---------------------------------------------------------------------------
 # Non-negative field constraints
 # ---------------------------------------------------------------------------
+
 
 def test_negative_taught_weeks_rejected() -> None:
     """taught_weeks < 0 raises ValidationError."""
@@ -95,6 +99,7 @@ def test_negative_tested_items_rejected() -> None:
 # ---------------------------------------------------------------------------
 # Extra-field rejection + frozen
 # ---------------------------------------------------------------------------
+
 
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""

@@ -10,9 +10,6 @@ from __future__ import annotations
 
 import argparse
 import io
-from pathlib import Path
-
-import pytest
 
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
@@ -67,9 +64,7 @@ class _AlwaysSucceeds:
 
 def test_second_run_archives_first(email_fixture, monkeypatch) -> None:
     """Re-running with a different sent-date moves prior outputs into _archive/."""
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds)
 
     # Run 1: sent-date 2026-05-01
     rc1 = run_email_dispatch(_args(sent_date="2026-05-01"))
@@ -103,9 +98,7 @@ def test_second_run_archives_first(email_fixture, monkeypatch) -> None:
 
 def test_archival_no_op_on_first_run(email_fixture, monkeypatch) -> None:
     """First run with no prior outputs → no _archive/ subdir created."""
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds)
     rc = run_email_dispatch(_args(sent_date="2026-05-01"))
     assert rc == 0
     archive_root = email_fixture["gold_email_dir"] / "_archive"

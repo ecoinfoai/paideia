@@ -421,8 +421,7 @@ class TestUS2ItemNoUniqueness:
         items, _ = _run_build(tmp_path)
         item_nos = [i.item_no for i in items]
         assert len(item_nos) == len(set(item_nos)), (
-            f"duplicate item_no found: "
-            f"{[n for n in item_nos if item_nos.count(n) > 1]}"
+            f"duplicate item_no found: {[n for n in item_nos if item_nos.count(n) > 1]}"
         )
 
     def test_item_no_covers_all_slots(self, tmp_path: Path) -> None:
@@ -459,22 +458,40 @@ class TestUS2OutOfOrderChapterBinding:
         # inventory deliberately out of order: ch9 first, then two ch8
         inventory = [
             SourceInventoryEntry(
-                semester=_SEMESTER, course_slug=_COURSE, source="formative",
-                source_ref="형성평가:9장#1", chapter_no=9, week=9,
-                stem="근육 질문.", model_answer="근육 모범답안. " * 5,
-                keywords=["근육"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+                semester=_SEMESTER,
+                course_slug=_COURSE,
+                source="formative",
+                source_ref="형성평가:9장#1",
+                chapter_no=9,
+                week=9,
+                stem="근육 질문.",
+                model_answer="근육 모범답안. " * 5,
+                keywords=["근육"],
+                rubric={"high": "h", "mid": "m", "low": "오개념"},
             ),
             SourceInventoryEntry(
-                semester=_SEMESTER, course_slug=_COURSE, source="formative",
-                source_ref="형성평가:8장#1", chapter_no=8, week=8,
-                stem="호흡 질문1.", model_answer="호흡 모범답안1. " * 5,
-                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+                semester=_SEMESTER,
+                course_slug=_COURSE,
+                source="formative",
+                source_ref="형성평가:8장#1",
+                chapter_no=8,
+                week=8,
+                stem="호흡 질문1.",
+                model_answer="호흡 모범답안1. " * 5,
+                keywords=["호흡"],
+                rubric={"high": "h", "mid": "m", "low": "오개념"},
             ),
             SourceInventoryEntry(
-                semester=_SEMESTER, course_slug=_COURSE, source="formative",
-                source_ref="형성평가:8장#2", chapter_no=8, week=8,
-                stem="호흡 질문2.", model_answer="호흡 모범답안2. " * 5,
-                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+                semester=_SEMESTER,
+                course_slug=_COURSE,
+                source="formative",
+                source_ref="형성평가:8장#2",
+                chapter_no=8,
+                week=8,
+                stem="호흡 질문2.",
+                model_answer="호흡 모범답안2. " * 5,
+                keywords=["호흡"],
+                rubric={"high": "h", "mid": "m", "low": "오개념"},
             ),
         ]
         items, _ = _run_build(tmp_path, formative_inventory=inventory)
@@ -502,10 +519,16 @@ class TestUS2OutOfOrderChapterBinding:
         """
         inventory = [
             SourceInventoryEntry(
-                semester=_SEMESTER, course_slug=_COURSE, source="formative",
-                source_ref=f"형성평가:8장#{k}", chapter_no=8, week=8,
-                stem=f"호흡 질문{k}.", model_answer="모범답안. " * 5,
-                keywords=["호흡"], rubric={"high": "h", "mid": "m", "low": "오개념"},
+                semester=_SEMESTER,
+                course_slug=_COURSE,
+                source="formative",
+                source_ref=f"형성평가:8장#{k}",
+                chapter_no=8,
+                week=8,
+                stem=f"호흡 질문{k}.",
+                model_answer="모범답안. " * 5,
+                keywords=["호흡"],
+                rubric={"high": "h", "mid": "m", "low": "오개념"},
             )
             for k in range(1, 4)  # 3 items, ALL chapter 8
         ]

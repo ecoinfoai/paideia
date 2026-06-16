@@ -113,9 +113,7 @@ class TestLoadGenerationSpec:
         with pytest.raises(ValueError, match=str(p)):
             load_generation_spec(p)
 
-    def test_missing_required_field_raises_with_path_and_field(
-        self, tmp_path: Path
-    ) -> None:
+    def test_missing_required_field_raises_with_path_and_field(self, tmp_path: Path) -> None:
         """Missing required 'week' → ValueError naming both the file and the field."""
         from maieutica.ingest.spec_load import load_generation_spec
 
@@ -181,9 +179,7 @@ class TestLoadCurriculumMap:
         with pytest.raises(ValueError, match=str(p)):
             load_curriculum_map(p)
 
-    def test_missing_entries_raises_with_path_and_field(
-        self, tmp_path: Path
-    ) -> None:
+    def test_missing_entries_raises_with_path_and_field(self, tmp_path: Path) -> None:
         """Missing 'entries' → ValueError with file path + field name."""
         from maieutica.ingest.spec_load import load_curriculum_map
 
@@ -233,9 +229,7 @@ class TestValidateWeekInMap:
         map_path, cm = self._make_map(tmp_path)
         with pytest.raises(ValueError) as exc_info:
             validate_week_in_map(cm, week=99, curriculum_map_path=map_path)
-        assert "99" in str(exc_info.value), (
-            f"week number not in error: {exc_info.value}"
-        )
+        assert "99" in str(exc_info.value), f"week number not in error: {exc_info.value}"
 
     def test_absent_week_error_names_file(self, tmp_path: Path) -> None:
         """Error message for absent week includes the curriculum_map file path."""
@@ -244,9 +238,7 @@ class TestValidateWeekInMap:
         map_path, cm = self._make_map(tmp_path)
         with pytest.raises(ValueError) as exc_info:
             validate_week_in_map(cm, week=99, curriculum_map_path=map_path)
-        assert str(map_path) in str(exc_info.value), (
-            f"file path not in error: {exc_info.value}"
-        )
+        assert str(map_path) in str(exc_info.value), f"file path not in error: {exc_info.value}"
 
 
 # ============================================================================

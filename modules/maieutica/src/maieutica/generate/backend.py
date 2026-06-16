@@ -208,7 +208,7 @@ class InputHashCache:
         # by a stale cache entry. Empty salt → key unchanged (api determinism).
         salt = self._backend.cache_salt(request)
         if salt:
-            key = hashlib.sha256(f"{key}:{salt}".encode("utf-8")).hexdigest()
+            key = hashlib.sha256(f"{key}:{salt}".encode()).hexdigest()
         cache_file = self._cache_dir / f"{key}.json"
 
         self._total_calls += 1

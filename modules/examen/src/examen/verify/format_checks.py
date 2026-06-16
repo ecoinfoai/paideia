@@ -176,6 +176,7 @@ def check_format(item: ExamItemDraft) -> ExamItemDraft:
 # T035 — Formative-specific verification
 # ---------------------------------------------------------------------------
 
+
 def check_formative(item: ExamItemDraft) -> ExamItemDraft:
     """Apply formative-specific format checks to ``item``.
 
@@ -246,9 +247,7 @@ def check_formative(item: ExamItemDraft) -> ExamItemDraft:
             )
         # 추가: 정답이 아닌 보기에 "틀린" 마커가 있으면 정답 지정 오류 의심
         other_wrong = [
-            i + 1
-            for i, r in enumerate(rationales)
-            if i != idx and _WRONG_RATIONALE_MARKER in r
+            i + 1 for i, r in enumerate(rationales) if i != idx and _WRONG_RATIONALE_MARKER in r
         ]
         if other_wrong:
             notes.append(
@@ -285,8 +284,8 @@ def check_formative(item: ExamItemDraft) -> ExamItemDraft:
 # ---------------------------------------------------------------------------
 
 # 자카드 유사도 임계값 (0 < J < 0.8 이 정상 변형 범위)
-_JACCARD_UPPER = 0.8   # 이 이상 → 원본과 너무 유사 (재작성 불충분)
-_JACCARD_LOWER = 0.0   # 이 이하 → 원본과 완전히 다름 (개념 보존 의심)
+_JACCARD_UPPER = 0.8  # 이 이상 → 원본과 너무 유사 (재작성 불충분)
+_JACCARD_LOWER = 0.0  # 이 이하 → 원본과 완전히 다름 (개념 보존 의심)
 
 
 def token_jaccard(a: str, b: str) -> float:
@@ -378,7 +377,6 @@ def check_quiz_variation(
     return item.model_copy(update=updates) if updates else item
 
 
-
 # ---------------------------------------------------------------------------
 # T048 — Explanation / intent length verification
 # ---------------------------------------------------------------------------
@@ -430,8 +428,7 @@ def check_explanation_lengths(item: ExamItemDraft) -> ExamItemDraft:
     intent_len = len(item.intent)
     if not (_INTENT_MIN <= intent_len <= _INTENT_MAX):
         notes.append(
-            f"[length_check] intent 길이 위반: "
-            f"{intent_len}자 (목표 {_INTENT_MIN}~{_INTENT_MAX}자)"
+            f"[length_check] intent 길이 위반: {intent_len}자 (목표 {_INTENT_MIN}~{_INTENT_MAX}자)"
         )
 
     if not notes:

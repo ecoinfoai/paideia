@@ -17,7 +17,6 @@ from pathlib import Path
 
 import openpyxl
 import pytest
-
 from immersio.combine.xlsx_writer import write_us1_xlsx
 from paideia_shared.schemas import (
     CorrelationCell,
@@ -261,7 +260,6 @@ def test_dcterms_created_pinned_to_epoch(tmp_path: Path) -> None:
     ``datetime.now()`` into core.xml so two runs with non-zero wall-clock
     delta diverge. This test asserts the pinned epoch lands.
     """
-    import io
     import zipfile
 
     out = tmp_path / "epoch.xlsx"

@@ -50,10 +50,8 @@ class ImmersioPhase1Manifest(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def diff_consistency(self) -> "ImmersioPhase1Manifest":
+    def diff_consistency(self) -> ImmersioPhase1Manifest:
         """V1: legacy_diff_diff_cells ≤ legacy_diff_total_cells."""
         if self.legacy_diff_diff_cells > self.legacy_diff_total_cells:
-            raise ValueError(
-                "ImmersioPhase1Manifest V1: diff cells > total cells"
-            )
+            raise ValueError("ImmersioPhase1Manifest V1: diff cells > total cells")
         return self

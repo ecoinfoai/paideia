@@ -190,9 +190,7 @@ def test_us2_leap_fold_end_to_end(tmp_path: Path) -> None:
     silver = data_root / "silver" / "maieutica" / f"{_SEMESTER}-{_COURSE}"
     responses_dir = silver / "responses"
     _write_canned_responses(responses_dir)
-    backend = SubscriptionBackend(
-        staging_dir=silver / "staging", responses_dir=responses_dir
-    )
+    backend = SubscriptionBackend(staging_dir=silver / "staging", responses_dir=responses_dir)
 
     items, run_dir = build(
         spec=spec,

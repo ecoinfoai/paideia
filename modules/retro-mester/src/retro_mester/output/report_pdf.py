@@ -93,9 +93,7 @@ def write_report_pdf(
         raise ValueError("write_report_pdf: md_text must be a non-empty string")
     pdf_path = Path(pdf_path)
     if not pdf_path.parent.is_dir():
-        raise FileNotFoundError(
-            f"write_report_pdf: parent directory missing: {pdf_path.parent}"
-        )
+        raise FileNotFoundError(f"write_report_pdf: parent directory missing: {pdf_path.parent}")
 
     regular_path, bold_path = resolve_korean_font_paths()
     regular_name, bold_name = register_for_reportlab(regular_path, bold_path)

@@ -15,8 +15,6 @@ top_distractor_rate, is_top_distractor_adjacent)`` 5개 인자를 받음.
 
 from __future__ import annotations
 
-import pytest
-
 from immersio.analysis.distractor_labels import label_distractor_pattern
 
 
@@ -63,10 +61,7 @@ def test_rule1_priority_over_easy() -> None:
 
 
 def test_rule2_correct_rate_above_95() -> None:
-    assert (
-        _label(correct_rate=0.96, discrimination_index=0.1)
-        == "모두 풀 수 있는 기본 문항"
-    )
+    assert _label(correct_rate=0.96, discrimination_index=0.1) == "모두 풀 수 있는 기본 문항"
 
 
 def test_rule2_correct_rate_eq_95_boundary() -> None:
@@ -82,8 +77,7 @@ def test_rule2_correct_rate_eq_95_boundary() -> None:
 
 def test_rule3_low_correct_high_discrimination() -> None:
     assert (
-        _label(correct_rate=0.25, discrimination_index=0.31)
-        == "어려운 변별 우수 문항(유지 권장)"
+        _label(correct_rate=0.25, discrimination_index=0.31) == "어려운 변별 우수 문항(유지 권장)"
     )
 
 
@@ -151,22 +145,19 @@ def test_rule5_non_adjacent_does_not_trigger() -> None:
 
 def test_rule6_mid_correct_low_discrimination() -> None:
     assert (
-        _label(correct_rate=0.65, discrimination_index=0.05)
-        == "변별 기여 적음 — 차년도 교체 검토"
+        _label(correct_rate=0.65, discrimination_index=0.05) == "변별 기여 적음 — 차년도 교체 검토"
     )
 
 
 def test_rule6_boundary_correct_eq_50() -> None:
     assert (
-        _label(correct_rate=0.50, discrimination_index=0.05)
-        == "변별 기여 적음 — 차년도 교체 검토"
+        _label(correct_rate=0.50, discrimination_index=0.05) == "변별 기여 적음 — 차년도 교체 검토"
     )
 
 
 def test_rule6_boundary_correct_eq_80() -> None:
     assert (
-        _label(correct_rate=0.80, discrimination_index=0.05)
-        == "변별 기여 적음 — 차년도 교체 검토"
+        _label(correct_rate=0.80, discrimination_index=0.05) == "변별 기여 적음 — 차년도 교체 검토"
     )
 
 
@@ -183,10 +174,7 @@ def test_rule6_boundary_d_abs_eq_10_does_not_trigger() -> None:
 
 def test_default_no_match() -> None:
     """변별력 좋고 정답률 적당, omit 낮음, 인접 distractor 없음."""
-    assert (
-        _label(correct_rate=0.40, discrimination_index=0.20, omit_rate=0.02)
-        == "특이사항 없음"
-    )
+    assert _label(correct_rate=0.40, discrimination_index=0.20, omit_rate=0.02) == "특이사항 없음"
 
 
 # =====================================================================
@@ -197,8 +185,7 @@ def test_default_no_match() -> None:
 def test_priority_rule3_beats_rule6() -> None:
     """correct_rate=0.25, D=0.40 — rule 3 우선 (rule 6 의 0.50-0.80 영역 밖이지만 보장)."""
     assert (
-        _label(correct_rate=0.25, discrimination_index=0.40)
-        == "어려운 변별 우수 문항(유지 권장)"
+        _label(correct_rate=0.25, discrimination_index=0.40) == "어려운 변별 우수 문항(유지 권장)"
     )
 
 

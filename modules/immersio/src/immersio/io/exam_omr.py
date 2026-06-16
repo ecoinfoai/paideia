@@ -34,8 +34,7 @@ def _engine_for(path: Path) -> str:
     if suffix == ".xlsx":
         return "openpyxl"
     raise ValueError(
-        f"exam_omr parser: unsupported extension {suffix!r} for {path}; "
-        f"expected .xls or .xlsx."
+        f"exam_omr parser: unsupported extension {suffix!r} for {path}; expected .xls or .xlsx."
     )
 
 
@@ -133,9 +132,7 @@ def discover_section_files(
             try:
                 match_real = match.resolve(strict=True)
             except OSError as exc:
-                raise ValueError(
-                    f"discover_section_files: cannot resolve {match} ({exc})"
-                ) from exc
+                raise ValueError(f"discover_section_files: cannot resolve {match} ({exc})") from exc
             if not match_real.is_relative_to(base_real):
                 raise ValueError(
                     f"discover_section_files: {match} resolves to {match_real}, "
@@ -203,17 +200,13 @@ def _parse_one_section(path: Path) -> OMRSectionResult:
             }
         )
     items_df = (
-        pd.DataFrame.from_records(items_records)
-        .sort_values("item_no")
-        .reset_index(drop=True)
+        pd.DataFrame.from_records(items_records).sort_values("item_no").reset_index(drop=True)
     )
 
     # Detect duplicate item_no
     if items_df["item_no"].duplicated().any():
         dup = items_df.loc[items_df["item_no"].duplicated(), "item_no"].tolist()
-        raise ValueError(
-            f"exam_omr parser: duplicate item_no in 문항분석 sheet of {path}: {dup}."
-        )
+        raise ValueError(f"exam_omr parser: duplicate item_no in 문항분석 sheet of {path}: {dup}.")
 
     # 결과 sheet → long-form responses + score summary
     results = sheets["결과"].copy()

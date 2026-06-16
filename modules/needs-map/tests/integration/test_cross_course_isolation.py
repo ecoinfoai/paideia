@@ -168,9 +168,7 @@ def test_rerun_anatomy_does_not_touch_microbiology(tmp_path: Path) -> None:
 
     silver_m = out_dir / "silver" / "needs-map" / "2026-1-microbiology"
     micro_snapshot = {
-        p.relative_to(silver_m): p.read_bytes()
-        for p in silver_m.rglob("*")
-        if p.is_file()
+        p.relative_to(silver_m): p.read_bytes() for p in silver_m.rglob("*") if p.is_file()
     }
 
     # Re-run anatomy

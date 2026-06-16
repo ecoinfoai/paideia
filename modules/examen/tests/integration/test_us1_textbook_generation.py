@@ -75,6 +75,7 @@ class FakeBackend(LLMBackend):
 
     def generate(self, request: GenerationRequest) -> GenerationResponse:
         import json as _json
+
         self.call_count += 1
         return GenerationResponse(
             slot_id=request.slot_id,
@@ -171,10 +172,20 @@ def _setup_bronze(bronze_dir: Path) -> None:
         "semester": _SEMESTER,
         "course_slug": _COURSE,
         "entries": [
-            {"week": 1, "chapter": "8장 호흡계통", "chapter_no": 8,
-             "subtopic": None, "sections": ["1. 기도", "2. 폐"]},
-            {"week": 2, "chapter": "9장 근육계통", "chapter_no": 9,
-             "subtopic": None, "sections": ["1. 골격근", "2. 평활근"]},
+            {
+                "week": 1,
+                "chapter": "8장 호흡계통",
+                "chapter_no": 8,
+                "subtopic": None,
+                "sections": ["1. 기도", "2. 폐"],
+            },
+            {
+                "week": 2,
+                "chapter": "9장 근육계통",
+                "chapter_no": 9,
+                "subtopic": None,
+                "sections": ["1. 골격근", "2. 평활근"],
+            },
         ],
     }
     (bronze_dir / "curriculum_map.yaml").write_text(
@@ -226,23 +237,20 @@ class TestUS1TextbookBuild:
     def test_item_count_equals_total_items(self, tmp_path: Path) -> None:
         """build_exam returns exactly total_items items."""
         items, _ = self._run_build(tmp_path)
-        assert len(items) == _TOTAL_ITEMS, (
-            f"Expected {_TOTAL_ITEMS} items, got {len(items)}"
-        )
+        assert len(items) == _TOTAL_ITEMS, f"Expected {_TOTAL_ITEMS} items, got {len(items)}"
 
     # --- Chapter-even distribution ---
 
     def test_chapter_even_distribution(self, tmp_path: Path) -> None:
         """Chapter distribution differs by at most 1 (chapter-even)."""
         from collections import Counter
+
         items, _ = self._run_build(tmp_path)
         counts = Counter(item.chapter for item in items)
         assert len(counts) == 2, f"Expected 2 chapters, got {counts}"
         max_c = max(counts.values())
         min_c = min(counts.values())
-        assert max_c - min_c <= 1, (
-            f"Chapter distribution not even: {dict(counts)}"
-        )
+        assert max_c - min_c <= 1, f"Chapter distribution not even: {dict(counts)}"
 
     # --- Format ---
 
@@ -250,9 +258,7 @@ class TestUS1TextbookBuild:
         """Every generated item has exactly 5 options."""
         items, _ = self._run_build(tmp_path)
         for item in items:
-            assert len(item.options) == 5, (
-                f"item {item.item_no} has {len(item.options)} options"
-            )
+            assert len(item.options) == 5, f"item {item.item_no} has {len(item.options)} options"
 
     def test_every_item_has_option_length_ok_set(self, tmp_path: Path) -> None:
         """option_length_ok is set (True or False) on every item."""
@@ -272,8 +278,7 @@ class TestUS1TextbookBuild:
                 f"item {item.item_no}: textbook_evidence is None"
             )
             assert item.textbook_evidence.status in ("확인", "미확인"), (
-                f"item {item.item_no}: unexpected status "
-                f"{item.textbook_evidence.status!r}"
+                f"item {item.item_no}: unexpected status {item.textbook_evidence.status!r}"
             )
 
     # --- Gold output files ---
@@ -349,6 +354,7 @@ class TestUS1TextbookBuild:
 
         # Pre-fill responses for every slot the solver will produce.
         from examen.plan.blueprint import solve
+
         slots = solve(blueprint, curriculum_map)
         staging_dir = tmp_path / "staging"
         responses_dir = tmp_path / "responses"
@@ -373,8 +379,7 @@ class TestUS1TextbookBuild:
         )
         manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
         assert manifest["llm_backend"] == "subscription", (
-            f"SubscriptionBackend should map to 'subscription', "
-            f"got {manifest['llm_backend']!r}"
+            f"SubscriptionBackend should map to 'subscription', got {manifest['llm_backend']!r}"
         )
 
     # --- Run isolation ---
@@ -429,9 +434,7 @@ class TestUS1TextbookBuild:
         bytes_run2 = xlsx_path.read_bytes()
 
         # Same run_id → same run_dir
-        assert run_dir1 == run_dir2, (
-            f"Different run dirs: {run_dir1} vs {run_dir2}"
-        )
+        assert run_dir1 == run_dir2, f"Different run dirs: {run_dir1} vs {run_dir2}"
         # Real cross-run byte comparison (run 1 bytes vs run 2 bytes)
         assert bytes_run1 == bytes_run2, "xlsx not byte-identical across re-runs"
 
@@ -474,9 +477,7 @@ class TestUS1TextbookBuild:
         """All items have source='textbook' for a textbook-only blueprint."""
         items, _ = self._run_build(tmp_path)
         for item in items:
-            assert item.source == "textbook", (
-                f"item {item.item_no} has source={item.source!r}"
-            )
+            assert item.source == "textbook", f"item {item.item_no} has source={item.source!r}"
 
     # --- xlsx 28-col contract satisfied ---
 

@@ -32,10 +32,9 @@ import json
 from pathlib import Path
 
 import responses
-
-from .conftest import write_student_metrics_parquet
 from immersio.email.pipeline import run_email_dispatch
 
+from .conftest import write_student_metrics_parquet
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -90,10 +89,10 @@ def _sha256(path: Path) -> str:
 def test_dry_run_plus_self_test_combined(email_fixture) -> None:
     """spec.md Edge Cases: dry-run + self-test → dry-run 우선, 5 단언 GREEN."""
     sids = [s[0] for s in email_fixture["students"]]
-    operator_email = "alpha@example.ac.kr"  # ALLOW_HARDCODING: matches conftest make_profile_dir sender.email
-    silver_dir = (
-        email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
+    operator_email = (
+        "alpha@example.ac.kr"  # ALLOW_HARDCODING: matches conftest make_profile_dir sender.email
     )
+    silver_dir = email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
     # All 5 students below the 60 threshold → cohort=low_score yields 5 students.
     # self_test=5 matches → preview 5 건 / dry-run csv 5 행.
     write_student_metrics_parquet(
@@ -127,8 +126,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
 
     rc = run_email_dispatch(_args())
     assert rc == 0, (
-        f"dry-run + self-test should exit 0 (dry-run wins, no actual send "
-        f"attempted); got rc={rc}"
+        f"dry-run + self-test should exit 0 (dry-run wins, no actual send attempted); got rc={rc}"
     )
 
     # ------------------------------------------------------------------
@@ -149,9 +147,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
     # ------------------------------------------------------------------
     # (b) ``메일_발송로그_dryrun.csv`` 에 5 행 (status=dry_run) 작성
     # ------------------------------------------------------------------
-    assert dryrun_log.is_file(), (
-        f"(b) ``메일_발송로그_dryrun.csv`` not created — FR-C03a violated"
-    )
+    assert dryrun_log.is_file(), "(b) ``메일_발송로그_dryrun.csv`` not created — FR-C03a violated"
     dryrun_text = dryrun_log.read_text(encoding="utf-8")
     dryrun_lines = dryrun_text.splitlines()
     # header + 5 data rows
@@ -160,8 +156,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
         f"(header + 5 dry_run rows for cohort=low_score)"
     )
     assert dryrun_text.count(",dry_run,") == 5, (
-        f"(b) expected 5 ``dry_run`` rows in dryrun csv; got "
-        f"{dryrun_text.count(',dry_run,')}"
+        f"(b) expected 5 ``dry_run`` rows in dryrun csv; got {dryrun_text.count(',dry_run,')}"
     )
 
     # ------------------------------------------------------------------
@@ -181,9 +176,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
             if line.startswith("To:"):
                 to_line = line
                 break
-        assert to_line is not None, (
-            f"(c) eml file {eml.name} has no ``To:`` header"
-        )
+        assert to_line is not None, f"(c) eml file {eml.name} has no ``To:`` header"
         assert operator_email in to_line, (
             f"(c) eml {eml.name} To header must be operator ({operator_email!r}); "
             f"got {to_line!r} — self-test meaning violated under dry-run"
@@ -206,9 +199,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
     # ------------------------------------------------------------------
     # (d) manifest outputs.dispatch_log_path 가 ``_dryrun`` 접미사 path
     # ------------------------------------------------------------------
-    assert manifest_path.is_file(), (
-        f"(d) manifest_email.json not created at {manifest_path}"
-    )
+    assert manifest_path.is_file(), f"(d) manifest_email.json not created at {manifest_path}"
     manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     dispatch_log_path = manifest_raw["outputs"]["dispatch_log_path"]
     assert dispatch_log_path.endswith("메일_발송로그_dryrun.csv"), (
@@ -217,8 +208,7 @@ def test_dry_run_plus_self_test_combined(email_fixture) -> None:
         f"FR-C03d violated under dry-run + self-test"
     )
     assert "_dryrun" in dispatch_log_path, (
-        f"(d) manifest dispatch_log_path missing ``_dryrun`` suffix "
-        f"({dispatch_log_path!r})"
+        f"(d) manifest dispatch_log_path missing ``_dryrun`` suffix ({dispatch_log_path!r})"
     )
 
     # ------------------------------------------------------------------

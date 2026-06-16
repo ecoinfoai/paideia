@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import CohortLabel, CohortRow
+from pydantic import ValidationError
 
 
 def test_valid_low_score_row() -> None:

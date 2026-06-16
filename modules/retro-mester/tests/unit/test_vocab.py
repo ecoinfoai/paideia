@@ -131,9 +131,7 @@ class TestSegmentClusterVocab:
             _make_row("2026000001", cluster_label=None),
             _make_row("2026000002", cluster_label=None),
         ]
-        config = _make_config(
-            roster={"2026000001": "학령기", "2026000002": "학령기"}
-        )
+        config = _make_config(roster={"2026000001": "학령기", "2026000002": "학령기"})
         result = segment_cluster_vocab(rows, config)
 
         assert result.get("학령기") is None
@@ -143,8 +141,8 @@ class TestSegmentClusterVocab:
         from retro_mester.segment.vocab import segment_cluster_vocab
 
         rows = [
-            _make_row("2026000001", cluster_label="전략적"),   # 학령기
-            _make_row("2026000002", cluster_label="전략적"),   # 학령기
+            _make_row("2026000001", cluster_label="전략적"),  # 학령기
+            _make_row("2026000002", cluster_label="전략적"),  # 학령기
             _make_row("2026000003", cluster_label="습관중심"),  # 만학도
             _make_row("2026000004", cluster_label="습관중심"),  # 만학도
         ]
@@ -166,8 +164,8 @@ class TestSegmentClusterVocab:
         from retro_mester.segment.vocab import segment_cluster_vocab
 
         rows = [
-            _make_row("2026000001", cluster_label="전략적"),   # in roster
-            _make_row("2026000099", cluster_label="수동적"),   # NOT in roster
+            _make_row("2026000001", cluster_label="전략적"),  # in roster
+            _make_row("2026000099", cluster_label="수동적"),  # NOT in roster
         ]
         config = _make_config(roster={"2026000001": "학령기"})
         result = segment_cluster_vocab(rows, config)
@@ -183,9 +181,7 @@ class TestSegmentClusterVocab:
             _make_row("2026000001", cluster_label="A"),
             _make_row("2026000002", cluster_label="B"),
         ]
-        config = _make_config(
-            roster={"2026000001": "학령기", "2026000002": "학령기"}
-        )
+        config = _make_config(roster={"2026000001": "학령기", "2026000002": "학령기"})
         # Just assert it returns some string (not None) on a tie
         result = segment_cluster_vocab(rows, config)
         assert result.get("학령기") is not None
@@ -195,12 +191,10 @@ class TestSegmentClusterVocab:
         from retro_mester.segment.vocab import segment_cluster_vocab
 
         rows = [
-            _make_row("2026000001", cluster_label=None),    # 학령기, no cluster
+            _make_row("2026000001", cluster_label=None),  # 학령기, no cluster
             _make_row("2026000002", cluster_label="전략적"),  # 학령기, has cluster
         ]
-        config = _make_config(
-            roster={"2026000001": "학령기", "2026000002": "학령기"}
-        )
+        config = _make_config(roster={"2026000001": "학령기", "2026000002": "학령기"})
         result = segment_cluster_vocab(rows, config)
 
         # Null excluded → 전략적 wins

@@ -19,8 +19,6 @@ Validators referenced (data-model.md sections):
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import (
     HistogramBin,
     ImmersioPhase1Manifest,
@@ -29,7 +27,7 @@ from paideia_shared.schemas import (
     MetadataAggregate,
     StudentExamMetrics,
 )
-
+from pydantic import ValidationError
 
 # =====================================================================
 # §1 ItemStatistics

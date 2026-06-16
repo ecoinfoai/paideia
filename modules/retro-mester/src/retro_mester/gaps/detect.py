@@ -100,9 +100,7 @@ def detect_gaps(
             weight = config.importance_weights[unit_importance]
             impact_score = n_below * weight
 
-            cause, cause_signals = classify_cause(
-                chapter, segment, rows, items, config
-            )
+            cause, cause_signals = classify_cause(chapter, segment, rows, items, config)
 
             gaps.append(
                 UnitGap(

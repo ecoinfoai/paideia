@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from immersio.cli.main import _build_parser
 
 

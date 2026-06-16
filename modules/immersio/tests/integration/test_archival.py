@@ -15,7 +15,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from immersio.analyze.archival import (
     ArchivalError,
     archive_previous_run,
@@ -26,18 +25,14 @@ def _seed_silver(silver_dir: Path) -> None:
     silver_dir.mkdir(parents=True, exist_ok=True)
     (silver_dir / "문항통계.parquet").write_bytes(b"fake-parquet-1")
     (silver_dir / "학생지표.parquet").write_bytes(b"fake-parquet-2")
-    (silver_dir / "manifest.json").write_text(
-        '{"schema_version": "1.0.0"}', encoding="utf-8"
-    )
+    (silver_dir / "manifest.json").write_text('{"schema_version": "1.0.0"}', encoding="utf-8")
 
 
 def _seed_gold(gold_dir: Path) -> None:
     gold_dir.mkdir(parents=True, exist_ok=True)
     (gold_dir / "시험분석결과.xlsx").write_bytes(b"fake-xlsx")
     (gold_dir / "시험품질보고서.md").write_text("# fake report\n", encoding="utf-8")
-    (gold_dir / "manifest.json").write_text(
-        '{"schema_version": "1.0.0"}', encoding="utf-8"
-    )
+    (gold_dir / "manifest.json").write_text('{"schema_version": "1.0.0"}', encoding="utf-8")
 
 
 def test_first_run_returns_none(tmp_path: Path) -> None:
@@ -95,9 +90,7 @@ def test_schema_version_suffix_from_manifest(tmp_path: Path) -> None:
     silver = tmp_path / "silver"
     gold = tmp_path / "gold"
     silver.mkdir()
-    (silver / "manifest.json").write_text(
-        '{"schema_version": "2.3.4"}', encoding="utf-8"
-    )
+    (silver / "manifest.json").write_text('{"schema_version": "2.3.4"}', encoding="utf-8")
     (silver / "stub.bin").write_bytes(b"x")
     gold.mkdir()
     (gold / "stub.bin").write_bytes(b"y")
@@ -125,15 +118,11 @@ def test_explicit_schema_version_overrides_manifest(tmp_path: Path) -> None:
     silver = tmp_path / "silver"
     gold = tmp_path / "gold"
     silver.mkdir()
-    (silver / "manifest.json").write_text(
-        '{"schema_version": "1.0.0"}', encoding="utf-8"
-    )
+    (silver / "manifest.json").write_text('{"schema_version": "1.0.0"}', encoding="utf-8")
     (silver / "stub.bin").write_bytes(b"x")
     gold.mkdir()
     (gold / "stub.bin").write_bytes(b"y")
-    result = archive_previous_run(
-        silver_dir=silver, gold_dir=gold, schema_version="9.9.9"
-    )
+    result = archive_previous_run(silver_dir=silver, gold_dir=gold, schema_version="9.9.9")
     assert result is not None
     assert "__v9.9.9" in result["silver"]
     assert "__v9.9.9" in result["gold"]

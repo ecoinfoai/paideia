@@ -43,9 +43,7 @@ def load_chapter(path: Path) -> list[tuple[int, str]]:
             the full path for fail-fast debugging.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"Textbook chapter file not found: {path}"
-        )
+        raise FileNotFoundError(f"Textbook chapter file not found: {path}")
     raw = path.read_text(encoding="utf-8")
     # Split on newlines only; do NOT strip trailing newline to preserve count
     lines = raw.split("\n")
@@ -59,6 +57,7 @@ def load_chapter(path: Path) -> list[tuple[int, str]]:
 # ---------------------------------------------------------------------------
 # Chapter-file matching
 # ---------------------------------------------------------------------------
+
 
 def _chapter_file_pattern(chapter_no: int) -> re.Pattern[str]:
     """Return a compiled regex that matches a filename for *chapter_no*.
@@ -77,9 +76,7 @@ def _chapter_file_pattern(chapter_no: int) -> re.Pattern[str]:
     n = str(chapter_no)
     # N장 token (preceded by start-of-string or a non-digit) → matches
     # "8장"/"10장" without colliding with "18장".
-    return re.compile(
-        rf"(?:^|(?<=\D)){re.escape(n)}장"
-    )
+    return re.compile(rf"(?:^|(?<=\D)){re.escape(n)}장")
 
 
 def _find_chapter_file(bronze_dir: Path, chapter_no: int) -> Path | None:

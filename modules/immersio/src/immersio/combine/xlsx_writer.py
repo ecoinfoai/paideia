@@ -30,19 +30,16 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-
-from immersio.report.xlsx_writer import rewrite_modified_in_zip
-
 from paideia_shared.schemas import (
     CorrelationCell,
     RegressionCoefficient,
     RegressionFitSummary,
 )
 
+from immersio.report.xlsx_writer import rewrite_modified_in_zip
+
 # Determinism vector #5 — fixed epoch (matches Phase 1+2 conventions).
-_EPOCH_MODIFIED = datetime.datetime(
-    2000, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
-)
+_EPOCH_MODIFIED = datetime.datetime(2000, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 
 _CORRELATION_HEADERS = (
     "axis_key",
@@ -70,9 +67,7 @@ _REGRESSION_HEADERS = (
 )
 
 
-def _build_correlation_sheet(
-    wb: Workbook, cells: Sequence[CorrelationCell]
-) -> None:
+def _build_correlation_sheet(wb: Workbook, cells: Sequence[CorrelationCell]) -> None:
     sheet = wb.create_sheet("상관매트릭스")
     sheet.append(list(_CORRELATION_HEADERS))
     for c in cells:
@@ -174,7 +169,7 @@ _CLUSTER_PAIRWISE_HEADERS = (
 
 
 def _build_cluster_sheet(
-    wb: "Workbook",
+    wb: Workbook,
     rows: object,
     header: object,
     pairwise: object,
@@ -345,9 +340,7 @@ def write_us1_xlsx(
     _build_regression_sheet(wb, regression_coefs, regression_fit)
 
     if cluster_rows is not None and cluster_header is not None:
-        _build_cluster_sheet(
-            wb, cluster_rows, cluster_header, cluster_pairwise or []
-        )
+        _build_cluster_sheet(wb, cluster_rows, cluster_header, cluster_pairwise or [])
 
     if subgroup_rows is not None and subgroup_headers is not None:
         _build_subgroup_sheet(wb, subgroup_rows, subgroup_headers)

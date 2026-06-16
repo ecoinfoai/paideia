@@ -13,7 +13,6 @@ References:
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable
 
 import numpy as np
@@ -49,8 +48,7 @@ def bh_fdr_adjust(p_values: Iterable[float]) -> list[float]:
 
     if (arr < 0.0).any() or (arr > 1.0).any():
         raise ValueError(
-            f"bh_fdr_adjust: p-value outside [0, 1] (got min={arr.min()},"
-            f" max={arr.max()})"
+            f"bh_fdr_adjust: p-value outside [0, 1] (got min={arr.min()}, max={arr.max()})"
         )
 
     q = false_discovery_control(arr, method="bh")

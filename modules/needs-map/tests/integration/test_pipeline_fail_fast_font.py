@@ -25,9 +25,7 @@ from pathlib import Path
 import pytest
 
 _FIXTURE_ROOT = Path("modules/needs-map/tests/fixtures/silver_minimal")
-_FULL_MAPPING = Path(
-    "modules/needs-map/tests/fixtures/mappings/anatomy_full.diagnostic.yaml"
-)
+_FULL_MAPPING = Path("modules/needs-map/tests/fixtures/mappings/anatomy_full.diagnostic.yaml")
 
 
 def _stage(tmp_path: Path) -> Path:
@@ -92,12 +90,17 @@ def test_font_unavailable_exits_six_and_writes_nothing(
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--phases", "A-B",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-B",
             "--no-llm",
-            "--input-root", str(input_root),
-            "--output-root", str(output_root),
+            "--input-root",
+            str(input_root),
+            "--output-root",
+            str(output_root),
         ]
     )
     captured = capsys.readouterr()

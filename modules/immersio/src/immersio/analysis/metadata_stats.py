@@ -17,11 +17,10 @@ Phase 4 와 함께 확장 가능.
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-
 from paideia_shared.schemas import MetadataAggregate, MetadataKind, TestKind
 
 from .stat_tests import levene_then_anova, welch_t_test
@@ -41,14 +40,10 @@ def _is_blank(value: object) -> bool:
         return True
     if isinstance(value, float) and math.isnan(value):
         return True
-    if isinstance(value, str) and value.strip() == "":
-        return True
-    return False
+    return isinstance(value, str) and value.strip() == ""
 
 
-def _group_by(
-    df: pd.DataFrame, key: str
-) -> dict[str, np.ndarray]:
+def _group_by(df: pd.DataFrame, key: str) -> dict[str, np.ndarray]:
     """Return ``{value: scores_array}`` for one metadata column."""
     out: dict[str, list[float]] = {}
     for _, row in df.iterrows():

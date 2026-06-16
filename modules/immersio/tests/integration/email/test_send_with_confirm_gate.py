@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-import pytest
-
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
 
@@ -33,6 +31,7 @@ def _args(*, send: bool, confirm_input: str = "yes\n") -> argparse.Namespace:
     )
     # Stash a stdin object on args so confirm_gate uses it instead of sys.stdin.
     import io as _io
+
     args._stdin = _io.StringIO(confirm_input)
     args._stdout = _io.StringIO()
     return args
@@ -65,9 +64,7 @@ class _CapturingDispatcher:
 def test_no_aborts_send_with_zero_calls(email_fixture, monkeypatch) -> None:
     """SC-004: 'no' at the gate → 0 send calls + exit 0 (safe abort)."""
     _CapturingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CapturingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CapturingDispatcher)
     rc = run_email_dispatch(_args(send=True, confirm_input="no\n"))
     assert rc == 0
     assert len(_CapturingDispatcher.captured) == 0
@@ -76,9 +73,7 @@ def test_no_aborts_send_with_zero_calls(email_fixture, monkeypatch) -> None:
 def test_yes_proceeds_to_send(email_fixture, monkeypatch) -> None:
     """'yes' → all 5 fixture students sent."""
     _CapturingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CapturingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CapturingDispatcher)
     rc = run_email_dispatch(_args(send=True, confirm_input="yes\n"))
     assert rc == 0
     assert len(_CapturingDispatcher.captured) == 5

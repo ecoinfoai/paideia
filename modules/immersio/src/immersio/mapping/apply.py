@@ -70,9 +70,7 @@ def apply_mapping(
             f"apply_mapping: expected pd.DataFrame, got {type(diagnostic_df).__name__}."
         )
 
-    likert_axes: dict[str, dict[str, list[float | None]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    likert_axes: dict[str, dict[str, list[float | None]]] = defaultdict(lambda: defaultdict(list))
     likert_aggregate_by_axis: dict[str, str] = {}
     multiselect_options: dict[str, list[str]] = defaultdict(list)
     new_options_by_axis: dict[str, list[str]] = defaultdict(list)
@@ -90,9 +88,7 @@ def apply_mapping(
         axis = column.axis
         if axis is None:
             # MappingColumn V1 already enforces this; keep an explicit raise.
-            raise ValueError(
-                f"apply_mapping: non-identity column {column.source!r} has axis=None."
-            )
+            raise ValueError(f"apply_mapping: non-identity column {column.source!r} has axis=None.")
         if column.kind == "likert":
             if column.aggregate is not None:
                 likert_aggregate_by_axis.setdefault(axis, column.aggregate)
@@ -171,8 +167,10 @@ def apply_mapping(
             aggregate = likert_aggregate_by_axis.get(axis)
             if aggregate is None:
                 # single-column axis: simple identity (mean of one)
-                per_student[axis] = float(non_null[0]) if len(non_null) == 1 else float(
-                    sum(non_null) / len(non_null)
+                per_student[axis] = (
+                    float(non_null[0])
+                    if len(non_null) == 1
+                    else float(sum(non_null) / len(non_null))
                 )
             else:
                 per_student[axis] = float(_column_summary_aggregate(non_null, aggregate))

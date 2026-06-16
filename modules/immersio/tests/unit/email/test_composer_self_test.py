@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
-import pytest
 import yaml
-
 from immersio.email.composer import build_email_draft
 from paideia_shared.schemas import (
     DispatchMode,
@@ -58,7 +56,7 @@ def _make_kwargs(tmp_path: Path):
             student_id="1234567001",
             email="student@example.com",
             source_row_index=0,
-            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
         ),
         pdf_bundle=StudentPDFBundle(
             student_id="1234567001",

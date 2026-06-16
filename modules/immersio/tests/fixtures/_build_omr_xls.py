@@ -143,9 +143,7 @@ def _write_section_workbook(path: Path, section: str) -> None:
 
     # OX sheet: 학번, item_1_OX, item_2_OX, ..., item_N_OX
     ox_sheet = workbook.create_sheet("OX")
-    ox_sheet.append(
-        ["학번"] + [f"item_{item['item_no']}_OX" for item in ITEMS]
-    )
+    ox_sheet.append(["학번"] + [f"item_{item['item_no']}_OX" for item in ITEMS])
     for student_id, _name in roster:
         if student_id not in responses:
             continue

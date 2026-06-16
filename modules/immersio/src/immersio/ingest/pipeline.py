@@ -56,6 +56,7 @@ def _data_integrity_violation(file_repr: str, exc: DuplicateStudentIdError) -> I
         found=str(exc),
     )
 
+
 _RECOGNIZED_SUBDIRS: tuple[str, ...] = ("진단평가", "시험성적", "출석", "시험문제")
 
 
@@ -215,9 +216,7 @@ def run_ingest(
     else:
         exam_yaml_path = exam_yaml
         if not exam_yaml_path.is_file():
-            raise FileNotFoundError(
-                f"run_ingest: --exam-yaml file missing: {exam_yaml_path}."
-            )
+            raise FileNotFoundError(f"run_ingest: --exam-yaml file missing: {exam_yaml_path}.")
 
     def _track(file_repr: str, stage: str, exc: Exception) -> None:
         if isinstance(exc, ValidationError):
@@ -265,12 +264,8 @@ def run_ingest(
     except (ValidationError, ValueError) as exc:
         _track(str(mapping_path), "load_mapping", exc)
 
-    semester: SemesterCode = (
-        mapping.metadata.semester if mapping is not None else "1900-1"
-    )
-    course_slug: CourseSlug = (
-        mapping.metadata.course_slug if mapping is not None else "unknown"
-    )
+    semester: SemesterCode = mapping.metadata.semester if mapping is not None else "1900-1"
+    course_slug: CourseSlug = mapping.metadata.course_slug if mapping is not None else "unknown"
     course_name_kr = mapping.metadata.course_name_kr if mapping is not None else None
     derived_output_key: OutputKey = (
         output_key if output_key is not None else f"{semester}-{course_slug}"
@@ -323,8 +318,7 @@ def run_ingest(
         )
         _print(
             verbose_stream,
-            f"      responses={len(exam_responses_df)}, "
-            f"students_in_summary={len(exam_summary_df)}",
+            f"      responses={len(exam_responses_df)}, students_in_summary={len(exam_summary_df)}",
         )
     except DuplicateStudentIdError as exc:
         raise DataIntegrityError(

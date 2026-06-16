@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import argparse
 import io
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
-
-from immersio.cli.main import _build_parser
 from immersio.email.pipeline import _parse_sent_date, run_email_dispatch
 
 KST = timezone(timedelta(hours=9))

@@ -143,15 +143,11 @@ def build_bundle(
 
     # Step 3: assemble chunk text (join with double newline)
     chunk_text = (
-        "\n\n".join(c.text for c in selected_sorted)
-        if selected_sorted
-        else "(교재 본문 없음)"
+        "\n\n".join(c.text for c in selected_sorted) if selected_sorted else "(교재 본문 없음)"
     )
 
     # Step 4: build context_refs
-    context_refs: list[str] = [
-        f"{c.source_file}#{c.chunk_id}" for c in selected_sorted
-    ]
+    context_refs: list[str] = [f"{c.source_file}#{c.chunk_id}" for c in selected_sorted]
 
     # Step 5: format prompt
     section_label = slot.section if slot.section else "(전체)"

@@ -77,9 +77,7 @@ class MaieuticaTextbookEvidence(BaseModel):
         if self.status != "확인":
             return self
         if not self.chunk_id:
-            raise ValueError(
-                "V2: status='확인' requires chunk_id to be set."
-            )
+            raise ValueError("V2: status='확인' requires chunk_id to be set.")
         has_found_text = bool(self.found_text)
         has_char_range = self.char_start is not None and self.char_end is not None
         if not has_found_text and not has_char_range:

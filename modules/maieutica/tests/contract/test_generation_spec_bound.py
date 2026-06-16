@@ -49,9 +49,7 @@ def test_quiz_count_20_allowed() -> None:
 def test_quiz_count_21_rejected() -> None:
     """quiz_count=21 (> 20) raises a ValidationError (FR-005)."""
     with pytest.raises(ValidationError):
-        MaieuticaGenerationSpec.model_validate(
-            _base_generation_spec(quiz_count=21)
-        )
+        MaieuticaGenerationSpec.model_validate(_base_generation_spec(quiz_count=21))
 
 
 def test_quiz_count_1_allowed() -> None:

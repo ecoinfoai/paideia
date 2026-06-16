@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -28,6 +29,7 @@ def _valid_kwargs() -> dict:
 # ---------------------------------------------------------------------------
 # Valid construction — all proposed_kind values
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "kind",
@@ -52,6 +54,7 @@ def test_valid_construction() -> None:
 # Invalid proposed_kind
 # ---------------------------------------------------------------------------
 
+
 def test_invalid_proposed_kind() -> None:
     """A non-Literal proposed_kind raises ValidationError."""
     kw = _valid_kwargs()
@@ -63,6 +66,7 @@ def test_invalid_proposed_kind() -> None:
 # ---------------------------------------------------------------------------
 # Extra-field rejection + frozen
 # ---------------------------------------------------------------------------
+
 
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""

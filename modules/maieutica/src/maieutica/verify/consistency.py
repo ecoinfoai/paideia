@@ -72,10 +72,7 @@ def check_flat_nested_consistency(
             f"Internal consistency error: quiz item count mismatch — "
             f"expected {expected_quiz_count}, got {len(quiz_items)}"
         )
-    if (
-        expected_formative_count is not None
-        and len(formative_items) != expected_formative_count
-    ):
+    if expected_formative_count is not None and len(formative_items) != expected_formative_count:
         raise RuntimeError(
             f"Internal consistency error: formative item count mismatch — "
             f"expected {expected_formative_count}, got {len(formative_items)}"
@@ -87,16 +84,13 @@ def check_flat_nested_consistency(
         from collections import Counter
 
         dupes = [k for k, v in Counter(quiz_item_nos).items() if v > 1]
-        raise RuntimeError(
-            f"Internal consistency error: duplicate quiz item_no values: {dupes}"
-        )
+        raise RuntimeError(f"Internal consistency error: duplicate quiz item_no values: {dupes}")
 
     # 2b. Quiz items must be ordered by item_no (slot-order pipeline invariant —
     # the flat .xls rows and nested yaml entries share this row order).
     if quiz_item_nos != sorted(quiz_item_nos):
         raise RuntimeError(
-            f"Internal consistency error: quiz items are not ordered by item_no: "
-            f"{quiz_item_nos}"
+            f"Internal consistency error: quiz items are not ordered by item_no: {quiz_item_nos}"
         )
 
     # 3. Formative no uniqueness
@@ -105,9 +99,7 @@ def check_flat_nested_consistency(
         from collections import Counter
 
         dupes = [k for k, v in Counter(formative_nos).items() if v > 1]
-        raise RuntimeError(
-            f"Internal consistency error: duplicate formative no values: {dupes}"
-        )
+        raise RuntimeError(f"Internal consistency error: duplicate formative no values: {dupes}")
 
     # 4. V4 round-trip: answer_explanation_combined == wrong ─ 도약 ─ leap.text
     for item in quiz_items:

@@ -40,9 +40,7 @@ from pathlib import Path
 
 # Strict filename contract:  {CLASS}_{WEEK}주차_{SESSION}차시  (optional .txt)
 # CLASS = a single digit followed by an uppercase letter A-D (e.g. 1A..1D).
-_STT_NAME_RE = re.compile(
-    r"^(?P<cls>\d[A-D])_(?P<week>\d+)주차_(?P<session>\d+)차시$"
-)
+_STT_NAME_RE = re.compile(r"^(?P<cls>\d[A-D])_(?P<week>\d+)주차_(?P<session>\d+)차시$")
 
 
 def parse_stt_filename(name: str) -> tuple[str, int, int] | None:

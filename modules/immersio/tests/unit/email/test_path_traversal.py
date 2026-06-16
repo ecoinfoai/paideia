@@ -11,10 +11,7 @@ errors emerge cleanly rather than the path being silently followed.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-
 from immersio.email.pdf_scan import PDFScanError, parse_filename_pattern
 
 

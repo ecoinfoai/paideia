@@ -51,9 +51,7 @@ class PreSendSummary(BaseModel):
     @model_validator(mode="after")
     def _check_invariants(self) -> PreSendSummary:
         if (
-            self.sendable_count
-            + len(self.idempotent_skipped_sids)
-            + self.cohort_outside_count
+            self.sendable_count + len(self.idempotent_skipped_sids) + self.cohort_outside_count
             != self.total_targets
         ):
             raise ValueError(
@@ -64,15 +62,11 @@ class PreSendSummary(BaseModel):
                 f"total({self.total_targets})"
             )
         if self.idempotent_skipped_sids != sorted(self.idempotent_skipped_sids):
-            raise ValueError(
-                "PreSendSummary.idempotent_skipped_sids must be ASC sorted "
-                "(FR-C04b)"
-            )
+            raise ValueError("PreSendSummary.idempotent_skipped_sids must be ASC sorted (FR-C04b)")
         for sid in self.idempotent_skipped_sids:
             if not _STUDENT_ID_RE.fullmatch(sid):
                 raise ValueError(
-                    f"PreSendSummary.idempotent_skipped_sids: "
-                    f"{sid!r} must match ^\\d{{10}}$"
+                    f"PreSendSummary.idempotent_skipped_sids: {sid!r} must match ^\\d{{10}}$"
                 )
         if self.is_self_test != (self.operator_email is not None):
             raise ValueError(

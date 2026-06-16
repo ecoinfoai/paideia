@@ -79,9 +79,7 @@ class FakeBackend(LLMBackend):
     def generate(self, request: GenerationRequest) -> GenerationResponse:
         self.call_count += 1
         raw_text = (
-            self._raw
-            if isinstance(self._raw, str)
-            else json.dumps(self._raw, ensure_ascii=False)
+            self._raw if isinstance(self._raw, str) else json.dumps(self._raw, ensure_ascii=False)
         )
         return GenerationResponse(
             slot_id=request.slot_id,

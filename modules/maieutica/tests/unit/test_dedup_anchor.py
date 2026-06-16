@@ -114,12 +114,8 @@ class TestDedupByAnchor:
         """미확인/None anchors are never grouped or removed by dedup (T029 is separate)."""
         from maieutica.verify.format_checks import detect_duplicates
 
-        confirmed = _make_candidate(
-            item_no=1, textbook_evidence=_confirmed_anchor("c8-1", 12)
-        )
-        unconfirmed = _make_candidate(
-            item_no=2, textbook_evidence=_unconfirmed_anchor()
-        )
+        confirmed = _make_candidate(item_no=1, textbook_evidence=_confirmed_anchor("c8-1", 12))
+        unconfirmed = _make_candidate(item_no=2, textbook_evidence=_unconfirmed_anchor())
         none_anchor = _make_candidate(item_no=3, textbook_evidence=None)
         out = detect_duplicates([confirmed, unconfirmed, none_anchor])
         assert len(out) == 3

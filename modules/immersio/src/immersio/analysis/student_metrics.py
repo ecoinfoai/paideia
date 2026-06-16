@@ -24,7 +24,7 @@ Hazen percentile (research §R-12): ``(n_below + 0.5 * n_equal) / n_total
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -134,14 +134,10 @@ def compute_student_metrics(
     if student_master_df.empty:
         raise ValueError("compute_student_metrics: student_master_df is empty")
     if "exam_taken" not in student_master_df.columns:
-        raise ValueError(
-            "compute_student_metrics: student_master_df missing 'exam_taken' column"
-        )
+        raise ValueError("compute_student_metrics: student_master_df missing 'exam_taken' column")
 
     items_list = [dict(it) for it in exam_items]
-    items_by_no: dict[int, Mapping[str, object]] = {
-        int(it["item_no"]): it for it in items_list
-    }
+    items_by_no: dict[int, Mapping[str, object]] = {int(it["item_no"]): it for it in items_list}
 
     semester = "2026-1"
     course_slug = "anatomy"
@@ -181,18 +177,14 @@ def compute_student_metrics(
     # needs-map alignment
     aligned: dict[str, dict[str, list[int]]] = {}
     if needs_map_responses is not None:
-        aligned = align_chapters_to_exam_items(
-            responses=needs_map_responses, exam_items=items_list
-        )
+        aligned = align_chapters_to_exam_items(responses=needs_map_responses, exam_items=items_list)
 
     out: list[StudentExamMetrics] = []
     for _, m in student_master_df.iterrows():
         sid = str(m["student_id"])
         name_kr = m.get("name_kr") if not pd.isna(m.get("name_kr")) else None
         section_raw = m.get("section")
-        section = (
-            str(section_raw) if section_raw is not None and not pd.isna(section_raw) else None
-        )
+        section = str(section_raw) if section_raw is not None and not pd.isna(section_raw) else None
         exam_taken = bool(m["exam_taken"])
 
         if not exam_taken:
@@ -222,12 +214,8 @@ def compute_student_metrics(
 
         chapter_rates = _build_metadata_rates(correct_map, items_by_no, "chapter")
         source_rates = _build_metadata_rates(correct_map, items_by_no, "source")
-        difficulty_rates = _build_metadata_rates(
-            correct_map, items_by_no, "difficulty_level"
-        )
-        expected_rates = _build_metadata_rates(
-            correct_map, items_by_no, "expected_difficulty"
-        )
+        difficulty_rates = _build_metadata_rates(correct_map, items_by_no, "difficulty_level")
+        expected_rates = _build_metadata_rates(correct_map, items_by_no, "expected_difficulty")
         item_type_rates = _build_metadata_rates(correct_map, items_by_no, "item_type")
 
         interest_rate, aversion_rate = _interest_aversion_rates(sid, correct_map, aligned)
@@ -248,9 +236,7 @@ def compute_student_metrics(
                 chapter_correct_rates={str(k): v for k, v in chapter_rates.items()},
                 source_correct_rates={str(k): v for k, v in source_rates.items()},
                 difficulty_correct_rates={int(k): v for k, v in difficulty_rates.items()},
-                expected_difficulty_correct_rates={
-                    str(k): v for k, v in expected_rates.items()
-                },
+                expected_difficulty_correct_rates={str(k): v for k, v in expected_rates.items()},
                 item_type_correct_rates={str(k): v for k, v in item_type_rates.items()},
                 interest_chapters_correct_rate=interest_rate,
                 aversion_chapters_correct_rate=aversion_rate,

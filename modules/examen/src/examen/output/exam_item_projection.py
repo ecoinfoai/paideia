@@ -121,8 +121,7 @@ def write_exam_item_projection(
     """
     # 직렬화 먼저 — 실패 시 파일 부수효과 없음 (constitution V)
     projected = [
-        project_to_exam_item(item, semester=semester, course_slug=course_slug)
-        for item in items
+        project_to_exam_item(item, semester=semester, course_slug=course_slug) for item in items
     ]
     data = [ei.model_dump(mode="python") for ei in projected]
     serialized = dump_yaml(data)

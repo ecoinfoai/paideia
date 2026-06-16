@@ -71,9 +71,7 @@ def propose_next_items(
     proposals: list[NextYearItemProposal] = []
 
     # Rule 1: one likert self-understanding proposal per structural gap chapter.
-    structural_chapters = sorted(
-        {g.chapter for g in gaps if g.is_structural}
-    )
+    structural_chapters = sorted({g.chapter for g in gaps if g.is_structural})
     for chapter in structural_chapters:
         missing_signal = f"{chapter} 자가이해도"
         if missing_signal in seen_signals:

@@ -102,9 +102,7 @@ def _run_fc_match(pattern: str) -> Path | None:
     return Path(output)
 
 
-def _resolve_env_var_path(
-    face: FaceKind, env_var: str, env_value: str, fc_pattern: str
-) -> Path:
+def _resolve_env_var_path(face: FaceKind, env_var: str, env_value: str, fc_pattern: str) -> Path:
     candidate = Path(env_value)
     try:
         resolved = candidate.resolve(strict=True)

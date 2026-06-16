@@ -102,9 +102,7 @@ class TestCheckFormat:
     def test_explanation_length_ok_false_for_long_leap(self) -> None:
         from maieutica.verify.format_checks import check_format
 
-        out = check_format(
-            _make_candidate(leap_text="나" * 250, explanation_length_ok=True)
-        )
+        out = check_format(_make_candidate(leap_text="나" * 250, explanation_length_ok=True))
         assert out.explanation_length_ok is False
 
     def test_returns_new_candidate(self) -> None:

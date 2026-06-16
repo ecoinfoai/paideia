@@ -125,18 +125,14 @@ def _resolve_face(face: FaceKind, env_var: str, fc_pattern: str) -> Path:
                 env_var=env_var,
                 env_var_status="not set",
                 fc_pattern=fc_pattern,
-                fc_match_status=(
-                    f"matched {fc_match_path} but the file does not exist"
-                ),
+                fc_match_status=(f"matched {fc_match_path} but the file does not exist"),
                 fc_match_path=fc_match_path,
             )
         )
     return fc_match_path
 
 
-def _resolve_env_var_path(
-    face: FaceKind, env_var: str, env_value: str, fc_pattern: str
-) -> Path:
+def _resolve_env_var_path(face: FaceKind, env_var: str, env_value: str, fc_pattern: str) -> Path:
     """Validate an operator-supplied env-var font path (T022 hardening).
 
     Three guards (in order — earliest possible rejection):
@@ -290,9 +286,7 @@ def register_for_matplotlib(regular_path: Path) -> str:
     return _REGULAR_FAMILY_NAME
 
 
-def register_for_reportlab(
-    regular_path: Path, bold_path: Path
-) -> tuple[str, str]:
+def register_for_reportlab(regular_path: Path, bold_path: Path) -> tuple[str, str]:
     """Register both faces with reportlab and return their (regular, bold) names.
 
     Reportlab tracks faces by *name*, not family. Card layout / manual PDF

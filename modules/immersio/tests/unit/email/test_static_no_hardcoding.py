@@ -22,8 +22,8 @@ false-negative regression in the regex set is caught.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pytest
 
@@ -76,86 +76,90 @@ _SECRETS_DIR = _REPO_ROOT / "secrets"
 # ---------------------------------------------------------------------------
 # False-positive whitelist (ADR-009 §"허용 예외 3종").
 # ---------------------------------------------------------------------------
-_ALLOWED_LITERALS: frozenset[str] = frozenset({
-    # 3-2: cohort-label Korean translation dict (operational labels)
-    "저득점",
-    "나머지",
-    "전체",
-    # 3-3: example-domain placeholders that show up in test fixtures /
-    # docstrings (NOT real personal addresses) — RFC 2606 reserves
-    # example.com / example.ac.kr / example.org for documentation use.
-    "student@example.com",
-    "alpha@example.ac.kr",
-    "noreply@example.ac.kr",
-    "kjeong@example.ac.kr",
-    "ok@example.com",
-    "pool1@example.com",
-    "pool2@example.com",
-    "abc@example.com",
-    "deterministic@example.ac.kr",
-    "mixed.case@example.com",
-    "first@example.com",
-    "second@example.com",
-    "alice@example.com",
-    "bob@example.com",
-    "operator@example.ac.kr",
-    "hong@example.com",
-    "kim@example.com",
-    "lee@example.com",
-    "yoo@example.com",
-    "ahn@example.com",
-    "a@example.com",
-    "b@example.com",
-    # Deterministic Message-ID literal asserted in tests — same domain
-    # (example.ac.kr) prefixed with the synthetic message-id form
-    "1234567890.2026-05-01.anatomy.2026-1@example.ac.kr",
-    "x@example.ac.kr",  # synthetic short message-id literal in csv schema test
-    "Alice@Example.COM",  # case-variant for lowercase normalization test
-    # ADR-009 allowed exception #3 — operational labels in body template
-    # and report headings, not student/professor PII.
-    "필요한 학생",
-    "다른 학생",
-    "실패 학생",
-    "누락 학생",
-    "해당 학생",  # cohort 명단 md placeholder for empty partition
-    "더미 학생",  # dummy_fixture body operational marker
-    "테스트학생",  # test fixture name placeholder (no role suffix)
-    "상태인 학생",  # v0.1.1 retry-mode notice phrase (FR-G; operational status descriptor)
-    "에서 학생",  # docstring connective fragment ("…줄에서 학생 이름…")
-    "라인은 학생",  # assertion-context connective ("표본 라인은 학생 이름·이메일…")
-    "라인에 학생",  # assertion-context connective ("표본 외 라인에 학생 이름 노출…")
-    "선이므로 학생",  # T035 docstring connective ("dry-run 이 우선이므로 학생/본인…")
-    "저득점 학생",  # T035 docstring cohort descriptor ("저득점 학생만 대상")
-    # Mock service-account placeholders (non-routable, fake-prefixed)
-    "fake-sa@fake-project.iam.gserviceaccount.com",
-    "x@y.com",
-    # Korean placeholder names used in test fixtures — operational
-    # placeholders (NOT real student/professor identifiers)
-    "알파교수",
-    "더미학생1",
-    "더미학생2",
-    "더미일",
-    "더미이",
-    "홍길동",
-    "김갑동",
-    "이순신",
-    "유관순",
-    "안중근",
-    "유령",
-    "다른이름",
-    "가짜이름",
-})
+_ALLOWED_LITERALS: frozenset[str] = frozenset(
+    {
+        # 3-2: cohort-label Korean translation dict (operational labels)
+        "저득점",
+        "나머지",
+        "전체",
+        # 3-3: example-domain placeholders that show up in test fixtures /
+        # docstrings (NOT real personal addresses) — RFC 2606 reserves
+        # example.com / example.ac.kr / example.org for documentation use.
+        "student@example.com",
+        "alpha@example.ac.kr",
+        "noreply@example.ac.kr",
+        "kjeong@example.ac.kr",
+        "ok@example.com",
+        "pool1@example.com",
+        "pool2@example.com",
+        "abc@example.com",
+        "deterministic@example.ac.kr",
+        "mixed.case@example.com",
+        "first@example.com",
+        "second@example.com",
+        "alice@example.com",
+        "bob@example.com",
+        "operator@example.ac.kr",
+        "hong@example.com",
+        "kim@example.com",
+        "lee@example.com",
+        "yoo@example.com",
+        "ahn@example.com",
+        "a@example.com",
+        "b@example.com",
+        # Deterministic Message-ID literal asserted in tests — same domain
+        # (example.ac.kr) prefixed with the synthetic message-id form
+        "1234567890.2026-05-01.anatomy.2026-1@example.ac.kr",
+        "x@example.ac.kr",  # synthetic short message-id literal in csv schema test
+        "Alice@Example.COM",  # case-variant for lowercase normalization test
+        # ADR-009 allowed exception #3 — operational labels in body template
+        # and report headings, not student/professor PII.
+        "필요한 학생",
+        "다른 학생",
+        "실패 학생",
+        "누락 학생",
+        "해당 학생",  # cohort 명단 md placeholder for empty partition
+        "더미 학생",  # dummy_fixture body operational marker
+        "테스트학생",  # test fixture name placeholder (no role suffix)
+        "상태인 학생",  # v0.1.1 retry-mode notice phrase (FR-G; operational status descriptor)
+        "에서 학생",  # docstring connective fragment ("…줄에서 학생 이름…")
+        "라인은 학생",  # assertion-context connective ("표본 라인은 학생 이름·이메일…")
+        "라인에 학생",  # assertion-context connective ("표본 외 라인에 학생 이름 노출…")
+        "선이므로 학생",  # T035 docstring connective ("dry-run 이 우선이므로 학생/본인…")
+        "저득점 학생",  # T035 docstring cohort descriptor ("저득점 학생만 대상")
+        # Mock service-account placeholders (non-routable, fake-prefixed)
+        "fake-sa@fake-project.iam.gserviceaccount.com",
+        "x@y.com",
+        # Korean placeholder names used in test fixtures — operational
+        # placeholders (NOT real student/professor identifiers)
+        "알파교수",
+        "더미학생1",
+        "더미학생2",
+        "더미일",
+        "더미이",
+        "홍길동",
+        "김갑동",
+        "이순신",
+        "유관순",
+        "안중근",
+        "유령",
+        "다른이름",
+        "가짜이름",
+    }
+)
 
 # Files whose contents are domain-specific allowed (whole-file exemption).
-_ALLOWED_FILE_NAMES: frozenset[str] = frozenset({
-    # The static-search test itself contains every regex pattern — would
-    # match itself recursively without exemption.
-    "test_static_no_hardcoding.py",
-    # Reflag #1 PII bidirectional contract test — the FAIL-case fixture
-    # must contain real-shape PII so the meta-test can verify regex
-    # match. Whole-file exemption mirrors the static-search test pattern.
-    "test_pii_static_scan.py",
-})
+_ALLOWED_FILE_NAMES: frozenset[str] = frozenset(
+    {
+        # The static-search test itself contains every regex pattern — would
+        # match itself recursively without exemption.
+        "test_static_no_hardcoding.py",
+        # Reflag #1 PII bidirectional contract test — the FAIL-case fixture
+        # must contain real-shape PII so the meta-test can verify regex
+        # match. Whole-file exemption mirrors the static-search test pattern.
+        "test_pii_static_scan.py",
+    }
+)
 
 
 def _iter_python_files() -> Iterable[Path]:

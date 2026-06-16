@@ -97,9 +97,7 @@ _STUDENT_FIXTURE: list[tuple[str, str, str]] = [
 
 def _make_drafts(tmp_path: Path, n: int):
     """첫 n 명의 (draft, bundle) 쌍 생성. n ≤ len(_STUDENT_FIXTURE)."""
-    assert n <= len(_STUDENT_FIXTURE), (
-        f"fixture only covers {len(_STUDENT_FIXTURE)} students"
-    )
+    assert n <= len(_STUDENT_FIXTURE), f"fixture only covers {len(_STUDENT_FIXTURE)} students"
     drafts = []
     profile = _profile()
     for i, (sid, name_kr, email) in enumerate(_STUDENT_FIXTURE[:n]):
@@ -287,12 +285,8 @@ def test_pii_invariant_across_all_scenarios(
     # _STUDENT_FIXTURE 의 이름은 한글 3자, 이메일은 ASCII alphanum + "@bhug.ac.kr"
     # 패턴. 비-표본 라인에 이 패턴 *전체 가족* 이 0 건이어야 한다 (장래 fixture
     # 가 확장되어도 PII leak 을 자동 캐치).
-    name_re = re.compile(
-        "|".join(re.escape(s[1]) for s in _STUDENT_FIXTURE)
-    )
-    email_re = re.compile(
-        "|".join(re.escape(s[2]) for s in _STUDENT_FIXTURE)
-    )
+    name_re = re.compile("|".join(re.escape(s[1]) for s in _STUDENT_FIXTURE))
+    email_re = re.compile("|".join(re.escape(s[2]) for s in _STUDENT_FIXTURE))
     for ln in non_sample_lines:
         m_name = name_re.search(ln)
         assert m_name is None, (

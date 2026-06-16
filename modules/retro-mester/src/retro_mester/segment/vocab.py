@@ -48,11 +48,7 @@ def segment_cluster_vocab(
 
     result: dict[SegmentKey, str | None] = {}
     for segment, segment_rows in buckets.items():
-        labels = [
-            row.cluster_label
-            for row in segment_rows
-            if row.cluster_label is not None
-        ]
+        labels = [row.cluster_label for row in segment_rows if row.cluster_label is not None]
         if labels:
             counter: Counter[str] = Counter(labels)
             result[segment] = counter.most_common(1)[0][0]

@@ -115,7 +115,9 @@ def test_silver_loader_valid_rows_pass(tmp_path: Path) -> None:
     silver = tmp_path / "silver" / "immersio" / "2026-1-anatomy"
     silver.mkdir(parents=True)
     pd.DataFrame([_good_student_master_row()]).to_parquet(silver / "student_master.parquet")
-    pd.DataFrame([_good_diagnostic_response_row()]).to_parquet(silver / "diagnostic_response.parquet")
+    pd.DataFrame([_good_diagnostic_response_row()]).to_parquet(
+        silver / "diagnostic_response.parquet"
+    )
 
     df_master = load_student_master(tmp_path, "2026-1", "anatomy")
     df_resp = load_diagnostic_response(tmp_path, "2026-1", "anatomy")

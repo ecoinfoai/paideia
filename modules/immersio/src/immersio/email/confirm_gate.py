@@ -15,7 +15,7 @@ from typing import IO
 from paideia_shared.schemas import EmailMessageDraft, PreSendSummary, StudentPDFBundle
 
 
-class ConfirmGateAborted(Exception):
+class ConfirmGateAborted(Exception):  # noqa: N818  (intentional control-flow exception name, not an Error)
     """Raised when the operator does not type the exact ``yes`` token."""
 
 
@@ -49,10 +49,7 @@ def confirm_first_n(
             than ``"yes"``).
     """
     if sample_size < 1 or sample_size > 10:
-        raise ValueError(
-            f"confirm_first_n: sample_size must be 1 ≤ N ≤ 10 "
-            f"(got {sample_size})"
-        )
+        raise ValueError(f"confirm_first_n: sample_size must be 1 ≤ N ≤ 10 (got {sample_size})")
     out = stdout if stdout is not None else sys.stdout
     in_ = stdin if stdin is not None else sys.stdin
 
@@ -63,8 +60,7 @@ def confirm_first_n(
         # 강조 라인 2 줄 + 3-bucket 카운트 줄 + 표본 prefix/suffix 변경.
         print("[immersio email] 확인 게이트", file=out)
         print(
-            "*** 주의: 현재 본인 테스트(SELF-TEST) 모드입니다. "
-            "학생 메일함 도달 0건. ***",
+            "*** 주의: 현재 본인 테스트(SELF-TEST) 모드입니다. 학생 메일함 도달 0건. ***",
             file=out,
         )
         print(

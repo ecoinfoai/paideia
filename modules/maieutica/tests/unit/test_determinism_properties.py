@@ -75,8 +75,7 @@ def test_option_length_ok_true_iff_all_in_window(options: list[str]) -> None:
     result = _compute_option_length_ok(options)
     # By construction every option is in range, so result must be True.
     assert result is True, (
-        f"expected True for all-in-range options, got False. "
-        f"Lengths: {[len(o) for o in options]}"
+        f"expected True for all-in-range options, got False. Lengths: {[len(o) for o in options]}"
     )
 
 
@@ -96,8 +95,7 @@ def test_option_length_ok_false_when_any_out_of_range(
     options = in_range + [out_of_range]
     result = _compute_option_length_ok(options)
     assert result is False, (
-        f"expected False for options with one too-long entry. "
-        f"Lengths: {[len(o) for o in options]}"
+        f"expected False for options with one too-long entry. Lengths: {[len(o) for o in options]}"
     )
 
 
@@ -110,15 +108,12 @@ def test_option_length_ok_false_when_any_out_of_range(
     too_short=_option_text(min_len=1, max_len=_OPTION_MIN_LEN - 1),
 )
 @settings(max_examples=200)
-def test_option_length_ok_false_when_any_too_short(
-    in_range: list[str], too_short: str
-) -> None:
+def test_option_length_ok_false_when_any_too_short(in_range: list[str], too_short: str) -> None:
     """option_length_ok is False when at least one option is under 30 codepoints."""
     options = in_range + [too_short]
     result = _compute_option_length_ok(options)
     assert result is False, (
-        f"expected False for options with one too-short entry. "
-        f"Lengths: {[len(o) for o in options]}"
+        f"expected False for options with one too-short entry. Lengths: {[len(o) for o in options]}"
     )
 
 
@@ -137,14 +132,11 @@ def test_option_length_ok_false_for_empty_list() -> None:
     leap=st.text(min_size=0, max_size=_EXPLANATION_MAX_LEN),
 )
 @settings(max_examples=300)
-def test_explanation_length_ok_true_iff_both_within_limit(
-    wrong: str, leap: str
-) -> None:
+def test_explanation_length_ok_true_iff_both_within_limit(wrong: str, leap: str) -> None:
     """explanation_length_ok is True when both texts are ≤200 codepoints."""
     result = _compute_explanation_length_ok(wrong, leap)
     assert result is True, (
-        f"expected True for both ≤200 chars. "
-        f"wrong={len(wrong)}, leap={len(leap)}"
+        f"expected True for both ≤200 chars. wrong={len(wrong)}, leap={len(leap)}"
     )
 
 
@@ -153,14 +145,11 @@ def test_explanation_length_ok_true_iff_both_within_limit(
     leap_over=st.text(min_size=_EXPLANATION_MAX_LEN + 1, max_size=400),
 )
 @settings(max_examples=200)
-def test_explanation_length_ok_false_when_leap_over_limit(
-    wrong_ok: str, leap_over: str
-) -> None:
+def test_explanation_length_ok_false_when_leap_over_limit(wrong_ok: str, leap_over: str) -> None:
     """explanation_length_ok is False when leap.text exceeds 200 codepoints."""
     result = _compute_explanation_length_ok(wrong_ok, leap_over)
     assert result is False, (
-        f"expected False (leap over limit). "
-        f"wrong={len(wrong_ok)}, leap={len(leap_over)}"
+        f"expected False (leap over limit). wrong={len(wrong_ok)}, leap={len(leap_over)}"
     )
 
 
@@ -169,14 +158,11 @@ def test_explanation_length_ok_false_when_leap_over_limit(
     leap_ok=st.text(min_size=0, max_size=_EXPLANATION_MAX_LEN),
 )
 @settings(max_examples=200)
-def test_explanation_length_ok_false_when_wrong_over_limit(
-    wrong_over: str, leap_ok: str
-) -> None:
+def test_explanation_length_ok_false_when_wrong_over_limit(wrong_over: str, leap_ok: str) -> None:
     """explanation_length_ok is False when wrong_explanation exceeds 200 codepoints."""
     result = _compute_explanation_length_ok(wrong_over, leap_ok)
     assert result is False, (
-        f"expected False (wrong over limit). "
-        f"wrong={len(wrong_over)}, leap={len(leap_ok)}"
+        f"expected False (wrong over limit). wrong={len(wrong_over)}, leap={len(leap_ok)}"
     )
 
 
@@ -214,9 +200,7 @@ def test_fold_round_trip(wrong: str, leap_text: str) -> None:
     """
     combined = f"{wrong}{_SEPARATOR}{leap_text}"
     parts = combined.split(_SEPARATOR, 1)
-    assert len(parts) == 2, (
-        f"split produced {len(parts)} parts, expected 2. combined={combined!r}"
-    )
+    assert len(parts) == 2, f"split produced {len(parts)} parts, expected 2. combined={combined!r}"
     recovered_wrong, recovered_leap = parts
     assert recovered_wrong == wrong, (
         f"round-trip: wrong_explanation mismatch.\n"

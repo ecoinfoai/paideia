@@ -141,8 +141,6 @@ def render_radar_png(
     )
 
     buf = io.BytesIO()
-    fig.savefig(
-        buf, format="png", dpi=dpi, bbox_inches=bbox, metadata={"Software": "paideia"}
-    )
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches=bbox, metadata={"Software": "paideia"})
     plt.close(fig)
     return buf.getvalue()

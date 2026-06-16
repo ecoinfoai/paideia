@@ -12,10 +12,9 @@ Validators V1-V6 per data-model.md:
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
-from paideia_shared.schemas.combined_analysis_row import CombinedAnalysisRow
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+from paideia_shared.schemas.combined_analysis_row import CombinedAnalysisRow
+from pydantic import ValidationError
 
 
 def _base_row(**overrides: object) -> dict[str, object]:
@@ -158,9 +157,7 @@ def test_v4_partial_cluster_invalid() -> None:
 
 
 def test_v4_full_cluster_valid() -> None:
-    overrides = _base_row(
-        cluster_id=2, cluster_label="고동기/고전략", cluster_distance=0.42
-    )
+    overrides = _base_row(cluster_id=2, cluster_label="고동기/고전략", cluster_distance=0.42)
     row = CombinedAnalysisRow(**overrides)
     assert row.cluster_id == 2
 
@@ -204,8 +201,13 @@ def test_v6_neither_responder_nor_examined_valid() -> None:
 
 def test_off_roster_respondent_valid() -> None:
     overrides = _base_row(
-        on_roster=False, name_kr=None, section=None, motivation_raw=3.0,
-        motivation_z=-0.5, motivation_missing=False, 진단응답=True,
+        on_roster=False,
+        name_kr=None,
+        section=None,
+        motivation_raw=3.0,
+        motivation_z=-0.5,
+        motivation_missing=False,
+        진단응답=True,
     )
     row = CombinedAnalysisRow(**overrides)
     assert row.on_roster is False

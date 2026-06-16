@@ -8,11 +8,9 @@ fixture → ItemStatistics list 의 정확성을 검증.
 
 from __future__ import annotations
 
+import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
 import pandas as pd
 import pytest
-
-import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
 from immersio.analysis.item_stats import compute_item_statistics  # noqa: E402
 from paideia_shared.schemas import ItemStatistics
 

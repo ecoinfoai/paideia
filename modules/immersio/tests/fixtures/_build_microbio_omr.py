@@ -57,9 +57,7 @@ def _section_workbook(target: Path, section: str) -> None:
     wb = Workbook()
     wb.remove(wb.active)
     results = wb.create_sheet("결과")
-    results.append(
-        ["학번", "이름"] + [f"item_{item['item_no']}" for item in ITEMS] + ["점수"]
-    )
+    results.append(["학번", "이름"] + [f"item_{item['item_no']}" for item in ITEMS] + ["점수"])
     for sid, name in ROSTER[section]:
         if sid not in RESPONSES.get(section, {}):
             continue
@@ -129,8 +127,7 @@ if __name__ == "__main__":
                 wb.create_sheet(sheet_name).append(
                     ["학번", "이름"]
                     if sheet_name != "OX"
-                    else ["학번"]
-                    + [f"item_{item['item_no']}_OX" for item in ITEMS]
+                    else ["학번"] + [f"item_{item['item_no']}_OX" for item in ITEMS]
                 )
             analysis = wb.create_sheet("문항분석")
             analysis.append(

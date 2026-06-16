@@ -130,9 +130,7 @@ class TestBuildReportMd:
 
     def test_llm_block_none_gives_template_prose(self) -> None:
         """When llm_block=None the output is template-only (no LLM placeholder)."""
-        md = build_report_md(
-            _make_recs(), 0.0, _make_gaps(), "2026-1", "anatomy", llm_block=None
-        )
+        md = build_report_md(_make_recs(), 0.0, _make_gaps(), "2026-1", "anatomy", llm_block=None)
         assert isinstance(md, str)
         assert len(md) > 0
 

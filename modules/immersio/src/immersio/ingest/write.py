@@ -226,9 +226,7 @@ def write_silver(
     ) as tmp:
         tmp_dir = Path(tmp)
         _write_parquet(_student_master_table(masters), tmp_dir / "student_master.parquet")
-        _write_parquet(
-            _diagnostic_response_table(diag), tmp_dir / "diagnostic_response.parquet"
-        )
+        _write_parquet(_diagnostic_response_table(diag), tmp_dir / "diagnostic_response.parquet")
         _write_parquet(_exam_result_table(exam), tmp_dir / "exam_result.parquet")
         _write_parquet(_exam_item_table(items), tmp_dir / "exam_item.parquet")
         manifest_payload = manifest.model_dump(mode="json")

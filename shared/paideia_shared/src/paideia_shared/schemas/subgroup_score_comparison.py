@@ -12,7 +12,6 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 SubgroupMetaKind = Literal["section", "prior_biology", "occupation", "education"]
 
 
@@ -60,7 +59,7 @@ class SubgroupScoreComparison(BaseModel):
 
     @model_validator(mode="after")
     def _v2_three_plus_cat_implies_anova_with_eta(self) -> Self:
-        """V2: n_categories_compared >= 3 ⇒ test_used in {ANOVA, Welch_ANOVA} AND effect_size_kind='eta_squared'."""
+        """Enforce V2: 3+ categories ⇒ ANOVA/Welch_ANOVA AND eta_squared effect size."""
         if self.n_categories_compared >= 3:
             if self.test_used not in ("ANOVA", "Welch_ANOVA"):
                 raise ValueError(

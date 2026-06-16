@@ -102,9 +102,7 @@ def welch_anova_manual(groups: list[np.ndarray]) -> float:
     grand_mean = float(np.sum(weights * means) / weight_sum)
 
     numerator = float(np.sum(weights * (means - grand_mean) ** 2)) / (k - 1)
-    correction_term = float(
-        np.sum(((1.0 - weights / weight_sum) ** 2) / (n - 1))
-    )
+    correction_term = float(np.sum(((1.0 - weights / weight_sum) ** 2) / (n - 1)))
     denominator = 1.0 + (2.0 * (k - 2) / (k**2 - 1)) * correction_term
     f_statistic = numerator / denominator
 
@@ -151,9 +149,7 @@ def point_biserial(binary: np.ndarray, continuous: np.ndarray) -> float | None:
     if binary.size == 0:
         raise ValueError("point_biserial: binary array is empty")
     if binary.size != continuous.size:
-        raise ValueError(
-            f"point_biserial: length mismatch ({binary.size} vs {continuous.size})"
-        )
+        raise ValueError(f"point_biserial: length mismatch ({binary.size} vs {continuous.size})")
     unique_binary = set(np.unique(binary).tolist())
     if not unique_binary.issubset({0, 1}):
         raise ValueError(f"point_biserial: binary array must be 0/1, found {unique_binary}")

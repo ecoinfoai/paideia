@@ -22,7 +22,7 @@ v2 외부화 트리거 (research §R-09):
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 # Anatomy 7 chapter ↔ needs-map multiselect option keyword dictionary.
 # Keys = canonical ExamItem.chapter strings produced by the operator's
@@ -113,10 +113,7 @@ def align_chapters_to_exam_items(
                         out[sid][axis].append(no)
 
     # Sort and freeze defaultdict → plain dicts for deterministic equality
-    return {
-        sid: {axis: sorted(nos) for axis, nos in axes.items()}
-        for sid, axes in out.items()
-    }
+    return {sid: {axis: sorted(nos) for axis, nos in axes.items()} for sid, axes in out.items()}
 
 
 __all__ = ["CHAPTER_KEYWORDS", "align_chapters_to_exam_items"]

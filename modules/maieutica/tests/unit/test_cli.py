@@ -19,9 +19,12 @@ from maieutica.cli.main import app
 # ---------------------------------------------------------------------------
 
 _COMMON = [
-    "--semester", "2026-1",
-    "--course", "anatomy-physiology",
-    "--week", "3",
+    "--semester",
+    "2026-1",
+    "--course",
+    "anatomy-physiology",
+    "--week",
+    "3",
 ]
 
 # ---------------------------------------------------------------------------
@@ -93,9 +96,7 @@ def test_unknown_subcommand_exits_nonzero() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "subcommand", ["ingest", "plan", "dry-run", "generate", "verify", "build"]
-)
+@pytest.mark.parametrize("subcommand", ["ingest", "plan", "dry-run", "generate", "verify", "build"])
 def test_missing_input_exits_2(
     subcommand: str, tmp_path: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -104,9 +105,7 @@ def test_missing_input_exits_2(
     # nonexistent directory → load_generation_spec raises FileNotFoundError → 2.
     monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
     rc = app([subcommand] + _COMMON)
-    assert rc == 2, (
-        f"subcommand '{subcommand}': expected exit 2 (missing input), got {rc}"
-    )
+    assert rc == 2, f"subcommand '{subcommand}': expected exit 2 (missing input), got {rc}"
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +133,7 @@ def test_explicit_backend_subscription_parsed() -> None:
     """--backend subscription should be a valid, parseable choice."""
     from maieutica.cli.main import _build_parser
 
-    args = _build_parser().parse_args(
-        ["generate"] + _COMMON + ["--backend", "subscription"]
-    )
+    args = _build_parser().parse_args(["generate"] + _COMMON + ["--backend", "subscription"])
     assert args.backend == "subscription"
 
 

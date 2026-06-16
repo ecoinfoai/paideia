@@ -73,10 +73,10 @@ _RE_RUNNING_HEADER: Final = re.compile(r"^제\d+장\s")
 
 # 연습문제 block start — heading variants (same as examen cleaner)
 _RE_EXERCISE_START: Final = re.compile(
-    r"^[\s■□▶◆●○\[\(]*"          # leading decoration / opening bracket
-    r"연습\s*문제"                  # "연습문제" or "연습 문제"
-    r"\s*[:\-–—\]\)]*"             # trailing colon / dash / closing bracket
-    r"\s*(?:\([0-9가-힣\s]+\))?"   # optional "(N문항)" tail
+    r"^[\s■□▶◆●○\[\(]*"  # leading decoration / opening bracket
+    r"연습\s*문제"  # "연습문제" or "연습 문제"
+    r"\s*[:\-–—\]\)]*"  # trailing colon / dash / closing bracket
+    r"\s*(?:\([0-9가-힣\s]+\))?"  # optional "(N문항)" tail
     r"\s*$"
 )
 
@@ -87,9 +87,7 @@ _RE_REFERENCE_START: Final = re.compile(r"^참고문헌")
 _RE_FOOTNOTE_LINE: Final = re.compile(r"^[†*※]")
 
 # Allowed tokens in a spaced-letter header (single uppercase, digit, or symbol)
-_SPACED_HEADER_ALLOWED_TOKENS: frozenset[str] = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&%"
-)
+_SPACED_HEADER_ALLOWED_TOKENS: frozenset[str] = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&%")
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +114,7 @@ def _is_spaced_letter_header(stripped: str) -> bool:
     tokens = stripped.split()
     if len(tokens) < 3:
         return False
-    return all(
-        len(t) <= 2 and all(ch in _SPACED_HEADER_ALLOWED_TOKENS for ch in t)
-        for t in tokens
-    )
+    return all(len(t) <= 2 and all(ch in _SPACED_HEADER_ALLOWED_TOKENS for ch in t) for t in tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -225,16 +220,12 @@ def clean_textbook(
 
         # Rule 4: figure caption
         if _RE_FIGURE_CAPTION.match(stripped):
-            removed_spans.append(
-                f"[figure_caption/그림] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[figure_caption/그림] line {lineno}: '{stripped}'")
             continue
 
         # Rule 5: table caption
         if _RE_TABLE_CAPTION.match(stripped):
-            removed_spans.append(
-                f"[table_caption/표] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[table_caption/표] line {lineno}: '{stripped}'")
             continue
 
         # Rule 6: footnote marker line

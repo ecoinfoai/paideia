@@ -20,9 +20,7 @@ from pathlib import Path
 
 import pytest
 
-_FIXTURE = Path(
-    "modules/needs-map/tests/fixtures/mappings/mapping_v2_with_anchors.yaml"
-)
+_FIXTURE = Path("modules/needs-map/tests/fixtures/mappings/mapping_v2_with_anchors.yaml")
 
 
 def test_anchor_alias_shared_between_two_likert_columns() -> None:
@@ -30,9 +28,7 @@ def test_anchor_alias_shared_between_two_likert_columns() -> None:
     from needs_map.io.mapping import load_mapping
 
     config = load_mapping(_FIXTURE)
-    motivation_cols = [
-        c for c in config.columns if c.kind == "likert" and c.axis == "motivation"
-    ]
+    motivation_cols = [c for c in config.columns if c.kind == "likert" and c.axis == "motivation"]
     study_strategy_cols = [
         c for c in config.columns if c.kind == "likert" and c.axis == "study_strategy"
     ]

@@ -63,17 +63,22 @@ def _normalize_entry_korean(entry: dict[str, Any]) -> dict[str, Any]:
         payload["expected_difficulty"] = _DIFFICULTY_KO_TO_EN[diff_kr]
     # Pass through any English keys already present (spec form mixed-in).
     for key in (
-        "item_no", "chapter", "text", "answer_key", "distractors",
-        "source", "expected_difficulty", "bloom", "points",
+        "item_no",
+        "chapter",
+        "text",
+        "answer_key",
+        "distractors",
+        "source",
+        "expected_difficulty",
+        "bloom",
+        "points",
     ):
         if key in entry and key not in payload:
             payload[key] = entry[key]
     return payload
 
 
-def parse_exam_yaml(
-    path: Path, semester: SemesterCode, course_slug: CourseSlug
-) -> list[ExamItem]:
+def parse_exam_yaml(path: Path, semester: SemesterCode, course_slug: CourseSlug) -> list[ExamItem]:
     """Parse the exam-question YAML into validated ExamItem instances.
 
     Args:
@@ -135,9 +140,7 @@ def parse_exam_yaml(
         }
         item = ExamItem.model_validate(payload)
         if item.item_no in seen_item_nos:
-            raise ValueError(
-                f"parse_exam_yaml: duplicate item_no={item.item_no} in {path}."
-            )
+            raise ValueError(f"parse_exam_yaml: duplicate item_no={item.item_no} in {path}.")
         seen_item_nos.append(item.item_no)
         items.append(item)
 

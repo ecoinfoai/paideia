@@ -19,9 +19,7 @@ import pytest
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -54,9 +52,7 @@ def test_re_run_archives_student_report_consolidated(
         gold_dir=tmp / "gold",
     )
 
-    gold_archive = (
-        tmp / "gold" / "immersio" / "2026-1-anatomy" / "_archive"
-    )
+    gold_archive = tmp / "gold" / "immersio" / "2026-1-anatomy" / "_archive"
     archived_top = {p.name for p in gold_archive.rglob("*") if p.is_file()}
     assert "학생별면담시트_합본.md" in archived_top, (
         f"qa GAP-11: 1st run 학생별면담시트_합본.md 가 _archive 에 미land. "
@@ -87,9 +83,7 @@ def test_re_run_archives_student_report_per_student_dir(
         gold_dir=tmp / "gold",
     )
 
-    gold_archive = (
-        tmp / "gold" / "immersio" / "2026-1-anatomy" / "_archive"
-    )
+    gold_archive = tmp / "gold" / "immersio" / "2026-1-anatomy" / "_archive"
     # 학생별 디렉터리가 archive 안에 sub-directory 로 보존.
     student_dirs = list(gold_archive.rglob("학생별"))
     assert student_dirs, (
@@ -98,6 +92,4 @@ def test_re_run_archives_student_report_per_student_dir(
     )
     # 학생별 .md 30 파일 모두 보존.
     student_mds = list(student_dirs[0].glob("*.md"))
-    assert len(student_mds) == 30, (
-        f"qa GAP-11: 30 학생별 .md 중 {len(student_mds)} 개만 archive 됨"
-    )
+    assert len(student_mds) == 30, f"qa GAP-11: 30 학생별 .md 중 {len(student_mds)} 개만 archive 됨"

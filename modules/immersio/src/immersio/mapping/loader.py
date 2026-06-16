@@ -24,15 +24,12 @@ def load_mapping(path: Path) -> DiagnosticMappingConfig:
         pydantic.ValidationError: If schema validation fails.
     """
     if not isinstance(path, Path):
-        raise TypeError(
-            f"load_mapping: expected pathlib.Path, got {type(path).__name__}."
-        )
+        raise TypeError(f"load_mapping: expected pathlib.Path, got {type(path).__name__}.")
     text = path.read_text(encoding="utf-8")
     data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError(
-            f"load_mapping: expected top-level mapping in {path}, got "
-            f"{type(data).__name__}."
+            f"load_mapping: expected top-level mapping in {path}, got {type(data).__name__}."
         )
     # YAML anchor-only top-level keys (e.g. `ordinal_maps:`) are reusable
     # alias blocks; drop them before strict (extra='forbid') validation so

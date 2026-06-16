@@ -82,9 +82,7 @@ def load_items(
         try:
             rows.append(ItemStatistics.model_validate(row_dict))
         except ValidationError as exc:
-            raise InputError(
-                f"Validation failed in {path} row {idx}: {exc}"
-            ) from exc
+            raise InputError(f"Validation failed in {path} row {idx}: {exc}") from exc
 
     # Compute chapter-set mismatch.
     item_chapters: set[str] = {r.chapter for r in rows}

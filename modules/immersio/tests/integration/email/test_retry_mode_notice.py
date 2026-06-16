@@ -22,9 +22,7 @@ from __future__ import annotations
 
 import argparse
 import io
-from datetime import datetime, timezone, timedelta
-
-import pytest
+from datetime import datetime, timedelta, timezone
 
 from immersio.email.log import append_dispatch_log_rows
 from immersio.email.pipeline import run_email_dispatch
@@ -88,9 +86,7 @@ class _CountingDispatcher:
         )
 
 
-def _seed_row(
-    sid: str, status: DispatchStatus, error_kind: str = ""
-) -> DispatchLogRow:
+def _seed_row(sid: str, status: DispatchStatus, error_kind: str = "") -> DispatchLogRow:
     return DispatchLogRow(
         student_id=sid,
         name_kr="홍길동",
@@ -100,9 +96,7 @@ def _seed_row(
         attempt_at_kst=datetime(2026, 4, 30, 12, 0, 0, tzinfo=KST),
         mode=DispatchMode.PRODUCTION,
         status=status,
-        smtp_message_id="<x@example.ac.kr>"
-        if status == DispatchStatus.SUCCESS
-        else "",
+        smtp_message_id="<x@example.ac.kr>" if status == DispatchStatus.SUCCESS else "",
         error_kind=error_kind,
         error_detail="",
         exam_name="중간고사",
@@ -110,9 +104,7 @@ def _seed_row(
     )
 
 
-def test_retry_skipped_notice_present_when_failed_exist(
-    email_fixture, monkeypatch
-) -> None:
+def test_retry_skipped_notice_present_when_failed_exist(email_fixture, monkeypatch) -> None:
     """Positive: ≥1 failed student + ``--retry-skipped`` → notice in md.
 
     Seed: 2 success + 2 failed + 1 skipped. ``--retry-skipped`` 모드는
@@ -127,36 +119,25 @@ def test_retry_skipped_notice_present_when_failed_exist(
         [
             _seed_row(sids[0], DispatchStatus.SUCCESS),
             _seed_row(sids[1], DispatchStatus.SUCCESS),
-            _seed_row(
-                sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"
-            ),
-            _seed_row(
-                sids[3], DispatchStatus.FAILED, error_kind="gmail_api_unknown"
-            ),
-            _seed_row(
-                sids[4], DispatchStatus.SKIPPED, error_kind="invalid_email"
-            ),
+            _seed_row(sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"),
+            _seed_row(sids[3], DispatchStatus.FAILED, error_kind="gmail_api_unknown"),
+            _seed_row(sids[4], DispatchStatus.SKIPPED, error_kind="invalid_email"),
         ],
     )
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args())
     assert rc == 0
 
     report_path = email_fixture["gold_email_dir"] / "메일_발송보고서.md"
-    assert report_path.exists(), (
-        f"메일_발송보고서.md 가 생성되지 않음: {report_path}"
-    )
+    assert report_path.exists(), f"메일_발송보고서.md 가 생성되지 않음: {report_path}"
     content = report_path.read_text(encoding="utf-8")
 
     # Two resilient substring checks rather than full-line equality —
     # tolerant to whitespace / formatting variation in T016 implementation.
     assert "v0.1.1 동작 변화" in content, (
-        "발송 보고서 md 에 v0.1.1 동작 변화 안내 도입부가 누락됨 (SC-008). "
-        f"보고서 내용:\n{content}"
+        f"발송 보고서 md 에 v0.1.1 동작 변화 안내 도입부가 누락됨 (SC-008). 보고서 내용:\n{content}"
     )
     assert "`--retry-failed` 모드를 사용해야 재시도됩니다" in content, (
         "발송 보고서 md 에 `--retry-failed` 모드 안내 후미부가 누락됨 "
@@ -164,14 +145,11 @@ def test_retry_skipped_notice_present_when_failed_exist(
     )
     # N=2 (failed students count) 가 본문에 명시적으로 포함되어야 함.
     assert "2명" in content, (
-        "발송 보고서 md 에 failed 학생 수(2명)가 명시되지 않음. "
-        f"보고서 내용:\n{content}"
+        f"발송 보고서 md 에 failed 학생 수(2명)가 명시되지 않음. 보고서 내용:\n{content}"
     )
 
 
-def test_retry_skipped_notice_absent_when_no_failed(
-    email_fixture, monkeypatch
-) -> None:
+def test_retry_skipped_notice_absent_when_no_failed(email_fixture, monkeypatch) -> None:
     """Negative: 0 failed students + ``--retry-skipped`` → notice NOT emitted.
 
     Seed: 3 success + 2 skipped (failed 0 명). 동작 변화 안내는 운영자가 실제로
@@ -186,26 +164,18 @@ def test_retry_skipped_notice_absent_when_no_failed(
             _seed_row(sids[0], DispatchStatus.SUCCESS),
             _seed_row(sids[1], DispatchStatus.SUCCESS),
             _seed_row(sids[2], DispatchStatus.SUCCESS),
-            _seed_row(
-                sids[3], DispatchStatus.SKIPPED, error_kind="invalid_email"
-            ),
-            _seed_row(
-                sids[4], DispatchStatus.SKIPPED, error_kind="email_not_found"
-            ),
+            _seed_row(sids[3], DispatchStatus.SKIPPED, error_kind="invalid_email"),
+            _seed_row(sids[4], DispatchStatus.SKIPPED, error_kind="email_not_found"),
         ],
     )
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args())
     assert rc == 0
 
     report_path = email_fixture["gold_email_dir"] / "메일_발송보고서.md"
-    assert report_path.exists(), (
-        f"메일_발송보고서.md 가 생성되지 않음: {report_path}"
-    )
+    assert report_path.exists(), f"메일_발송보고서.md 가 생성되지 않음: {report_path}"
     content = report_path.read_text(encoding="utf-8")
 
     assert "v0.1.1 동작 변화" not in content, (

@@ -44,10 +44,7 @@ def chapter_item_type_rates(
 
     result: dict[str, dict[str, float]] = {}
     for chapter, type_sums in sums.items():
-        result[chapter] = {
-            itype: type_sums[itype] / counts[chapter][itype]
-            for itype in type_sums
-        }
+        result[chapter] = {itype: type_sums[itype] / counts[chapter][itype] for itype in type_sums}
     return result
 
 

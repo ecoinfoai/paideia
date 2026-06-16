@@ -53,9 +53,7 @@ def archive_existing(target_dir: Path, when: datetime.datetime) -> Path | None:
     if not target_dir.exists():
         return None
     if not target_dir.is_dir():
-        raise ValueError(
-            f"archive_existing: target_dir is not a directory: {target_dir}"
-        )
+        raise ValueError(f"archive_existing: target_dir is not a directory: {target_dir}")
 
     entries = [p for p in target_dir.iterdir() if p.name != _ARCHIVE_DIR_NAME]
     if not entries:

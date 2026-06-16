@@ -7,11 +7,9 @@ serialised payload (data-model.md §1.6 secrets policy).
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import (
     DispatchMode,
     EmailManifest,
@@ -19,6 +17,7 @@ from paideia_shared.schemas import (
     EmailManifestInputs,
     EmailManifestOutputs,
 )
+from pydantic import ValidationError
 
 
 def _valid_inputs() -> EmailManifestInputs:
@@ -67,8 +66,8 @@ def _valid_manifest_kwargs() -> dict:
         outputs=_valid_outputs(),
         counts=_valid_counts(),
         tool_version="0.1.0",
-        started_at_kst=datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc),
-        completed_at_kst=datetime(2026, 5, 1, 12, 5, 0, tzinfo=timezone.utc),
+        started_at_kst=datetime(2026, 5, 1, 12, 0, 0, tzinfo=UTC),
+        completed_at_kst=datetime(2026, 5, 1, 12, 5, 0, tzinfo=UTC),
     )
 
 

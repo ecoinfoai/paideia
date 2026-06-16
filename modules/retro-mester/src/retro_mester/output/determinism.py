@@ -81,9 +81,7 @@ def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
             members.append((info.filename, data, info.compress_type))
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(
-        buf, "w", zipfile.ZIP_DEFLATED, compresslevel=_FIXED_COMPRESSLEVEL
-    ) as dst:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=_FIXED_COMPRESSLEVEL) as dst:
         for name, data, compress_type in members:
             zi = zipfile.ZipInfo(filename=name, date_time=_FIXED_ZIP_DATE)
             zi.compress_type = compress_type or zipfile.ZIP_DEFLATED

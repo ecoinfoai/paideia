@@ -17,21 +17,14 @@ def build(target: Path) -> None:
     wb = Workbook()
     sheet = wb.active
     sheet.title = "출석"
-    sheet.append(
-        ["학번", "이름"] + [f"W{week:02d}" for week in range(1, 17)] + ["비고"]
-    )
+    sheet.append(["학번", "이름"] + [f"W{week:02d}" for week in range(1, 17)] + ["비고"])
     for sid, name in ROSTER:
         sheet.append([sid, name] + ["O"] * 16 + [""])
     wb.save(target)
 
 
 if __name__ == "__main__":
-    out = (
-        Path(__file__).parent
-        / "bronze_minimal_microbio"
-        / "출석"
-        / "출석부.xlsx"
-    )
+    out = Path(__file__).parent / "bronze_minimal_microbio" / "출석" / "출석부.xlsx"
     out.parent.mkdir(parents=True, exist_ok=True)
     build(out)
     print(f"wrote {out}")

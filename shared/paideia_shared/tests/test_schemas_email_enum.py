@@ -7,7 +7,6 @@ Verifies DispatchStatus (6 values), DispatchMode (2 values), CohortLabel
 from __future__ import annotations
 
 import pytest
-
 from paideia_shared.schemas import CohortLabel, DispatchMode, DispatchStatus
 
 
@@ -36,7 +35,7 @@ def test_dispatch_status_member_access() -> None:
 def test_dispatch_status_is_str_enum() -> None:
     """DispatchStatus comparisons against plain strings hold (StrEnum)."""
     assert DispatchStatus.SUCCESS == "success"
-    assert "success" == DispatchStatus.SUCCESS
+    assert DispatchStatus.SUCCESS == "success"
 
 
 def test_dispatch_status_invalid_value_rejected() -> None:

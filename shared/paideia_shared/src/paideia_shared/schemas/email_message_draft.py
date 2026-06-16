@@ -48,10 +48,7 @@ class EmailMessageDraft(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"EmailMessageDraft.student_id must match ^\\d{{10}}$ "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"EmailMessageDraft.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
     @field_validator("to_header")
@@ -69,10 +66,7 @@ class EmailMessageDraft(BaseModel):
     @classmethod
     def _v_attachment_sha256(cls, value: str) -> str:
         if not _HEX64_RE.fullmatch(value):
-            raise ValueError(
-                f"EmailMessageDraft.attachment_sha256 must be hex64 "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"EmailMessageDraft.attachment_sha256 must be hex64 (got {value!r})")
         return value
 
     @field_validator("message_id")
@@ -80,8 +74,7 @@ class EmailMessageDraft(BaseModel):
     def _v_message_id(cls, value: str) -> str:
         if not _MESSAGE_ID_RE.fullmatch(value):
             raise ValueError(
-                f"EmailMessageDraft.message_id must be RFC 5322 Message-ID "
-                f"(got {value!r})"
+                f"EmailMessageDraft.message_id must be RFC 5322 Message-ID (got {value!r})"
             )
         return value
 

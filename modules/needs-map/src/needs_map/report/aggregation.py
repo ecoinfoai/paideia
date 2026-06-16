@@ -124,9 +124,7 @@ def build_axis_summary_rows(
     return rows
 
 
-def _compute_quant_stats(
-    long_rows: Sequence[Mapping[str, Any]], axis_key: str
-) -> dict[str, Any]:
+def _compute_quant_stats(long_rows: Sequence[Mapping[str, Any]], axis_key: str) -> dict[str, Any]:
     """Compute n / mean / std / p25 / p50 / p75 from the long-form rows.
 
     Excludes None values per axis (drop policy at the consumer side).
@@ -150,9 +148,7 @@ def _compute_quant_stats(
         }
     sorted_values = sorted(raw_values)
     mean = sum(sorted_values) / n
-    variance = (
-        sum((v - mean) ** 2 for v in sorted_values) / (n - 1) if n > 1 else 0.0
-    )
+    variance = sum((v - mean) ** 2 for v in sorted_values) / (n - 1) if n > 1 else 0.0
     std = math.sqrt(variance)
     p25 = _percentile(sorted_values, 0.25)
     p50 = _percentile(sorted_values, 0.50)

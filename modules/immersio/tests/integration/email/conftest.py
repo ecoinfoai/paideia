@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Iterable
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -39,11 +38,13 @@ def make_fixture(
         writer = csv.writer(f)
         writer.writerow(["타임스탬프", "사용자 이름", "학번"])
         for sid, _name, email in students:
-            writer.writerow([
-                "2026/03/03 11:03:36 AM GMT+9",
-                email,
-                sid,
-            ])
+            writer.writerow(
+                [
+                    "2026/03/03 11:03:36 AM GMT+9",
+                    email,
+                    sid,
+                ]
+            )
 
     pdf_dir = base_dir / "data" / "gold" / "immersio" / "2026-1-anatomy" / "이메일_발송용"
     pdf_dir.mkdir(parents=True)

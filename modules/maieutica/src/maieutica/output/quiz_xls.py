@@ -43,13 +43,9 @@ from maieutica.output.paths import atomic_write
 
 # ``templates/`` lives at modules/maieutica/templates, i.e. three parents above
 # src/maieutica/output/quiz_xls.py → .../maieutica.
-_COLUMN_MAP_PATH = (
-    Path(__file__).resolve().parents[3] / "templates" / "quiz_column_map.yaml"
-)
+_COLUMN_MAP_PATH = Path(__file__).resolve().parents[3] / "templates" / "quiz_column_map.yaml"
 # The frozen guide asset lives inside the package, next to this module's parent.
-_GUIDE_ASSET_PATH = (
-    Path(__file__).resolve().parents[1] / "assets" / "lms_quiz_guide_sheet.yaml"
-)
+_GUIDE_ASSET_PATH = Path(__file__).resolve().parents[1] / "assets" / "lms_quiz_guide_sheet.yaml"
 
 # xlwt encoding for the workbook — BIFF8 text is stored as the workbook encoding.
 _WORKBOOK_ENCODING = "utf-8"

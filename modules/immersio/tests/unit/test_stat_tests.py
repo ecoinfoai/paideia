@@ -13,15 +13,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from scipy import stats
-
 from immersio.analysis.stat_tests import (
     levene_then_anova,
     point_biserial,
     welch_anova_manual,
     welch_t_test,
 )
-
+from scipy import stats
 
 # =====================================================================
 # levene_then_anova

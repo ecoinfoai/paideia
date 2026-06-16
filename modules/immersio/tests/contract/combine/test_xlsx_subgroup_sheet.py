@@ -10,7 +10,6 @@ from pathlib import Path
 
 import openpyxl
 import pytest
-
 from immersio.combine.xlsx_writer import write_us1_xlsx
 from paideia_shared.schemas import (
     CorrelationCell,
@@ -148,9 +147,7 @@ def _subgroup_payload() -> tuple:
 @pytest.fixture(scope="module")
 def workbook(tmp_path_factory: pytest.TempPathFactory) -> openpyxl.Workbook:
     rows, headers = _subgroup_payload()
-    out = (
-        tmp_path_factory.mktemp("xlsx_subgroup_contract") / "결합분석.xlsx"
-    )
+    out = tmp_path_factory.mktemp("xlsx_subgroup_contract") / "결합분석.xlsx"
     write_us1_xlsx(
         correlation_cells=_cells(),
         regression_coefs=_coefs(),
@@ -235,9 +232,7 @@ def test_full_pipeline_emits_all_artefacts(
 
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         pytest.skip("builder unavailable")
     module: ModuleType = importlib.util.module_from_spec(spec)

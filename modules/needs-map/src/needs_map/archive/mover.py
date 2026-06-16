@@ -85,17 +85,14 @@ def archive_previous_run(direct_path: Path) -> str | None:
     """
     if not isinstance(direct_path, Path):
         raise TypeError(
-            f"archive_previous_run: expected pathlib.Path, got "
-            f"{type(direct_path).__name__}."
+            f"archive_previous_run: expected pathlib.Path, got {type(direct_path).__name__}."
         )
 
     if not direct_path.exists():
         return None
 
     if not direct_path.is_dir():
-        raise ArchivalError(
-            f"archive_previous_run: direct_path is not a directory: {direct_path}"
-        )
+        raise ArchivalError(f"archive_previous_run: direct_path is not a directory: {direct_path}")
 
     entries = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
     if not entries:

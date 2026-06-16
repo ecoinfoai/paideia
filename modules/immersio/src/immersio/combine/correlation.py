@@ -24,10 +24,9 @@ import math
 import warnings
 
 import pandas as pd
-from scipy.stats import ConstantInputWarning, NearConstantInputWarning, pearsonr
-
 from paideia_shared.schemas import CorrelationCell
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+from scipy.stats import ConstantInputWarning, NearConstantInputWarning, pearsonr
 
 from .fdr import bh_fdr_adjust
 
@@ -57,9 +56,7 @@ def _exam_metric_columns(df: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     return out
 
 
-def _pairwise_pearson(
-    x: pd.Series, y: pd.Series
-) -> tuple[int, float | None, float | None]:
+def _pairwise_pearson(x: pd.Series, y: pd.Series) -> tuple[int, float | None, float | None]:
     """Compute (n, r, p) for the complete-case overlap of two series.
 
     Returns ``(n, None, None)`` when ``n < 3`` (scipy requires ≥ 3) or
@@ -123,9 +120,7 @@ def compute_correlation_matrix(df: pd.DataFrame) -> list[CorrelationCell]:
     if defined_indices:
         ps = [cells_partial[i][4] for i in defined_indices]
         qs = bh_fdr_adjust(ps)
-        q_by_index: dict[int, float | None] = {
-            idx: q for idx, q in zip(defined_indices, qs)
-        }
+        q_by_index: dict[int, float | None] = dict(zip(defined_indices, qs, strict=False))
     else:
         q_by_index = {}
 
@@ -145,9 +140,7 @@ def compute_correlation_matrix(df: pd.DataFrame) -> list[CorrelationCell]:
                 pearson_r=r,
                 raw_p=p,
                 fdr_q=q,
-                significant_after_correction=bool(
-                    q is not None and q < 0.05
-                ),
+                significant_after_correction=bool(q is not None and q < 0.05),
                 unstable_inference_flag=n < _UNSTABLE_N_THRESHOLD,
             )
         )

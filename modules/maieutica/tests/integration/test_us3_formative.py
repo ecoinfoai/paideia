@@ -233,9 +233,7 @@ def test_us3_formative_build_end_to_end(tmp_path: Path) -> None:
         assert "도약" in sheet.cell(row=row, column=col["Support(High)"]).value
 
     # Manifest formative_count reflects the formative items.
-    manifest = json.loads(
-        (run_dir / "manifest_maieutica.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((run_dir / "manifest_maieutica.json").read_text(encoding="utf-8"))
     assert manifest["formative_count"] == _FORMATIVE_COUNT
 
     # No real data/ dir touched.

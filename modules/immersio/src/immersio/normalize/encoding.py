@@ -30,8 +30,7 @@ def read_text_with_fallback(path: Path) -> tuple[str, EncodingLabel]:
     """
     if not isinstance(path, Path):
         raise TypeError(
-            f"read_text_with_fallback: expected pathlib.Path, got "
-            f"{type(path).__name__}."
+            f"read_text_with_fallback: expected pathlib.Path, got {type(path).__name__}."
         )
     raw_bytes = path.read_bytes()
     for codec, label in (("utf-8-sig", "utf-8"), ("utf-8", "utf-8"), ("cp949", "cp949")):

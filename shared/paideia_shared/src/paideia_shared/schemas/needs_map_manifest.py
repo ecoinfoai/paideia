@@ -65,18 +65,12 @@ class SentimentRunInfo(BaseModel):
     enabled: bool
     model_id: Annotated[str, Field(min_length=1)] | None = None
     model_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
-    tokenizer_vocab_sha256: (
-        Annotated[str, Field(pattern=_SHA256_PATTERN)] | None
-    ) = None
-    negative_label_subset_sha256: (
-        Annotated[str, Field(pattern=_SHA256_PATTERN)] | None
-    ) = None
+    tokenizer_vocab_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
+    negative_label_subset_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)] | None = None
     n_attempted: Annotated[int, Field(ge=0)] = 0
     n_succeeded: Annotated[int, Field(ge=0)] = 0
     n_fallback: Annotated[int, Field(ge=0)] = 0
-    fallback_reason: (
-        Literal["torch-unavailable", "model-unavailable", "cli-disabled"] | None
-    ) = None
+    fallback_reason: Literal["torch-unavailable", "model-unavailable", "cli-disabled"] | None = None
 
     @model_validator(mode="after")
     def v1_counts_consistent(self) -> Self:
@@ -87,9 +81,7 @@ class SentimentRunInfo(BaseModel):
                 f"n_fallback({self.n_fallback}) > n_attempted({self.n_attempted})."
             )
         if self.enabled and self.model_id is None:
-            raise ValueError(
-                "SentimentRunInfo V1: enabled=True requires model_id to be set."
-            )
+            raise ValueError("SentimentRunInfo V1: enabled=True requires model_id to be set.")
         if not self.enabled and self.model_id is not None:
             raise ValueError(
                 "SentimentRunInfo V1: enabled=False requires model_id=None "
@@ -184,9 +176,9 @@ class LLMCallStat(BaseModel):
     attempted: Annotated[int, Field(ge=0)]
     succeeded: Annotated[int, Field(ge=0)]
     fallback: Annotated[int, Field(ge=0)]
-    failure_kinds: dict[
-        Literal["timeout", "rate_limit", "auth", "pii_block", "other"], int
-    ] = Field(default_factory=dict)
+    failure_kinds: dict[Literal["timeout", "rate_limit", "auth", "pii_block", "other"], int] = (
+        Field(default_factory=dict)
+    )
     failure_student_ids: list[CanonicalStudentId] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -199,9 +191,7 @@ class LLMCallStat(BaseModel):
             )
         for kind, count in self.failure_kinds.items():
             if count < 0:
-                raise ValueError(
-                    f"LLMCallStat V1: failure_kinds[{kind!r}]={count} must be ≥ 0."
-                )
+                raise ValueError(f"LLMCallStat V1: failure_kinds[{kind!r}]={count} must be ≥ 0.")
         return self
 
 
@@ -288,9 +278,7 @@ class NeedsMapManifest(BaseModel):
         seen: set[str] = set()
         for stat in self.llm_calls:
             if stat.site in seen:
-                raise ValueError(
-                    f"NeedsMapManifest V3: duplicate llm_calls site={stat.site!r}."
-                )
+                raise ValueError(f"NeedsMapManifest V3: duplicate llm_calls site={stat.site!r}.")
             seen.add(stat.site)
         return self
 

@@ -22,8 +22,14 @@ _CHAPTER_A = "1장. 해부학 서론"
 _CHAPTER_B = "2장. 세포와 조직"
 
 _AXES = [
-    "digital_efficacy", "motivation", "time_availability", "material_preference",
-    "study_strategy", "study_environment", "social_learning", "feedback_seeking",
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 ]
 
 
@@ -57,9 +63,7 @@ def _combined_row(
         "chapter_correct_rates": json.dumps(chapter_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -87,12 +91,25 @@ def _combined_row(
 
 def _item_row(item_no: int, chapter: str = _CHAPTER_A) -> dict:
     return {
-        "item_no": item_no, "semester": _SEMESTER, "course_slug": _COURSE,
-        "chapter": chapter, "week": None, "item_type": "지식축적",
-        "difficulty_level": 2, "expected_difficulty": "보통", "source": "형성평가",
-        "correct_answer": 3, "n_responders": 20, "n_correct": 10, "n_omit": 0,
-        "correct_rate": 0.50, "omit_rate": 0.00, "discrimination_index": 0.25,
-        "point_biserial": 0.35, "top_distractor_no": 2, "top_distractor_rate": 0.20,
+        "item_no": item_no,
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "chapter": chapter,
+        "week": None,
+        "item_type": "지식축적",
+        "difficulty_level": 2,
+        "expected_difficulty": "보통",
+        "source": "형성평가",
+        "correct_answer": 3,
+        "n_responders": 20,
+        "n_correct": 10,
+        "n_omit": 0,
+        "correct_rate": 0.50,
+        "omit_rate": 0.00,
+        "discrimination_index": 0.25,
+        "point_biserial": 0.35,
+        "top_distractor_no": 2,
+        "top_distractor_rate": 0.20,
         "is_top_distractor_adjacent": True,
         "option_distribution": json.dumps({1: 0.1, 2: 0.2, 3: 0.5, 4: 0.1, 5: 0.1}),
         "distractor_label": "특이사항 없음",
@@ -110,8 +127,10 @@ def _build_and_run(
 
     if group_roster is None:
         group_roster = {
-            "2026000001": "학령기", "2026000002": "학령기",
-            "2026000003": "만학도", "2026000004": "만학도",
+            "2026000001": "학령기",
+            "2026000002": "학령기",
+            "2026000003": "만학도",
+            "2026000004": "만학도",
         }
 
     combined = [
@@ -128,38 +147,63 @@ def _build_and_run(
     bronze = data_root / "bronze" / "retro-mester" / _KEY
     bronze.mkdir(parents=True, exist_ok=True)
     cfg = {
-        "semester": _SEMESTER, "course_slug": _COURSE,
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
         "group_roster": group_roster,
         "unit_importance": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
-        "gap_threshold": 0.6, "baseline_segment": "만학도",
-        "low_discrimination_threshold": 0.2, "cognitive_cliff_drop": 0.15,
+        "gap_threshold": 0.6,
+        "baseline_segment": "만학도",
+        "low_discrimination_threshold": 0.2,
+        "cognitive_cliff_drop": 0.15,
         "effort_ratings": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
     }
-    (bronze / "retro_config.yaml").write_text(
-        yaml.dump(cfg, allow_unicode=True), encoding="utf-8"
-    )
+    (bronze / "retro_config.yaml").write_text(yaml.dump(cfg, allow_unicode=True), encoding="utf-8")
     (bronze / "blueprint.yaml").write_text(
-        yaml.dump({
-            "semester": _SEMESTER, "course_slug": _COURSE, "exam_name": "기말고사",
-            "total_items": 40, "chapters": [_CHAPTER_A, _CHAPTER_B],
-            "difficulty_targets": {"easy": 0.45, "medium": 0.35, "hard": 0.20},
-            "source_mix": {"formative": 18, "quiz": 12, "textbook": 10},
-            "quiz_target": 12, "answer_key_balance": True,
-        }, allow_unicode=True), encoding="utf-8"
+        yaml.dump(
+            {
+                "semester": _SEMESTER,
+                "course_slug": _COURSE,
+                "exam_name": "기말고사",
+                "total_items": 40,
+                "chapters": [_CHAPTER_A, _CHAPTER_B],
+                "difficulty_targets": {"easy": 0.45, "medium": 0.35, "hard": 0.20},
+                "source_mix": {"formative": 18, "quiz": 12, "textbook": 10},
+                "quiz_target": 12,
+                "answer_key_balance": True,
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
     )
     (bronze / "curriculum_map.yaml").write_text(
-        yaml.dump({
-            "semester": _SEMESTER, "course_slug": _COURSE,
-            "entries": [
-                {"week": 1, "chapter": _CHAPTER_A, "chapter_no": 1,
-                 "subtopic": None, "sections": ["1.1 인체의 조직"]},
-                {"week": 2, "chapter": _CHAPTER_B, "chapter_no": 2,
-                 "subtopic": None, "sections": ["2.1 세포의 구조"]},
-            ],
-        }, allow_unicode=True), encoding="utf-8"
+        yaml.dump(
+            {
+                "semester": _SEMESTER,
+                "course_slug": _COURSE,
+                "entries": [
+                    {
+                        "week": 1,
+                        "chapter": _CHAPTER_A,
+                        "chapter_no": 1,
+                        "subtopic": None,
+                        "sections": ["1.1 인체의 조직"],
+                    },
+                    {
+                        "week": 2,
+                        "chapter": _CHAPTER_B,
+                        "chapter_no": 2,
+                        "subtopic": None,
+                        "sections": ["2.1 세포의 구조"],
+                    },
+                ],
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
     )
 
     from retro_mester.pipeline import run_retro
+
     code = run_retro(
         semester=_SEMESTER,
         course=_COURSE,
@@ -170,8 +214,9 @@ def _build_and_run(
     assert code == 0, f"Pipeline failed: exit {code}"
 
     return json.loads(
-        (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json")
-        .read_text(encoding="utf-8")
+        (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+            encoding="utf-8"
+        )
     )
 
 
@@ -192,17 +237,13 @@ class TestManifestDegrade:
     def test_degrade_has_prior_year_present_false(self, tmp_path: Path) -> None:
         """manifest.degrade['prior_year_present'] is False when no prior yaml."""
         manifest = _build_and_run(tmp_path / "data")
-        assert "prior_year_present" in manifest["degrade"], (
-            "degrade missing prior_year_present"
-        )
+        assert "prior_year_present" in manifest["degrade"], "degrade missing prior_year_present"
         assert manifest["degrade"]["prior_year_present"] is False
 
     def test_degrade_has_granularity_note(self, tmp_path: Path) -> None:
         """manifest.degrade['granularity_note'] describes the 3-way cross limitation."""
         manifest = _build_and_run(tmp_path / "data")
-        assert "granularity_note" in manifest["degrade"], (
-            "degrade missing granularity_note"
-        )
+        assert "granularity_note" in manifest["degrade"], "degrade missing granularity_note"
         note = manifest["degrade"]["granularity_note"]
         assert isinstance(note, str) and len(note) > 10, (
             f"granularity_note is too short or empty: {note!r}"
@@ -249,16 +290,12 @@ class TestManifestCounts:
         # Fixture has 학령기 and 만학도 — both appear → 2 segments
         assert manifest["counts"]["segments"] == 2.0
 
-    def test_unclassified_students_zero_when_all_in_roster(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclassified_students_zero_when_all_in_roster(self, tmp_path: Path) -> None:
         """manifest.counts['unclassified_students'] is 0 when all students in roster."""
         manifest = _build_and_run(tmp_path / "data")
         assert manifest["counts"]["unclassified_students"] == 0.0
 
-    def test_unclassified_students_nonzero_when_missing_from_roster(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclassified_students_nonzero_when_missing_from_roster(self, tmp_path: Path) -> None:
         """manifest.counts['unclassified_students'] > 0 when a student is not in roster."""
         # Omit student 2026000004 from the roster
         roster = {

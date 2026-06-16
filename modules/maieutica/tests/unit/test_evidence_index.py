@@ -97,9 +97,7 @@ class TestEvidenceIndex:
         assert ev.char_start == expected_start
         assert ORIGINAL_TEXT[ev.char_start : ev.char_end] == target
         # Guard the trap: a cleaned-text offset would be smaller (removed bytes).
-        cleaned_text = "\n".join(
-            t for c in _chunks() for t in c.text.split("\n")
-        )
+        cleaned_text = "\n".join(t for c in _chunks() for t in c.text.split("\n"))
         naive_offset = cleaned_text.index(target)
         assert ev.char_start != naive_offset
 

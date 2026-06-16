@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 
 import responses
-
 from immersio.email.pipeline import run_email_dispatch
 
 
@@ -38,18 +37,14 @@ def test_two_dry_runs_produce_byte_identical_eml(email_fixture) -> None:
     # First run
     assert run_email_dispatch(_args()) == 0
     preview_dir = email_fixture["preview_dir"]
-    first = {
-        p.name: p.read_bytes() for p in sorted(preview_dir.glob("*.eml"))
-    }
+    first = {p.name: p.read_bytes() for p in sorted(preview_dir.glob("*.eml"))}
 
     # Wipe and re-run
     for p in preview_dir.glob("*.eml"):
         p.unlink()
 
     assert run_email_dispatch(_args()) == 0
-    second = {
-        p.name: p.read_bytes() for p in sorted(preview_dir.glob("*.eml"))
-    }
+    second = {p.name: p.read_bytes() for p in sorted(preview_dir.glob("*.eml"))}
 
     assert set(first.keys()) == set(second.keys())
     for name in first:
@@ -59,8 +54,12 @@ def test_two_dry_runs_produce_byte_identical_eml(email_fixture) -> None:
 @responses.activate
 def test_silver_mapping_parquet_byte_identical_two_runs(email_fixture) -> None:
     silver_path = (
-        email_fixture["base"] / "data" / "silver" / "immersio"
-        / "2026-1-anatomy" / "학번_이메일_매핑.parquet"
+        email_fixture["base"]
+        / "data"
+        / "silver"
+        / "immersio"
+        / "2026-1-anatomy"
+        / "학번_이메일_매핑.parquet"
     )
 
     assert run_email_dispatch(_args()) == 0

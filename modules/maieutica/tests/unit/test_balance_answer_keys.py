@@ -174,10 +174,7 @@ class TestBalanceAnswerKeys:
 
         # [2, 2, 2, 4] — a run of three 2s with a differing value (4) to swap in.
         answers = [2, 2, 2, 4]
-        items = [
-            _make_candidate(item_no=i + 1, answer_no=a)
-            for i, a in enumerate(answers)
-        ]
+        items = [_make_candidate(item_no=i + 1, answer_no=a) for i, a in enumerate(answers)]
         out = balance_answer_keys(items)
         assert _max_run([it.answer_no for it in out]) <= 2
 

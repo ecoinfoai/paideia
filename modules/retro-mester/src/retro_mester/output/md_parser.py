@@ -133,8 +133,10 @@ def parse_markdown_to_flowables(
             i += 1
             continue
 
-        if _TABLE_ROW_PATTERN.match(line) and i + 1 < len(lines) and _TABLE_SEP_PATTERN.match(
-            lines[i + 1]
+        if (
+            _TABLE_ROW_PATTERN.match(line)
+            and i + 1 < len(lines)
+            and _TABLE_SEP_PATTERN.match(lines[i + 1])
         ):
             header = _split_table_row(line)
             i += 2
@@ -156,8 +158,10 @@ def parse_markdown_to_flowables(
                 break
             if _IMAGE_PATTERN.match(nxt_stripped):
                 break
-            if _TABLE_ROW_PATTERN.match(nxt) and i + 1 < len(lines) and _TABLE_SEP_PATTERN.match(
-                lines[i + 1]
+            if (
+                _TABLE_ROW_PATTERN.match(nxt)
+                and i + 1 < len(lines)
+                and _TABLE_SEP_PATTERN.match(lines[i + 1])
             ):
                 break
             para_lines.append(nxt_stripped)

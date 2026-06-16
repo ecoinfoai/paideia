@@ -6,11 +6,10 @@ import argparse
 import io
 from pathlib import Path
 
-import pytest
-
-from .conftest import make_test_profile
 from immersio.email.dummy_fixture import generate_dummy_pdfs
 from immersio.email.pipeline import run_email_dispatch
+
+from .conftest import make_test_profile
 
 
 def _args(*, profile: str = "alpha-dev") -> argparse.Namespace:
@@ -39,9 +38,7 @@ def _args(*, profile: str = "alpha-dev") -> argparse.Namespace:
     return args
 
 
-def test_test_profile_uses_dummy_fixture_dir(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_test_profile_uses_dummy_fixture_dir(tmp_path: Path, monkeypatch) -> None:
     """SC-013 + SC-014: TestProfile activates dummy_fixture_dir as PDF source."""
     home = tmp_path / "home"
     home.mkdir()
@@ -61,24 +58,18 @@ def test_test_profile_uses_dummy_fixture_dir(
     assert rc == 0
 
     # Preview routed to _test/ subtree (TC-004)
-    preview_dir = (
-        tmp_path / "tmp" / "immersio_email_preview" / "2026-1-anatomy" / "_test"
-    )
+    preview_dir = tmp_path / "tmp" / "immersio_email_preview" / "2026-1-anatomy" / "_test"
     eml_files = sorted(preview_dir.glob("*.eml"))
     # 2 dummy students × 2 pool addresses → 1:1 → 2 .eml
     assert len(eml_files) == 2
 
     # Production output dir untouched (no production .eml)
-    prod_preview = (
-        tmp_path / "tmp" / "immersio_email_preview" / "2026-1-anatomy"
-    )
+    prod_preview = tmp_path / "tmp" / "immersio_email_preview" / "2026-1-anatomy"
     prod_eml_at_root = list(prod_preview.glob("*.eml"))
     assert prod_eml_at_root == []  # Only _test/ has .eml
 
 
-def test_test_profile_rejects_explicit_bronze_path(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_test_profile_rejects_explicit_bronze_path(tmp_path: Path, monkeypatch) -> None:
     """TestProfile + --bronze-csv → exit 2 (operator paths meaningless)."""
     home = tmp_path / "home"
     home.mkdir()

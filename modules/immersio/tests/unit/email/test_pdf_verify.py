@@ -6,9 +6,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
-
 from immersio.email.pdf_verify import (
-    PDFVerifyResult,
     verify_pdf_body_contains_student_id,
 )
 from paideia_shared.schemas import StudentPDFBundle
@@ -52,9 +50,7 @@ def test_missing_student_id_skipped(tmp_path: Path) -> None:
 def test_attachment_size_exceeded(tmp_path: Path) -> None:
     """101 MB > 100 MB max → failed + attachment_size_exceeded (FR-F02)."""
     b = _bundle(tmp_path, size_bytes=101 * 1024 * 1024)
-    result = verify_pdf_body_contains_student_id(
-        b, attachment_max_bytes=100 * 1024 * 1024
-    )
+    result = verify_pdf_body_contains_student_id(b, attachment_max_bytes=100 * 1024 * 1024)
     assert result.ok is False
     assert result.error_kind == "attachment_size_exceeded"
 
@@ -76,9 +72,7 @@ def test_invalid_max_bytes_rejected(tmp_path: Path) -> None:
 def test_size_check_runs_before_body_check(tmp_path: Path) -> None:
     """Oversized PDF is rejected with size error even if body lacks ID."""
     b = _bundle(tmp_path, contains_id=False, size_bytes=200 * 1024 * 1024)
-    result = verify_pdf_body_contains_student_id(
-        b, attachment_max_bytes=100 * 1024 * 1024
-    )
+    result = verify_pdf_body_contains_student_id(b, attachment_max_bytes=100 * 1024 * 1024)
     assert result.error_kind == "attachment_size_exceeded"
 
 

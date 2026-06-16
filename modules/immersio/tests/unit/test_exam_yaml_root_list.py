@@ -7,20 +7,15 @@ list of question dicts; the spec-contract form is a mapping with an
 
 from __future__ import annotations
 
+import importlib.util as _ilu
 from pathlib import Path
 
 import pytest
 import yaml
 
-import importlib.util as _ilu
-
 _spec = _ilu.spec_from_file_location(
     "exam_yaml_isolated",
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "immersio"
-    / "io"
-    / "exam_yaml.py",
+    Path(__file__).resolve().parents[2] / "src" / "immersio" / "io" / "exam_yaml.py",
 )
 _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
 _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
@@ -80,9 +75,7 @@ def test_list_and_mapping_yield_identical_items(tmp_path: Path) -> None:
     items_list = parse_exam_yaml(list_yaml, "2026-1", "anatomy")
     items_map = parse_exam_yaml(map_yaml, "2026-1", "anatomy")
     # Same shape, same field values.
-    assert [it.model_dump() for it in items_list] == [
-        it.model_dump() for it in items_map
-    ]
+    assert [it.model_dump() for it in items_list] == [it.model_dump() for it in items_map]
 
 
 def test_neither_layout_rejected(tmp_path: Path) -> None:

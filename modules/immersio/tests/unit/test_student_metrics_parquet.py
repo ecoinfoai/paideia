@@ -12,10 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-from paideia_shared.schemas import StudentExamMetrics
-
 from immersio.analyze.silver_writer import write_student_metrics_parquet
+from paideia_shared.schemas import StudentExamMetrics
 
 
 def _metric(
@@ -79,7 +77,9 @@ def test_round_trip_preserves_fields(tmp_path: Path) -> None:
     assert sids == sorted(sids)
     # taker row carries score, absent carries NaN/None
     by_id = df.set_index("student_id")
-    assert by_id.loc["2026100001", "exam_taken"] is True or by_id.loc["2026100001", "exam_taken"] == 1
+    assert (
+        by_id.loc["2026100001", "exam_taken"] is True or by_id.loc["2026100001", "exam_taken"] == 1
+    )
     assert by_id.loc["2026100001", "total_score"] == 4.0
     absent_score = by_id.loc["2026100002", "total_score"]
     assert absent_score is None or pd.isna(absent_score)
@@ -106,6 +106,7 @@ def test_dict_columns_round_trip(tmp_path: Path) -> None:
     # recoverable as ``{"1장. 서론": 0.75}``.
     if isinstance(raw, str):
         import json
+
         decoded = json.loads(raw)
     elif hasattr(raw, "items"):
         decoded = dict(raw)

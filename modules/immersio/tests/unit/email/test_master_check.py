@@ -8,7 +8,6 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.email.master_check import (
     MasterMismatchError,
     MasterMissingError,

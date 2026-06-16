@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -32,6 +33,7 @@ def _valid_kwargs() -> dict:
 # ---------------------------------------------------------------------------
 # Valid construction
 # ---------------------------------------------------------------------------
+
 
 def test_valid_construction_with_defaults() -> None:
     """A minimal valid config uses schema defaults for optional fields."""
@@ -64,6 +66,7 @@ def test_valid_construction_explicit_overrides() -> None:
 # V1: gap_threshold range
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("bad", [-0.01, 1.01, -1.0, 2.5])
 def test_v1_gap_threshold_out_of_range(bad: float) -> None:
     """V1: gap_threshold outside [0, 1] raises ValidationError."""
@@ -87,6 +90,7 @@ def test_v1_gap_threshold_boundary_1() -> None:
 # V2: low_discrimination_threshold non-negative
 # ---------------------------------------------------------------------------
 
+
 def test_v2_low_discrimination_negative() -> None:
     """V2: negative low_discrimination_threshold raises ValidationError."""
     with pytest.raises(ValidationError, match="V2"):
@@ -97,6 +101,7 @@ def test_v2_low_discrimination_negative() -> None:
 # V3: cognitive_cliff_drop non-negative
 # ---------------------------------------------------------------------------
 
+
 def test_v3_cognitive_cliff_negative() -> None:
     """V3: negative cognitive_cliff_drop raises ValidationError."""
     with pytest.raises(ValidationError, match="V3"):
@@ -106,6 +111,7 @@ def test_v3_cognitive_cliff_negative() -> None:
 # ---------------------------------------------------------------------------
 # V4: importance_weights keys
 # ---------------------------------------------------------------------------
+
 
 def test_v4_importance_weights_missing_key() -> None:
     """V4: importance_weights with a missing key raises ValidationError."""
@@ -133,6 +139,7 @@ def test_v4_importance_weights_extra_key() -> None:
 # Extra-field rejection
 # ---------------------------------------------------------------------------
 
+
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""
     with pytest.raises(ValidationError):
@@ -142,6 +149,7 @@ def test_extra_field_rejected() -> None:
 # ---------------------------------------------------------------------------
 # Frozen (immutability)
 # ---------------------------------------------------------------------------
+
 
 def test_frozen_prevents_mutation() -> None:
     """frozen=True prevents in-place attribute mutation."""

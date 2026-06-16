@@ -7,11 +7,8 @@ adds the `군집비교` sheet whose 3-block structure matches
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import openpyxl
 import pytest
-
 from immersio.combine.xlsx_writer import write_us1_xlsx
 from paideia_shared.schemas import (
     CorrelationCell,

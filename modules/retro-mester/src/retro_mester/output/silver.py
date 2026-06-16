@@ -93,9 +93,7 @@ def write_silver(
     """
     silver_path = Path(silver_path)
     if not silver_path.is_dir():
-        raise FileNotFoundError(
-            f"write_silver: directory missing: {silver_path}"
-        )
+        raise FileNotFoundError(f"write_silver: directory missing: {silver_path}")
 
     write_opts = parquet_write_options()
 
@@ -113,12 +111,8 @@ def write_silver(
     if recs:
         df_recs = pd.DataFrame([_rec_to_dict(r) for r in recs])
         # Sort by rank (None last) then chapter, segment for determinism
-        df_recs["_rank_sort"] = df_recs["rank"].apply(
-            lambda r: r if r is not None else 999
-        )
-        df_recs = df_recs.sort_values(
-            by=["_rank_sort", "chapter", "segment"], ignore_index=True
-        )
+        df_recs["_rank_sort"] = df_recs["rank"].apply(lambda r: r if r is not None else 999)
+        df_recs = df_recs.sort_values(by=["_rank_sort", "chapter", "segment"], ignore_index=True)
         df_recs = df_recs.drop(columns=["_rank_sort"])
     else:
         df_recs = pd.DataFrame(columns=list(ChangeRecommendation.model_fields.keys()))

@@ -79,10 +79,10 @@ def _make_quiz_entries(
                 semester=_SEMESTER,
                 course_slug=_COURSE,
                 source="quiz",
-                source_ref=f"퀴즈:{weeks[idx]}주#{i+1}",
+                source_ref=f"퀴즈:{weeks[idx]}주#{i + 1}",
                 chapter_no=chapter_nos[idx],
                 week=weeks[idx],
-                stem=f"챕터{chapter_nos[idx]} 문제 {i+1}",
+                stem=f"챕터{chapter_nos[idx]} 문제 {i + 1}",
                 options=[f"① 보기{i}A", f"② 보기{i}B", f"③ 보기{i}C", f"④ 보기{i}D", f"⑤ 보기{i}E"],
                 answer=f"{(i % 5) + 1}",
             )
@@ -90,7 +90,9 @@ def _make_quiz_entries(
     return entries
 
 
-def _make_formative_entries(n: int, chapter_nos: list[int] | None = None) -> list[SourceInventoryEntry]:
+def _make_formative_entries(
+    n: int, chapter_nos: list[int] | None = None
+) -> list[SourceInventoryEntry]:
     """Build n synthetic formative SourceInventoryEntry objects."""
     chapter_nos = chapter_nos or _CHAPTER_NOS
     entries: list[SourceInventoryEntry] = []
@@ -101,10 +103,10 @@ def _make_formative_entries(n: int, chapter_nos: list[int] | None = None) -> lis
                 semester=_SEMESTER,
                 course_slug=_COURSE,
                 source="formative",
-                source_ref=f"형성평가:{ch_no}장#{i+1}",
+                source_ref=f"형성평가:{ch_no}장#{i + 1}",
                 chapter_no=ch_no,
                 week=ch_no,
-                stem=f"형성평가 질문 {i+1}",
+                stem=f"형성평가 질문 {i + 1}",
                 model_answer="모범답안",
                 keywords=[],
                 rubric={"high": "h", "mid": "m", "low": "l"},
@@ -139,9 +141,7 @@ class TestSelectQuizSubset:
         inventory = _make_quiz_entries(30)
         result = select_quiz_subset(inventory, target=15, chapters=_CHAPTER_NOS)
         counts = list(Counter(e.chapter_no for e in result).values())
-        assert max(counts) - min(counts) <= 1, (
-            f"Chapter distribution not even: {counts}"
-        )
+        assert max(counts) - min(counts) <= 1, f"Chapter distribution not even: {counts}"
 
     def test_all_chapters_represented(self) -> None:
         """All chapters appear in the subset when inventory has enough items."""
@@ -341,9 +341,7 @@ class TestSolveWithQuizSlots:
         slots = solve(blueprint, curriculum_map, formative_inventory=formative)
 
         counts = list(Counter(s.chapter_no for s in slots).values())
-        assert max(counts) - min(counts) <= 1, (
-            f"Chapter distribution not even: {counts}"
-        )
+        assert max(counts) - min(counts) <= 1, f"Chapter distribution not even: {counts}"
 
     def test_source_mix_totals_match(self) -> None:
         """Source counts in slots exactly match source_mix declaration."""

@@ -34,7 +34,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
 
 _AXIS_KR: dict[str, str] = {
@@ -76,8 +75,7 @@ def _format_axis_table(row: pd.Series) -> str:
             lines.append(f"| {kr} | — | — | (응답 누락) |")
         else:
             lines.append(
-                f"| {kr} | {float(raw):.2f} | {float(z):+.2f} | "
-                f"{_interpret_z(float(z), miss)} |"
+                f"| {kr} | {float(raw):.2f} | {float(z):+.2f} | {_interpret_z(float(z), miss)} |"
             )
     return "\n".join(lines)
 
@@ -108,13 +106,9 @@ def _top_axes(row: pd.Series, manifest_top3: list[str]) -> str:
         z = float(row[f"{axis}_z"])
         kr = _AXIS_KR.get(axis, axis)
         if z >= 0.5:
-            stance = (
-                f"**상대적 강점** (z={z:+.2f}) — 면담 시 자기효능감 강화 토픽 권장."
-            )
+            stance = f"**상대적 강점** (z={z:+.2f}) — 면담 시 자기효능감 강화 토픽 권장."
         elif z <= -0.5:
-            stance = (
-                f"**상대적 약점** (z={z:+.2f}) — 면담 시 학습 전략 보강 권장."
-            )
+            stance = f"**상대적 약점** (z={z:+.2f}) — 면담 시 학습 전략 보강 권장."
         else:
             stance = f"평균 수준 (z={z:+.2f}) — 표준 면담 흐름 적용."
         lines.append(f"- **{kr}** ({axis}): {stance}")
@@ -132,12 +126,8 @@ def _student_section(
     sid = str(row["student_id"])
     name = row["name_kr"] if pd.notna(row["name_kr"]) else "(이름 없음)"
     section = row["section"] if pd.notna(row["section"]) else "—"
-    cluster_label = (
-        row["cluster_label"] if pd.notna(row["cluster_label"]) else "(군집 미배정)"
-    )
-    cluster_id = (
-        int(row["cluster_id"]) if pd.notna(row["cluster_id"]) else "—"
-    )
+    cluster_label = row["cluster_label"] if pd.notna(row["cluster_label"]) else "(군집 미배정)"
+    cluster_id = int(row["cluster_id"]) if pd.notna(row["cluster_id"]) else "—"
     parts = [
         f"## {idx}. {name} (학번 `{sid}`)",
         "",
@@ -245,10 +235,7 @@ def build_student_reports(
         # Per-student .md
         sid = str(row["student_id"])
         per_student_path = student_dir / _safe_filename(sid, row.get("name_kr"))
-        per_student_text = (
-            f"# {row.get('name_kr') or '이름없음'} (학번 `{sid}`)\n\n"
-            f"{section}"
-        )
+        per_student_text = f"# {row.get('name_kr') or '이름없음'} (학번 `{sid}`)\n\n{section}"
         per_student_path.write_text(per_student_text, encoding="utf-8")
         paths.append(per_student_path)
 

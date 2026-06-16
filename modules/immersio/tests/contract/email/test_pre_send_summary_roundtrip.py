@@ -14,9 +14,8 @@ Invariants (PreSendSummary._check_invariants 참조):
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import PreSendSummary
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Happy-path fixtures (module-level for reuse in roundtrip + violation tests)

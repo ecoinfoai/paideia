@@ -36,12 +36,17 @@ def test_main_phase_ab_returns_zero(tmp_path: Path, capsys: pytest.CaptureFixtur
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--phases", "A-B",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-B",
             "--no-llm",
-            "--input-root", str(_stage(tmp_path / "in")),
-            "--output-root", str(tmp_path / "out"),
+            "--input-root",
+            str(_stage(tmp_path / "in")),
+            "--output-root",
+            str(tmp_path / "out"),
         ]
     )
     assert rc == 0
@@ -57,12 +62,17 @@ def test_main_phase_full_returns_zero(tmp_path: Path) -> None:
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--phases", "all",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "all",
             "--no-llm",
-            "--input-root", str(_stage(tmp_path / "in")),
-            "--output-root", str(tmp_path / "out"),
+            "--input-root",
+            str(_stage(tmp_path / "in")),
+            "--output-root",
+            str(tmp_path / "out"),
         ]
     )
     assert rc == 0
@@ -74,12 +84,17 @@ def test_main_k_one_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--k", "1",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--k",
+            "1",
             "--no-llm",
-            "--input-root", str(tmp_path),
-            "--output-root", str(tmp_path),
+            "--input-root",
+            str(tmp_path),
+            "--output-root",
+            str(tmp_path),
         ]
     )
     assert rc == 1
@@ -93,12 +108,17 @@ def test_main_k_seven_rejected(tmp_path: Path, capsys: pytest.CaptureFixture[str
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--k", "7",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--k",
+            "7",
             "--no-llm",
-            "--input-root", str(tmp_path),
-            "--output-root", str(tmp_path),
+            "--input-root",
+            str(tmp_path),
+            "--output-root",
+            str(tmp_path),
         ]
     )
     assert rc == 1
@@ -111,12 +131,17 @@ def test_main_missing_input_returns_two(tmp_path: Path, capsys: pytest.CaptureFi
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--phases", "A-B",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-B",
             "--no-llm",
-            "--input-root", str(tmp_path / "empty"),
-            "--output-root", str(tmp_path / "out"),
+            "--input-root",
+            str(tmp_path / "empty"),
+            "--output-root",
+            str(tmp_path / "out"),
         ]
     )
     assert rc == 2
@@ -131,11 +156,15 @@ def test_main_bad_semester_pattern_returns_one(
     rc = main(
         [
             "run",
-            "--semester", "2026-Q1",  # not in SemesterCode pattern
-            "--course", "anatomy",
+            "--semester",
+            "2026-Q1",  # not in SemesterCode pattern
+            "--course",
+            "anatomy",
             "--no-llm",
-            "--input-root", str(tmp_path),
-            "--output-root", str(tmp_path),
+            "--input-root",
+            str(tmp_path),
+            "--output-root",
+            str(tmp_path),
         ]
     )
     assert rc == 1

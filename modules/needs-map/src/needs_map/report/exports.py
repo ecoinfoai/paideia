@@ -132,9 +132,7 @@ def write_factor_scores_long(
         ``(csv_path, yaml_path)`` of the written files.
     """
     if not isinstance(gold_dir, Path):
-        raise TypeError(
-            f"write_factor_scores_long: expected Path, got {type(gold_dir).__name__}."
-        )
+        raise TypeError(f"write_factor_scores_long: expected Path, got {type(gold_dir).__name__}.")
     gold_dir.mkdir(parents=True, exist_ok=True)
     materialised = sorted(rows, key=lambda r: r.student_id)
 
@@ -164,9 +162,7 @@ def write_factor_scores_long(
     return csv_path, yaml_path
 
 
-def write_axis_summary(
-    rows: Iterable[AxisSummaryRow], gold_dir: Path
-) -> tuple[Path, Path]:
+def write_axis_summary(rows: Iterable[AxisSummaryRow], gold_dir: Path) -> tuple[Path, Path]:
     """Write the v0.1.1 axis_summary CSV + YAML to ``gold_dir``.
 
     Args:
@@ -180,9 +176,7 @@ def write_axis_summary(
         ``(csv_path, yaml_path)`` of the written files.
     """
     if not isinstance(gold_dir, Path):
-        raise TypeError(
-            f"write_axis_summary: expected Path, got {type(gold_dir).__name__}."
-        )
+        raise TypeError(f"write_axis_summary: expected Path, got {type(gold_dir).__name__}.")
     gold_dir.mkdir(parents=True, exist_ok=True)
     sorted_rows = _sort_axis_summary_rows(rows)
 
@@ -252,9 +246,7 @@ def _sort_axis_summary_rows(rows: Iterable[AxisSummaryRow]) -> list[AxisSummaryR
         else:
             freetext.append(r)
     quant.sort(key=lambda r: r.axis_key)
-    aux.sort(
-        key=lambda r: (r.axis_key, r.source_col or "", r.option or "")
-    )
+    aux.sort(key=lambda r: (r.axis_key, r.source_col or "", r.option or ""))
     freetext.sort(key=lambda r: r.axis_key)
     return quant + aux + freetext
 
@@ -294,9 +286,7 @@ def _axis_summary_yaml_doc(rows: list[AxisSummaryRow]) -> dict[str, object]:
                 }
             )
         else:  # freetext_summary
-            freetext_list.append(
-                _strip_none_floats(payload, _freetext_yaml_keys())
-            )
+            freetext_list.append(_strip_none_floats(payload, _freetext_yaml_keys()))
 
     aux_yaml: dict[str, list[dict[str, object]]] = {}
     for axis_key in sorted(auxiliary):
@@ -338,9 +328,7 @@ def _freetext_yaml_keys() -> tuple[str, ...]:
     )
 
 
-def _strip_none_floats(
-    payload: dict[str, object], keys: tuple[str, ...]
-) -> dict[str, object]:
+def _strip_none_floats(payload: dict[str, object], keys: tuple[str, ...]) -> dict[str, object]:
     """Build a YAML-friendly dict with floats rounded + only the listed keys."""
     out: dict[str, object] = {}
     for k in keys:

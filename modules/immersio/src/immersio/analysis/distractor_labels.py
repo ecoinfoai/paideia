@@ -70,10 +70,7 @@ def label_distractor_pattern(
         return "어려운 변별 우수 문항(유지 권장)"
     if omit_rate > TIME_PRESSURE_OMIT_THRESHOLD:
         return "시간 부족 또는 포기형"
-    if (
-        top_distractor_rate > ADJACENT_DISTRACTOR_RATE_THRESHOLD
-        and is_top_distractor_adjacent
-    ):
+    if top_distractor_rate > ADJACENT_DISTRACTOR_RATE_THRESHOLD and is_top_distractor_adjacent:
         return "근접 distractor에 의한 변별 성공형"
     if (
         WEAK_CORRECT_RATE_LOW <= correct_rate <= WEAK_CORRECT_RATE_HIGH

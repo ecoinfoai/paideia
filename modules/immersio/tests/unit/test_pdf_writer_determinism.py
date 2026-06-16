@@ -16,7 +16,6 @@ import hashlib
 from pathlib import Path
 
 import pytest
-
 from immersio import fonts as _fonts
 from immersio.report.pdf_writer import render_quality_report_pdf
 
@@ -26,9 +25,7 @@ def _resolve_font(monkeypatch: pytest.MonkeyPatch) -> None:
     from matplotlib import font_manager
 
     deja_vu_path = Path(font_manager.findfont("DejaVu Sans", fallback_to_default=True))
-    monkeypatch.setattr(
-        _fonts, "resolve_korean_font_paths", lambda: (deja_vu_path, deja_vu_path)
-    )
+    monkeypatch.setattr(_fonts, "resolve_korean_font_paths", lambda: (deja_vu_path, deja_vu_path))
 
 
 _MD_TEXT = """# 시험품질보고서 — 인체구조와기능 (2026-1)
@@ -104,9 +101,9 @@ def test_pdf_producer_and_creator_pinned(tmp_path: Path) -> None:
     assert "paideia" in str(info.producer or info.get("/Producer", ""))
     creation = info.creation_date or info.get("/CreationDate", "")
     creation_str = str(creation)
-    assert (
-        "20260429" in creation_str or "2026-04-29" in creation_str
-    ), f"CreationDate not pinned: {creation!r}"
+    assert "20260429" in creation_str or "2026-04-29" in creation_str, (
+        f"CreationDate not pinned: {creation!r}"
+    )
 
 
 def test_pdf_rejects_empty_md() -> None:

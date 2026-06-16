@@ -161,9 +161,7 @@ def _build_forward_section(
     lines.append("")
 
     # FR-016 disclaimer
-    lines.append(
-        "> **주의**: 본 절은 연도간 미시적 외삽(YoY extrapolation)을 수행하지 않습니다.  "
-    )
+    lines.append("> **주의**: 본 절은 연도간 미시적 외삽(YoY extrapolation)을 수행하지 않습니다.  ")
     lines.append(
         "> 코호트 특성은 현재 학기 데이터에서 추론한 조건부 가정이며, "
         "다음 학기 실제 코호트와 다를 수 있습니다."
@@ -202,14 +200,16 @@ def _build_forward_section(
         for e in ledger:
             lines.append(
                 "| "
-                + " | ".join([
-                    e.entry_id[:8] + "…",
-                    e.chapter,
-                    e.segment,
-                    f"{e.baseline_value:.2f}",
-                    f"{e.target_value:.2f}",
-                    e.measure_at,
-                ])
+                + " | ".join(
+                    [
+                        e.entry_id[:8] + "…",
+                        e.chapter,
+                        e.segment,
+                        f"{e.baseline_value:.2f}",
+                        f"{e.target_value:.2f}",
+                        e.measure_at,
+                    ]
+                )
                 + " |"
             )
         lines.append("")
@@ -237,13 +237,15 @@ def _build_forward_section(
                 eid = str(r.get("entry_id", ""))
                 lines.append(
                     "| "
-                    + " | ".join([
-                        eid[:8] + "…" if len(eid) > 8 else eid,
-                        f"{r.get('prior_baseline', 0.0):.2f}",
-                        f"{r.get('prior_target', 0.0):.2f}",
-                        val_str,
-                        met_str,
-                    ])
+                    + " | ".join(
+                        [
+                            eid[:8] + "…" if len(eid) > 8 else eid,
+                            f"{r.get('prior_baseline', 0.0):.2f}",
+                            f"{r.get('prior_target', 0.0):.2f}",
+                            val_str,
+                            met_str,
+                        ]
+                    )
                     + " |"
                 )
             lines.append("")
@@ -290,13 +292,15 @@ def _build_alignment_section(
     for f in sorted(findings, key=lambda x: x.chapter):
         lines.append(
             "| "
-            + " | ".join([
-                f.chapter,
-                f.flag,
-                str(f.taught_weeks),
-                str(f.tested_items),
-                f"{f.learned_rate:.2f}",
-            ])
+            + " | ".join(
+                [
+                    f.chapter,
+                    f.flag,
+                    str(f.taught_weeks),
+                    str(f.tested_items),
+                    f"{f.learned_rate:.2f}",
+                ]
+            )
             + " |"
         )
 
@@ -308,9 +312,7 @@ def _build_alignment_section(
         lines.append("**인지수준절벽 단원:**")
         for ch in sorted(cliff_chapters):
             f = next(x for x in findings if x.chapter == ch)
-            profile_str = ", ".join(
-                f"{t}: {r:.2f}" for t, r in sorted(f.cognitive_profile.items())
-            )
+            profile_str = ", ".join(f"{t}: {r:.2f}" for t, r in sorted(f.cognitive_profile.items()))
             lines.append(f"- {ch}: 인지수준별 정답률 [{profile_str}]")
         lines.append("")
 

@@ -85,9 +85,7 @@ _SCHEMA_VERSION = "0.1.0"
 # ``manifest_retro.json`` is the sole carrier of the real run timestamp.
 # ---------------------------------------------------------------------------
 
-DETERMINISTIC_EPOCH: datetime.datetime = datetime.datetime(
-    2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC
-)
+DETERMINISTIC_EPOCH: datetime.datetime = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -101,9 +99,7 @@ def _file_sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def _resolve_immersio_silver(
-    semester: str, course: str, data_root: Path
-) -> tuple[Path, Path]:
+def _resolve_immersio_silver(semester: str, course: str, data_root: Path) -> tuple[Path, Path]:
     """Return (combined_path, items_path) in the immersio Silver tier.
 
     Args:
@@ -239,9 +235,7 @@ def _run(
     # Step 1: Resolve input paths
     # ------------------------------------------------------------------
     combined_path, items_path = _resolve_immersio_silver(semester, course, data_root)
-    cfg_path, bp_path, cm_path = _resolve_retro_bronze(
-        semester, course, data_root, config_path
-    )
+    cfg_path, bp_path, cm_path = _resolve_retro_bronze(semester, course, data_root, config_path)
 
     # ------------------------------------------------------------------
     # Step 2: Load + reconcile
@@ -302,9 +296,7 @@ def _run(
     for rec in recs:
         presc = prescriptions.get((rec.chapter, rec.segment), rec.prescription_key)
         cv = vocab.get(rec.segment)
-        patched_recs.append(
-            rec.model_copy(update={"prescription_key": presc, "cluster_vocab": cv})
-        )
+        patched_recs.append(rec.model_copy(update={"prescription_key": presc, "cluster_vocab": cv}))
     recs = patched_recs
 
     # ------------------------------------------------------------------
@@ -352,11 +344,13 @@ def _run(
     validity_table: list[dict] = []
     for ch in sorted(validity_verdicts.keys()):
         sigs = validity_signals(_items_by_chapter.get(ch, []), config)
-        validity_table.append({
-            "chapter": ch,
-            "verdict": validity_verdicts[ch],
-            **sigs,
-        })
+        validity_table.append(
+            {
+                "chapter": ch,
+                "verdict": validity_verdicts[ch],
+                **sigs,
+            }
+        )
 
     # Enrich UnitGap.validity (replaces provisional "판정불가").
     validity_enriched_gaps: list = []
@@ -371,9 +365,7 @@ def _run(
     # chapters, override prescription_key with the repair string (SC-006).
     # Re-teaching prescriptions are suppressed — the instrument must be fixed
     # before instructional re-design is meaningful.
-    chapter_validity_map: dict[str, str] = {
-        gap.chapter: gap.validity for gap in gaps
-    }
+    chapter_validity_map: dict[str, str] = {gap.chapter: gap.validity for gap in gaps}
     validity_enriched_recs: list = []
     for rec in recs:
         rec_validity = chapter_validity_map.get(rec.chapter, "판정불가")
@@ -432,11 +424,7 @@ def _run(
         if r.is_covered
     ]
     _alignment_flag_strs = list({f.flag for f in alignment_findings if f.flag})
-    _forward_summary = (
-        f"개선 서약 {len(ledger)}건"
-        if ledger
-        else "개선 서약 없음"
-    )
+    _forward_summary = f"개선 서약 {len(ledger)}건" if ledger else "개선 서약 없음"
     insight_facts: dict = {
         "top_changes": _top_changes,
         "alignment_flags": _alignment_flag_strs,
@@ -574,9 +562,7 @@ def _run(
     degrade: dict[str, bool | str] = {
         "llm_used": llm_used,
         "prior_year_present": prior_yaml_path is not None,
-        "granularity_note": (
-            "group×chapter×item_type 3원 교차 미가용 — 인지수준 cohort 주석"
-        ),
+        "granularity_note": ("group×chapter×item_type 3원 교차 미가용 — 인지수준 cohort 주석"),
     }
 
     manifest = build_manifest(

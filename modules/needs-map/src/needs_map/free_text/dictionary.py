@@ -17,9 +17,7 @@ from paideia_shared.keywords import KeywordDictionary
 from paideia_shared.schemas import FreeTextRow
 
 # Normalised tokens that count as "no substantive response".
-_NO_RESPONSE_TOKENS: frozenset[str] = frozenset(
-    {"", "없습니다", "없음", "x", "-", "n/a", "na"}
-)
+_NO_RESPONSE_TOKENS: frozenset[str] = frozenset({"", "없습니다", "없음", "x", "-", "n/a", "na"})
 
 
 def _normalize(text: str) -> str:

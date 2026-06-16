@@ -29,9 +29,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-from immersio.analyze.pipeline import PipelineArgs, run_immersio_phase1
 from immersio import fonts as _fonts
+from immersio.analyze.pipeline import PipelineArgs, run_immersio_phase1
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +42,7 @@ def _patch_fonts(monkeypatch: pytest.MonkeyPatch) -> None:
     matplotlib) so tests run on any CI host.
     """
     import matplotlib
+
     matplotlib.use("Agg")
     from matplotlib import font_manager
 
@@ -106,13 +106,13 @@ def _seed_silver(silver_dir: Path) -> None:
 
     rows = []
     correctness_pattern = [
-        [True, True, True, True],   # student 1 — 4/4
+        [True, True, True, True],  # student 1 — 4/4
         [True, True, True, False],  # 2 — 3/4
         [True, True, False, True],  # 3 — 3/4
-        [True, True, False, False], # 4 — 2/4
-        [True, False, True, False], # 5 — 2/4
-        [True, False, False, False],# 6 — 1/4
-        [False, False, False, False],# 7 — 0/4
+        [True, True, False, False],  # 4 — 2/4
+        [True, False, True, False],  # 5 — 2/4
+        [True, False, False, False],  # 6 — 1/4
+        [False, False, False, False],  # 7 — 0/4
     ]
     for idx, flags in enumerate(correctness_pattern, start=1):
         sid = f"202610{idx:04d}"
@@ -183,9 +183,7 @@ def _make_args(
 
 
 def test_pipeline_writes_all_gold_artefacts(synthetic_silver: Path, gold_root: Path) -> None:
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     gold_dir = gold_root / "immersio" / "2026-1-anatomy"
     expected = [
@@ -204,21 +202,15 @@ def test_pipeline_writes_all_gold_artefacts(synthetic_silver: Path, gold_root: P
 
 
 def test_pipeline_writes_silver_mirrors(synthetic_silver: Path, gold_root: Path) -> None:
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     silver_dir = synthetic_silver / "immersio" / "2026-1-anatomy"
     assert (silver_dir / "학생지표.parquet").is_file()
     assert (silver_dir / "manifest.json").is_file()
 
 
-def test_pipeline_manifest_has_all_required_fields(
-    synthetic_silver: Path, gold_root: Path
-) -> None:
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+def test_pipeline_manifest_has_all_required_fields(synthetic_silver: Path, gold_root: Path) -> None:
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     gold_dir = gold_root / "immersio" / "2026-1-anatomy"
     payload = json.loads((gold_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -252,9 +244,7 @@ def test_pipeline_manifest_has_all_required_fields(
 
 def test_pipeline_silver_parquet_round_trip(synthetic_silver: Path, gold_root: Path) -> None:
     """T066 (b) — round-trip of silver 학생지표.parquet."""
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     silver_dir = synthetic_silver / "immersio" / "2026-1-anatomy"
     df = pd.read_parquet(silver_dir / "학생지표.parquet")
@@ -268,9 +258,7 @@ def test_pipeline_xlsx_has_seven_sheets(synthetic_silver: Path, gold_root: Path)
     """T066 (c) — xlsx contains all 7 sheets including 학생성적."""
     from openpyxl import load_workbook
 
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     gold_dir = gold_root / "immersio" / "2026-1-anatomy"
     wb = load_workbook(gold_dir / "시험분석결과.xlsx")
@@ -339,23 +327,18 @@ def test_two_runs_byte_identical(synthetic_silver: Path, tmp_path: Path) -> None
         silver_b / "immersio" / "2026-1-anatomy",
     )
     assert sha_a == sha_b, (
-        "byte-identical determinism failed for one of the artefacts:\n"
-        f"  a: {sha_a}\n  b: {sha_b}"
+        f"byte-identical determinism failed for one of the artefacts:\n  a: {sha_a}\n  b: {sha_b}"
     )
 
 
 # --- T068: LLM call detection --------------------------------------------
 
 
-def test_no_llm_modules_imported_after_pipeline(
-    synthetic_silver: Path, gold_root: Path
-) -> None:
+def test_no_llm_modules_imported_after_pipeline(synthetic_silver: Path, gold_root: Path) -> None:
     """SC-006 — pipeline must NOT import anthropic/openai/instructor."""
     forbidden = ("anthropic", "openai", "instructor")
     pre = {m for m in sys.modules if m.startswith(forbidden)}
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     post = {m for m in sys.modules if m.startswith(forbidden)}
     new_llm = post - pre
@@ -378,8 +361,6 @@ def test_no_socket_calls_during_pipeline(
         return real_socket(*args, **kwargs)
 
     monkeypatch.setattr(socket, "socket", _spy)
-    rc = run_immersio_phase1(
-        _make_args(silver_root=synthetic_silver, gold_root=gold_root)
-    )
+    rc = run_immersio_phase1(_make_args(silver_root=synthetic_silver, gold_root=gold_root))
     assert rc == 0
     assert not blocked, f"pipeline opened network sockets: {blocked}"

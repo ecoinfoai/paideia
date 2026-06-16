@@ -63,10 +63,10 @@ _RE_RUNNING_HEADER: Final = re.compile(r"^제\d+장\s")
 # 본문 문장("연습문제는 중요하다.")과 구분하기 위해, "연습 문제" 토큰 뒤에는
 # 임의의 한글 텍스트가 아니라 헤딩성 꼬리(구두점·괄호 안 문항수·번호)만 허용한다.
 _RE_EXERCISE_START: Final = re.compile(
-    r"^[\s■□▶◆●○\[\(]*"          # 선두 장식 기호·여는 괄호
-    r"연습\s*문제"                  # "연습문제" 또는 "연습 문제"
-    r"\s*[:\-–—\]\)]*"             # 콜론·대시·닫는 괄호
-    r"\s*(?:\([0-9가-힣\s]+\))?"   # 선택적 "(10문항)" 같은 꼬리
+    r"^[\s■□▶◆●○\[\(]*"  # 선두 장식 기호·여는 괄호
+    r"연습\s*문제"  # "연습문제" 또는 "연습 문제"
+    r"\s*[:\-–—\]\)]*"  # 콜론·대시·닫는 괄호
+    r"\s*(?:\([0-9가-힣\s]+\))?"  # 선택적 "(10문항)" 같은 꼬리
     r"\s*$"
 )
 
@@ -77,9 +77,7 @@ _RE_REFERENCE_START: Final = re.compile(r"^참고문헌")
 _RE_FOOTNOTE_LINE: Final = re.compile(r"^[†*※]")
 
 # 허용되는 자간헤더 토큰 (단일 대문자·숫자·기호)
-_SPACED_HEADER_ALLOWED_TOKENS: frozenset[str] = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&%"
-)
+_SPACED_HEADER_ALLOWED_TOKENS: frozenset[str] = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&%")
 
 
 def _is_spaced_letter_header(stripped: str) -> bool:
@@ -100,10 +98,7 @@ def _is_spaced_letter_header(stripped: str) -> bool:
     tokens = stripped.split()
     if len(tokens) < 3:  # 최소 3 토큰 이상이어야 자간헤더로 간주
         return False
-    return all(
-        len(t) <= 2 and all(ch in _SPACED_HEADER_ALLOWED_TOKENS for ch in t)
-        for t in tokens
-    )
+    return all(len(t) <= 2 and all(ch in _SPACED_HEADER_ALLOWED_TOKENS for ch in t) for t in tokens)
 
 
 def clean_textbook(
@@ -183,44 +178,32 @@ def clean_textbook(
 
         # Rule 1: spaced-letter header
         if _is_spaced_letter_header(stripped):
-            removed_spans.append(
-                f"[spaced_header] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[spaced_header] line {lineno}: '{stripped}'")
             continue
 
         # Rule 2: running chapter header (제N장 …)
         if _RE_RUNNING_HEADER.match(stripped):
-            removed_spans.append(
-                f"[running_header] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[running_header] line {lineno}: '{stripped}'")
             continue
 
         # Rule 3: standalone page number
         if _RE_PAGE_NUMBER.match(stripped):
-            removed_spans.append(
-                f"[page_number] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[page_number] line {lineno}: '{stripped}'")
             continue
 
         # Rule 4: figure caption
         if _RE_FIGURE_CAPTION.match(stripped):
-            removed_spans.append(
-                f"[figure_caption/그림] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[figure_caption/그림] line {lineno}: '{stripped}'")
             continue
 
         # Rule 5: table caption
         if _RE_TABLE_CAPTION.match(stripped):
-            removed_spans.append(
-                f"[table_caption/표] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[table_caption/표] line {lineno}: '{stripped}'")
             continue
 
         # Rule 6: footnote marker line
         if _RE_FOOTNOTE_LINE.match(stripped):
-            removed_spans.append(
-                f"[footnote/각주] line {lineno}: '{stripped}'"
-            )
+            removed_spans.append(f"[footnote/각주] line {lineno}: '{stripped}'")
             continue
 
         # No rule matched — keep the line

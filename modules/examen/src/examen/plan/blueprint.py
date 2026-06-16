@@ -187,8 +187,7 @@ def select_quiz_subset(
     """
     if not inventory:
         raise ValueError(
-            f"select_quiz_subset: quiz inventory is empty — "
-            f"cannot select {target} items."
+            f"select_quiz_subset: quiz inventory is empty — cannot select {target} items."
         )
     if target <= 0:
         return []
@@ -348,9 +347,7 @@ def solve(
     # ----------------------------------------------------------------
     counts_per_chapter = _even_distribute(blueprint.total_items, n_chapters)
     # chapter → slot count
-    chapter_slot_counts: dict[str, int] = dict(
-        zip(chapters, counts_per_chapter, strict=True)
-    )
+    chapter_slot_counts: dict[str, int] = dict(zip(chapters, counts_per_chapter, strict=True))
 
     # ----------------------------------------------------------------
     # Step 3: difficulty sequence (whole-exam, interleaved)

@@ -30,13 +30,10 @@ def _load_master_names(silver_master_parquet: Path) -> dict[str, str | None]:
     """Read the student master and return ``{student_id: name_kr or None}``."""
     if not isinstance(silver_master_parquet, Path):
         raise MasterMissingError(
-            f"silver_master must be Path, got "
-            f"{type(silver_master_parquet).__name__}"
+            f"silver_master must be Path, got {type(silver_master_parquet).__name__}"
         )
     if not silver_master_parquet.is_file():
-        raise MasterMissingError(
-            f"student master parquet not found at {silver_master_parquet}"
-        )
+        raise MasterMissingError(f"student master parquet not found at {silver_master_parquet}")
     table = pq.read_table(silver_master_parquet)
     df = table.to_pydict()
     ids = df.get("student_id", [])

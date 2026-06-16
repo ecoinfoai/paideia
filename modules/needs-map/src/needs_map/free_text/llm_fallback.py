@@ -43,9 +43,7 @@ class FreeTextCategoryOut(BaseModel):
     categories: list[str] = Field(default_factory=list)
 
 
-def _row_with_categories(
-    row: FreeTextRow, categories: list[str], source: str
-) -> FreeTextRow:
+def _row_with_categories(row: FreeTextRow, categories: list[str], source: str) -> FreeTextRow:
     """Return a clone of ``row`` with new matched_categories + match_source."""
     return FreeTextRow(
         student_id=row.student_id,

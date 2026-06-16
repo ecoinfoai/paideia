@@ -18,11 +18,9 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from scipy import stats
 
 REPO = Path("/home/kjeong/localgit/paideia")
 BRONZE_EXAM = REPO / "data/bronze/시험성적"
@@ -63,15 +61,17 @@ def _read_result_xls(path: Path, section: str) -> pd.DataFrame:
             continue
         if total is None:
             continue
-        rows.append({
-            "student_id": sid,
-            "name_kr": str(r.iloc[3]) if pd.notna(r.iloc[3]) else "(이름없음)",
-            "section": section,
-            "exam_taken": True,
-            "total_score": total,
-            "score_percent": percent,
-            "section_rank": rank,
-        })
+        rows.append(
+            {
+                "student_id": sid,
+                "name_kr": str(r.iloc[3]) if pd.notna(r.iloc[3]) else "(이름없음)",
+                "section": section,
+                "exam_taken": True,
+                "total_score": total,
+                "score_percent": percent,
+                "section_rank": rank,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -83,15 +83,17 @@ def _read_absent_xls(path: Path, section: str) -> pd.DataFrame:
         sid = _normalize_sid(sid_raw)
         if sid is None:
             continue
-        rows.append({
-            "student_id": sid,
-            "name_kr": str(r.iloc[3]) if pd.notna(r.iloc[3]) else "(이름없음)",
-            "section": section,
-            "exam_taken": False,
-            "total_score": None,
-            "score_percent": None,
-            "section_rank": None,
-        })
+        rows.append(
+            {
+                "student_id": sid,
+                "name_kr": str(r.iloc[3]) if pd.notna(r.iloc[3]) else "(이름없음)",
+                "section": section,
+                "exam_taken": False,
+                "total_score": None,
+                "score_percent": None,
+                "section_rank": None,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -116,14 +118,8 @@ def _build_student_metrics() -> pd.DataFrame:
 
     # cohort percentile via rank
     sat = sat.sort_values("total_score", ascending=True).reset_index(drop=True)
-    sat["cohort_percentile"] = (
-        100.0 * (sat.index + 1).astype(float) / len(sat)
-    )
-    sat["z_score"] = (
-        (sat["total_score"] - cohort_mean) / cohort_std
-        if cohort_std > 0
-        else 0.0
-    )
+    sat["cohort_percentile"] = 100.0 * (sat.index + 1).astype(float) / len(sat)
+    sat["z_score"] = (sat["total_score"] - cohort_mean) / cohort_std if cohort_std > 0 else 0.0
 
     # section percentile per section
     section_pct: dict[str, pd.Series] = {}
@@ -140,9 +136,7 @@ def _build_student_metrics() -> pd.DataFrame:
     sat["section_percentile"] = sat["student_id"].map(pct_map)
 
     # Merge back into df
-    sat_keep = sat[
-        ["student_id", "section_percentile", "cohort_percentile", "z_score"]
-    ]
+    sat_keep = sat[["student_id", "section_percentile", "cohort_percentile", "z_score"]]
     df = df.merge(sat_keep, on="student_id", how="left")
 
     # 학생지표 schema 정합
@@ -160,43 +154,59 @@ def _build_student_metrics() -> pd.DataFrame:
         df[c] = None
 
     cols_keep = [
-        "student_id", "name_kr", "section", "semester", "course_slug",
-        "exam_taken", "total_score", "score_percent",
-        "section_percentile", "cohort_percentile", "z_score",
-        "chapter_correct_rates", "source_correct_rates",
-        "difficulty_correct_rates", "expected_difficulty_correct_rates",
+        "student_id",
+        "name_kr",
+        "section",
+        "semester",
+        "course_slug",
+        "exam_taken",
+        "total_score",
+        "score_percent",
+        "section_percentile",
+        "cohort_percentile",
+        "z_score",
+        "chapter_correct_rates",
+        "source_correct_rates",
+        "difficulty_correct_rates",
+        "expected_difficulty_correct_rates",
         "item_type_correct_rates",
-        "interest_chapters_correct_rate", "aversion_chapters_correct_rate",
+        "interest_chapters_correct_rate",
+        "aversion_chapters_correct_rate",
     ]
     return df[cols_keep].sort_values("student_id").reset_index(drop=True)
 
 
 def _write_student_metrics(df: pd.DataFrame) -> Path:
-    schema = pa.schema([
-        pa.field("student_id", pa.large_string()),
-        pa.field("name_kr", pa.large_string()),
-        pa.field("section", pa.large_string()),
-        pa.field("semester", pa.large_string()),
-        pa.field("course_slug", pa.large_string()),
-        pa.field("exam_taken", pa.bool_()),
-        pa.field("total_score", pa.float64()),
-        pa.field("score_percent", pa.float64()),
-        pa.field("section_percentile", pa.float64()),
-        pa.field("cohort_percentile", pa.float64()),
-        pa.field("z_score", pa.float64()),
-        pa.field("chapter_correct_rates", pa.large_string()),
-        pa.field("source_correct_rates", pa.large_string()),
-        pa.field("difficulty_correct_rates", pa.large_string()),
-        pa.field("expected_difficulty_correct_rates", pa.large_string()),
-        pa.field("item_type_correct_rates", pa.large_string()),
-        pa.field("interest_chapters_correct_rate", pa.null()),
-        pa.field("aversion_chapters_correct_rate", pa.null()),
-    ])
+    schema = pa.schema(
+        [
+            pa.field("student_id", pa.large_string()),
+            pa.field("name_kr", pa.large_string()),
+            pa.field("section", pa.large_string()),
+            pa.field("semester", pa.large_string()),
+            pa.field("course_slug", pa.large_string()),
+            pa.field("exam_taken", pa.bool_()),
+            pa.field("total_score", pa.float64()),
+            pa.field("score_percent", pa.float64()),
+            pa.field("section_percentile", pa.float64()),
+            pa.field("cohort_percentile", pa.float64()),
+            pa.field("z_score", pa.float64()),
+            pa.field("chapter_correct_rates", pa.large_string()),
+            pa.field("source_correct_rates", pa.large_string()),
+            pa.field("difficulty_correct_rates", pa.large_string()),
+            pa.field("expected_difficulty_correct_rates", pa.large_string()),
+            pa.field("item_type_correct_rates", pa.large_string()),
+            pa.field("interest_chapters_correct_rate", pa.null()),
+            pa.field("aversion_chapters_correct_rate", pa.null()),
+        ]
+    )
     table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
     out = SILVER_IM / "학생지표.parquet"
     pq.write_table(
-        table, out, compression="snappy",
-        use_dictionary=False, write_statistics=False,
+        table,
+        out,
+        compression="snappy",
+        use_dictionary=False,
+        write_statistics=False,
     )
     return out
 
@@ -220,9 +230,7 @@ def _write_immersio_manifest() -> Path:
 
 def _write_cluster_names() -> Path:
     """needs-map cluster_summary.xlsx → cluster_names.json sidecar (SPEC-GAP-001)."""
-    summary = pd.read_excel(
-        GOLD_NM / "cluster_summary.xlsx", sheet_name="summary"
-    )
+    summary = pd.read_excel(GOLD_NM / "cluster_summary.xlsx", sheet_name="summary")
     names: dict[str, str] = {}
     for _, r in summary.iterrows():
         cid = int(r["cluster_id"])
@@ -258,8 +266,11 @@ def _backfill_student_master(metrics_df: pd.DataFrame) -> Path:
             sm.loc[mask, "exam_max_score"] = 220.0  # 100 items × 2.2pt avg
     table = pa.Table.from_pandas(sm, preserve_index=False)
     pq.write_table(
-        table, sm_path, compression="snappy",
-        use_dictionary=False, write_statistics=False,
+        table,
+        sm_path,
+        compression="snappy",
+        use_dictionary=False,
+        write_statistics=False,
     )
     return sm_path
 

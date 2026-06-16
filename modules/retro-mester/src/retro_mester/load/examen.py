@@ -46,9 +46,7 @@ def load_blueprint(path: Path) -> ExamenBlueprint:
         raise InputError(f"Failed to parse blueprint.yaml at {path}: {exc}") from exc
 
     if not isinstance(raw, dict):
-        raise InputError(
-            f"blueprint.yaml must be a YAML mapping, got {type(raw).__name__}: {path}"
-        )
+        raise InputError(f"blueprint.yaml must be a YAML mapping, got {type(raw).__name__}: {path}")
 
     try:
         return ExamenBlueprint(**raw)
@@ -85,9 +83,7 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
     try:
         return CurriculumMap(**raw)
     except ValidationError as exc:
-        raise InputError(
-            f"curriculum_map.yaml validation failed at {path}: {exc}"
-        ) from exc
+        raise InputError(f"curriculum_map.yaml validation failed at {path}: {exc}") from exc
 
 
 def load_exam_spec(

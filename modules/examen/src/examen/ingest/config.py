@@ -42,22 +42,16 @@ def load_blueprint(path: Path) -> ExamenBlueprint:
             Message always includes the file path and the offending field.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"blueprint.yaml not found: {path}"
-        )
+        raise FileNotFoundError(f"blueprint.yaml not found: {path}")
 
     # YAML 파싱 — 문법 오류는 위치 포함 메시지로 재포장
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(
-            f"Failed to parse blueprint.yaml at {path}: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to parse blueprint.yaml at {path}: {exc}") from exc
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"blueprint.yaml must be a YAML mapping, got {type(raw).__name__}: {path}"
-        )
+        raise ValueError(f"blueprint.yaml must be a YAML mapping, got {type(raw).__name__}: {path}")
 
     # Pydantic 검증 — ValidationError 를 위치 포함 ValueError 로 재포장
     try:
@@ -65,12 +59,9 @@ def load_blueprint(path: Path) -> ExamenBlueprint:
     except ValidationError as exc:
         # pydantic의 오류 목록을 간결한 문자열로 변환
         errors = "; ".join(
-            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-            for e in exc.errors()
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
-        raise ValueError(
-            f"blueprint.yaml validation failed at {path}: {errors}"
-        ) from exc
+        raise ValueError(f"blueprint.yaml validation failed at {path}: {errors}") from exc
 
 
 def load_curriculum_map(path: Path) -> CurriculumMap:
@@ -88,17 +79,13 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
             Message always includes the file path and the offending field.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"curriculum_map.yaml not found: {path}"
-        )
+        raise FileNotFoundError(f"curriculum_map.yaml not found: {path}")
 
     # YAML 파싱
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(
-            f"Failed to parse curriculum_map.yaml at {path}: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to parse curriculum_map.yaml at {path}: {exc}") from exc
 
     if not isinstance(raw, dict):
         raise ValueError(
@@ -110,12 +97,9 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
         return CurriculumMap.model_validate(raw)
     except ValidationError as exc:
         errors = "; ".join(
-            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-            for e in exc.errors()
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
-        raise ValueError(
-            f"curriculum_map.yaml validation failed at {path}: {errors}"
-        ) from exc
+        raise ValueError(f"curriculum_map.yaml validation failed at {path}: {errors}") from exc
 
 
 __all__ = ["load_blueprint", "load_curriculum_map", "bronze_dir"]

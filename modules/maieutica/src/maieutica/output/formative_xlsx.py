@@ -38,9 +38,7 @@ from maieutica.output.paths import atomic_write
 
 # ``templates/`` lives at modules/maieutica/templates, three parents above
 # src/maieutica/output/formative_xlsx.py → .../maieutica.
-_COLUMN_MAP_PATH = (
-    Path(__file__).resolve().parents[3] / "templates" / "formative_column_map.yaml"
-)
+_COLUMN_MAP_PATH = Path(__file__).resolve().parents[3] / "templates" / "formative_column_map.yaml"
 
 # Pinned timestamp for xlsx determinism (mirrors examen.pipeline._PINNED_WHEN).
 _PINNED_WHEN = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)

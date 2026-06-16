@@ -54,9 +54,7 @@ def _likert_col(axis: str = "motivation", partition: bool = False) -> MappingCol
     )
 
 
-def _multiselect_col(
-    axis: str = "interest_topics", partition: bool = False
-) -> MappingColumn:
+def _multiselect_col(axis: str = "interest_topics", partition: bool = False) -> MappingColumn:
     """Auxiliary group multiselect (v0.1.1 — non-scoring, no aggregate=mean)."""
     return MappingColumn(
         source=f"Q03_{axis}",
@@ -66,9 +64,7 @@ def _multiselect_col(
     )
 
 
-def _freetext_col(
-    axis: str = "anxiety_freetext", partition: bool = False
-) -> MappingColumn:
+def _freetext_col(axis: str = "anxiety_freetext", partition: bool = False) -> MappingColumn:
     """Freetext column targeting a FreetextAreaKey (v0.1.1)."""
     return MappingColumn(
         source=f"Q62_{axis}",

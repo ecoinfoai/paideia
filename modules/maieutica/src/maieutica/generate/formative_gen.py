@@ -65,9 +65,7 @@ from maieutica.plan.slots import Slot
 
 # templates/ lives at modules/maieutica/templates, two parents above the
 # src/maieutica package root (src/maieutica/generate/formative_gen.py → maieutica).
-_TEMPLATE_PATH = (
-    Path(__file__).resolve().parents[3] / "templates" / "prompt_formative.txt"
-)
+_TEMPLATE_PATH = Path(__file__).resolve().parents[3] / "templates" / "prompt_formative.txt"
 
 # Default topic hint when the planner has not assigned one.  The LLM re-emits
 # its own topic, parsed below; this only seeds the prompt deterministically.
@@ -147,9 +145,7 @@ def build_formative_bundle(
     """
     selected = _select_chunks(slot, chunks)
 
-    textbook_context = (
-        "\n\n".join(c.text for c in selected) if selected else "(교재 본문 없음)"
-    )
+    textbook_context = "\n\n".join(c.text for c in selected) if selected else "(교재 본문 없음)"
     section = _derive_section(selected)
     key_concept = spec.chapter
 

@@ -48,32 +48,34 @@ class CohortLabel(StrEnum):
     ALL = "all"
 
 
-_VALID_ERROR_KINDS: frozenset[str] = frozenset({
-    "",
-    "invalid_email",
-    "email_not_found",
-    "pdf_no_student_id",
-    "pdf_filename_violation",
-    "master_name_mismatch",
-    "attachment_io_error",
-    "attachment_size_exceeded",
-    "gmail_api_invalid_recipient",
-    "gmail_api_quota_exceeded",
-    "gmail_api_rate_limit",
-    "gmail_api_server_error",
-    "gmail_api_unknown",
-    "gmail_api_auth_failed",
-    "gmail_api_domain_policy",
-    "network_timeout",
-    "score_unavailable",
-    # Post-release fix: per-bundle loop pre-populates SUCCESS placeholder
-    # rows assuming each draft will be sent. When self-test mode sends
-    # only the first N drafts, or production-send returns early (auth
-    # fail / exception), the un-attempted rows must be rewritten so the
-    # csv/manifest don't report fake successes.
-    "self_test_not_attempted",
-    "not_attempted_after_early_exit",
-})
+_VALID_ERROR_KINDS: frozenset[str] = frozenset(
+    {
+        "",
+        "invalid_email",
+        "email_not_found",
+        "pdf_no_student_id",
+        "pdf_filename_violation",
+        "master_name_mismatch",
+        "attachment_io_error",
+        "attachment_size_exceeded",
+        "gmail_api_invalid_recipient",
+        "gmail_api_quota_exceeded",
+        "gmail_api_rate_limit",
+        "gmail_api_server_error",
+        "gmail_api_unknown",
+        "gmail_api_auth_failed",
+        "gmail_api_domain_policy",
+        "network_timeout",
+        "score_unavailable",
+        # Post-release fix: per-bundle loop pre-populates SUCCESS placeholder
+        # rows assuming each draft will be sent. When self-test mode sends
+        # only the first N drafts, or production-send returns early (auth
+        # fail / exception), the un-attempted rows must be rewritten so the
+        # csv/manifest don't report fake successes.
+        "self_test_not_attempted",
+        "not_attempted_after_early_exit",
+    }
+)
 
 
 class DispatchLogRow(BaseModel):
@@ -120,9 +122,7 @@ class DispatchLogRow(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"DispatchLogRow.student_id must match ^\\d{{10}}$ (got {value!r})"
-            )
+            raise ValueError(f"DispatchLogRow.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
     @field_validator("name_kr")
@@ -146,9 +146,7 @@ class DispatchLogRow(BaseModel):
         if value == "":
             return value
         if not _HEX64_RE.fullmatch(value):
-            raise ValueError(
-                f"DispatchLogRow.pdf_sha256 must be hex64 or '' (got {value!r})"
-            )
+            raise ValueError(f"DispatchLogRow.pdf_sha256 must be hex64 or '' (got {value!r})")
         return value
 
     @field_validator("smtp_message_id")
@@ -158,8 +156,7 @@ class DispatchLogRow(BaseModel):
             return value
         if not _MESSAGE_ID_RE.fullmatch(value):
             raise ValueError(
-                f"DispatchLogRow.smtp_message_id must be RFC 5322 Message-ID "
-                f"or '' (got {value!r})"
+                f"DispatchLogRow.smtp_message_id must be RFC 5322 Message-ID or '' (got {value!r})"
             )
         return value
 
@@ -167,18 +164,14 @@ class DispatchLogRow(BaseModel):
     @classmethod
     def _v_error_kind(cls, value: str) -> str:
         if value not in _VALID_ERROR_KINDS:
-            raise ValueError(
-                f"DispatchLogRow.error_kind {value!r} not in {_VALID_ERROR_KINDS}"
-            )
+            raise ValueError(f"DispatchLogRow.error_kind {value!r} not in {_VALID_ERROR_KINDS}")
         return value
 
     @field_validator("error_detail")
     @classmethod
     def _v_error_detail(cls, value: str) -> str:
         if len(value) > 200:
-            raise ValueError(
-                f"DispatchLogRow.error_detail max length 200 (got {len(value)})"
-            )
+            raise ValueError(f"DispatchLogRow.error_detail max length 200 (got {len(value)})")
         return value
 
     @field_validator("exam_name")

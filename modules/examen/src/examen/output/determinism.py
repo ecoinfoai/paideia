@@ -103,9 +103,7 @@ def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
             members.append((info.filename, data, info.compress_type))
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(
-        buf, "w", zipfile.ZIP_DEFLATED, compresslevel=_FIXED_COMPRESSLEVEL
-    ) as dst:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=_FIXED_COMPRESSLEVEL) as dst:
         for name, data, compress_type in members:
             zi = zipfile.ZipInfo(filename=name, date_time=_FIXED_ZIP_DATE)
             # 원본 압축 방식 유지 (openpyxl 선택 압축 호환)
@@ -118,6 +116,7 @@ def finalize_xlsx(path: Path, when: datetime.datetime) -> None:
 # ---------------------------------------------------------------------------
 # yaml determinism
 # ---------------------------------------------------------------------------
+
 
 def dump_yaml(obj: Any) -> str:  # noqa: ANN401
     """Dump ``obj`` to a deterministic YAML string.
@@ -150,6 +149,7 @@ def dump_yaml(obj: Any) -> str:  # noqa: ANN401
 # ---------------------------------------------------------------------------
 # parquet determinism
 # ---------------------------------------------------------------------------
+
 
 def parquet_write_options() -> dict[str, Any]:
     """Return PyArrow parquet write options for byte-identical output.

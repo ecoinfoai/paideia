@@ -31,9 +31,7 @@ ITEMS = [
 
 def _make_diag_csv(out: Path, n: int) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
-    headers = (
-        "학번,Q01,Q02,Q05,Q11,Q62"
-    )
+    headers = "학번,Q01,Q02,Q05,Q11,Q62"
     rows = [headers]
     for i in range(n):
         sid = f"2026{i:06d}"
@@ -163,7 +161,9 @@ def synthetic_184_bronze(tmp_path: Path) -> tuple[Path, Path]:
     return bronze, mapping
 
 
-def test_184_student_ingest_under_5s(synthetic_184_bronze: tuple[Path, Path], tmp_path: Path) -> None:
+def test_184_student_ingest_under_5s(
+    synthetic_184_bronze: tuple[Path, Path], tmp_path: Path
+) -> None:
     bronze, mapping = synthetic_184_bronze
     out = tmp_path / "silver"
     start = time.perf_counter()

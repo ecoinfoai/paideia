@@ -28,7 +28,6 @@ import typing
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # T007 + T008 — StandardAxisKey + AuxiliaryGroupKey + FreetextAreaKey
 # ---------------------------------------------------------------------------

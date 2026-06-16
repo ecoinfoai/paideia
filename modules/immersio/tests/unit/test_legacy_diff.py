@@ -19,9 +19,8 @@ import hashlib
 from pathlib import Path
 
 import pytest
-from openpyxl import Workbook
-
 from immersio.report.legacy_diff import LegacyLoadError, generate_legacy_diff
+from openpyxl import Workbook
 
 
 def _stamp_workbook(wb: Workbook, when: str) -> None:
@@ -64,17 +63,21 @@ def legacy_path(tmp_path: Path) -> Path:
             "전체요약": [
                 ["지표", "값"],
                 ["응시자 수", 184],
-                ["평균", 125.351],            # vs immersio 125.350 → diff -0.001 (=tolerance, ignored)
-                ["표준편차", 39.5511],         # vs immersio 39.5500 → diff -0.0011 (reported)
+                ["평균", 125.351],  # vs immersio 125.350 → diff -0.001 (=tolerance, ignored)
+                ["표준편차", 39.5511],  # vs immersio 39.5500 → diff -0.0011 (reported)
             ],
             "2_메타데이터통계": [
                 ["분류축", "값", "p값"],
-                ["분반", "ANOVA", 0.0421],     # vs immersio 0.0432 → diff +0.0011 (reported, ANOVA reason)
+                [
+                    "분반",
+                    "ANOVA",
+                    0.0421,
+                ],  # vs immersio 0.0432 → diff +0.0011 (reported, ANOVA reason)
                 ["LLM_코멘트", "분반 A 평균이...", None],  # missing in immersio (legacy 만 존재)
             ],
             "4_정답률": [
                 ["문항번호", "정답률(%)"],
-                [1, 73.0],                    # text + numeric mix
+                [1, 73.0],  # text + numeric mix
                 [2, 85.87],
             ],
         },
@@ -96,7 +99,11 @@ def immersio_path(tmp_path: Path) -> Path:
             ],
             "2_메타데이터통계": [
                 ["분류축", "값", "p값"],
-                ["분반", "Welch ANOVA", 0.0432],  # text different ('ANOVA' vs 'Welch ANOVA') + p diff
+                [
+                    "분반",
+                    "Welch ANOVA",
+                    0.0432,
+                ],  # text different ('ANOVA' vs 'Welch ANOVA') + p diff
                 # row 3 absent → legacy 의 "LLM_코멘트" 행이 미재현
             ],
             "4_정답률": [
@@ -224,9 +231,7 @@ def test_reason_rule_rounding_for_small_numeric_diff(
     assert "반올림" in md
 
 
-def test_two_calls_byte_identical(
-    tmp_path: Path, legacy_path: Path, immersio_path: Path
-) -> None:
+def test_two_calls_byte_identical(tmp_path: Path, legacy_path: Path, immersio_path: Path) -> None:
     a = tmp_path / "a.md"
     b = tmp_path / "b.md"
     for path in (a, b):
@@ -280,9 +285,7 @@ def test_summary_header_lists_total_compared_and_diff_counts(
     assert "미재현" in md
 
 
-def test_structure_section_present(
-    tmp_path: Path, legacy_path: Path, immersio_path: Path
-) -> None:
+def test_structure_section_present(tmp_path: Path, legacy_path: Path, immersio_path: Path) -> None:
     out = tmp_path / "diff.md"
     generate_legacy_diff(
         legacy_xlsx=legacy_path,
@@ -309,9 +312,7 @@ def test_rejects_missing_legacy_path(tmp_path: Path, immersio_path: Path) -> Non
         )
 
 
-def test_corrupt_legacy_xlsx_raises_legacy_load_error(
-    tmp_path: Path, immersio_path: Path
-) -> None:
+def test_corrupt_legacy_xlsx_raises_legacy_load_error(tmp_path: Path, immersio_path: Path) -> None:
     """Adversary P4: corrupt legacy xlsx → LegacyLoadError (CLI exit 5)."""
     bad = tmp_path / "corrupt.xlsx"
     bad.write_bytes(b"this is not a real xlsx -- just garbage bytes")
@@ -332,9 +333,7 @@ def test_corrupt_legacy_xlsx_raises_legacy_load_error(
     assert str(bad) in msg
 
 
-def test_corrupt_immersio_xlsx_raises_legacy_load_error(
-    tmp_path: Path, legacy_path: Path
-) -> None:
+def test_corrupt_immersio_xlsx_raises_legacy_load_error(tmp_path: Path, legacy_path: Path) -> None:
     bad = tmp_path / "corrupt.xlsx"
     bad.write_bytes(b"PK\x03\x04 -- truncated zip header, not a real xlsx")
     out = tmp_path / "diff.md"
@@ -352,9 +351,7 @@ def test_corrupt_immersio_xlsx_raises_legacy_load_error(
     assert str(bad) in msg
 
 
-def test_legacy_load_error_chains_original_exception(
-    tmp_path: Path, immersio_path: Path
-) -> None:
+def test_legacy_load_error_chains_original_exception(tmp_path: Path, immersio_path: Path) -> None:
     """Adversary P4 anti-pattern guard: original exception preserved via __cause__."""
     bad = tmp_path / "x.xlsx"
     bad.write_bytes(b"not xlsx")

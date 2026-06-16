@@ -18,7 +18,6 @@ identity 재실행.
 from __future__ import annotations
 
 import pytest
-
 from immersio.combine.recommendations import build_recommendations
 from paideia_shared.schemas import RegressionCoefficient, RegressionFitSummary
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS

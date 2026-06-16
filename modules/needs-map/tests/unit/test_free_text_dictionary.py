@@ -45,9 +45,7 @@ def test_classify_dictionary_no_response_tokens(raw: str) -> None:
     from needs_map.free_text.dictionary import classify_dictionary
     from paideia_shared.keywords import load
 
-    rows = classify_dictionary(
-        [("2026194000", "Q62", raw)], dictionary=load("ko")
-    )
+    rows = classify_dictionary([("2026194000", "Q62", raw)], dictionary=load("ko"))
     assert rows[0].match_source == "no_response"
     assert rows[0].matched_categories == []
 
@@ -73,9 +71,7 @@ def test_classify_dictionary_raw_length_recorded() -> None:
     from paideia_shared.keywords import load
 
     text = "암기가 너무 많습니다"
-    rows = classify_dictionary(
-        [("2026194000", "Q62", text)], dictionary=load("ko")
-    )
+    rows = classify_dictionary([("2026194000", "Q62", text)], dictionary=load("ko"))
     assert rows[0].raw_length == len(text)
 
 

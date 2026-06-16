@@ -34,9 +34,7 @@ class ClusterRow(BaseModel):
         if self.n == 0:
             for field_name in ("mean", "std", "ci_low_95", "ci_high_95"):
                 if getattr(self, field_name) is not None:
-                    raise ValueError(
-                        f"ClusterRow n=0: {field_name} must be None when n=0"
-                    )
+                    raise ValueError(f"ClusterRow n=0: {field_name} must be None when n=0")
         return self
 
 
@@ -59,17 +57,11 @@ class ClusterScoreComparison(BaseModel):
         """V1: k_used=1 ⇒ test_used='N/A' AND levene_p is None AND posthoc_test='N/A'."""
         if self.k_used == 1:
             if self.test_used != "N/A":
-                raise ValueError(
-                    f"V1 k=1: test_used must be 'N/A', got {self.test_used}"
-                )
+                raise ValueError(f"V1 k=1: test_used must be 'N/A', got {self.test_used}")
             if self.levene_p is not None:
-                raise ValueError(
-                    f"V1 k=1: levene_p must be None, got {self.levene_p}"
-                )
+                raise ValueError(f"V1 k=1: levene_p must be None, got {self.levene_p}")
             if self.posthoc_test != "N/A":
-                raise ValueError(
-                    f"V1 k=1: posthoc_test must be 'N/A', got {self.posthoc_test}"
-                )
+                raise ValueError(f"V1 k=1: posthoc_test must be 'N/A', got {self.posthoc_test}")
         return self
 
     @model_validator(mode="after")
@@ -77,22 +69,16 @@ class ClusterScoreComparison(BaseModel):
         """V2: k_used=2 ⇒ test_used='Welch_t_test' AND posthoc_test='N/A'."""
         if self.k_used == 2:
             if self.test_used != "Welch_t_test":
-                raise ValueError(
-                    f"V2 k=2: test_used must be 'Welch_t_test', got {self.test_used}"
-                )
+                raise ValueError(f"V2 k=2: test_used must be 'Welch_t_test', got {self.test_used}")
             if self.posthoc_test != "N/A":
-                raise ValueError(
-                    f"V2 k=2: posthoc_test must be 'N/A', got {self.posthoc_test}"
-                )
+                raise ValueError(f"V2 k=2: posthoc_test must be 'N/A', got {self.posthoc_test}")
         return self
 
     @model_validator(mode="after")
     def _v3_eta_squared_unit_range(self) -> Self:
         """V3: eta_squared in [0, 1] when populated."""
         if self.eta_squared is not None and not (0.0 <= self.eta_squared <= 1.0):
-            raise ValueError(
-                f"V3 eta_squared range: must be in [0, 1], got {self.eta_squared}"
-            )
+            raise ValueError(f"V3 eta_squared range: must be in [0, 1], got {self.eta_squared}")
         return self
 
 

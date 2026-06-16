@@ -153,14 +153,11 @@ def _no_lock_or_backup_artifacts(csv_path: Path) -> None:
     # No backup files
     bak_files = list(parent.glob(f"{csv_path.name}.bak-*"))
     assert not bak_files, (
-        f"FR-C05d violation: backup file(s) created during lock-conflict: "
-        f"{bak_files}"
+        f"FR-C05d violation: backup file(s) created during lock-conflict: {bak_files}"
     )
     # No temp files
     tmp_files = list(parent.glob(f"{csv_path.name}.tmp-*"))
-    assert not tmp_files, (
-        f"atomic-replace violation: temp file(s) leaked: {tmp_files}"
-    )
+    assert not tmp_files, f"atomic-replace violation: temp file(s) leaked: {tmp_files}"
 
 
 # ---------------------------------------------------------------------------
@@ -168,9 +165,7 @@ def _no_lock_or_backup_artifacts(csv_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_real_mode_normal_completion(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_real_mode_normal_completion(tmp_path: Path, cleanup_log_fn) -> None:
     """실 모드 정상 — 백업 sha256 == 원본 sha256, atomic replace, 한글 분포 보고."""
     log = tmp_path / "메일_발송로그.csv"
     # 4 rows: 2 success, 1 test_dummy, 1 dry_run, 1 skipped  → keep {success, test_dummy}
@@ -199,21 +194,15 @@ def test_real_mode_normal_completion(
     )
 
     # Normal exit
-    assert result in (0, None), (
-        f"실 모드 정상 완료 시 return 0 (또는 None) 기대, got {result!r}"
-    )
+    assert result in (0, None), f"실 모드 정상 완료 시 return 0 (또는 None) 기대, got {result!r}"
 
     # Exactly one backup file with the `*.bak-<unix_ts>` pattern.
     bak_files = list(log.parent.glob(f"{log.name}.bak-*"))
-    assert len(bak_files) == 1, (
-        f"백업 파일 1개 기대 (*.bak-<unix_ts>), got: {bak_files}"
-    )
+    assert len(bak_files) == 1, f"백업 파일 1개 기대 (*.bak-<unix_ts>), got: {bak_files}"
     bak = bak_files[0]
     # The suffix after `.bak-` must look like a unix timestamp (int).
     suffix = bak.name.rsplit(".bak-", 1)[-1]
-    assert suffix.isdigit(), (
-        f"백업 suffix 가 unix_ts (정수) 가 아님: {bak.name!r}"
-    )
+    assert suffix.isdigit(), f"백업 suffix 가 unix_ts (정수) 가 아님: {bak.name!r}"
 
     # FR-C05b — backup sha256 == pre-cleanup csv sha256.
     assert _sha256_of(bak) == sha_before, (
@@ -225,47 +214,33 @@ def test_real_mode_normal_completion(
     assert set(statuses_after) <= {"success", "test_dummy"}, (
         f"정리 후 csv 에 보존 status 외 행이 남음: {statuses_after}"
     )
-    assert statuses_after.count("success") == 2, (
-        f"success 행 2개 보존 기대, got {statuses_after}"
-    )
+    assert statuses_after.count("success") == 2, f"success 행 2개 보존 기대, got {statuses_after}"
     assert statuses_after.count("test_dummy") == 1, (
         f"test_dummy 행 1개 보존 기대, got {statuses_after}"
     )
 
     # sha256 changed (atomic replace performed).
-    assert _sha256_of(log) != sha_before, (
-        "원본 csv 가 atomic replace 로 새 내용으로 교체되어야 함"
-    )
+    assert _sha256_of(log) != sha_before, "원본 csv 가 atomic replace 로 새 내용으로 교체되어야 함"
 
     # No `*.tmp-*` leftover (atomic replace cleaned up).
     tmp_files = list(log.parent.glob(f"{log.name}.tmp-*"))
-    assert not tmp_files, (
-        f"atomic replace 후 임시 파일 (*.tmp-*) 잔존 — 정리 누락: {tmp_files}"
-    )
+    assert not tmp_files, f"atomic replace 후 임시 파일 (*.tmp-*) 잔존 — 정리 누락: {tmp_files}"
 
     # stdout 분포 보고 (§4.1) 한글 라벨 검증.
     out = stdout.getvalue()
     # 보존된 status 라벨
-    assert "성공(success)" in out, (
-        f"stdout 에 '성공(success)' 라벨 없음 (§4.1 / FR-C04f): {out!r}"
-    )
+    assert "성공(success)" in out, f"stdout 에 '성공(success)' 라벨 없음 (§4.1 / FR-C04f): {out!r}"
     assert "본인-테스트(test_dummy)" in out, (
         f"stdout 에 '본인-테스트(test_dummy)' 라벨 없음: {out!r}"
     )
     # 제거 라벨 (status 가 아니라 작업 결과 — 분리 라벨)
-    assert "제거(removed)" in out, (
-        f"stdout 에 '제거(removed)' 분리 라벨 없음: {out!r}"
-    )
+    assert "제거(removed)" in out, f"stdout 에 '제거(removed)' 분리 라벨 없음: {out!r}"
     # 건수 — 정확한 카운트 (2 success, 1 test_dummy, 2 removed)
-    assert "성공(success): 2건" in out, (
-        f"stdout '성공(success): 2건' 카운트 없음: {out!r}"
-    )
+    assert "성공(success): 2건" in out, f"stdout '성공(success): 2건' 카운트 없음: {out!r}"
     assert "본인-테스트(test_dummy): 1건" in out, (
         f"stdout '본인-테스트(test_dummy): 1건' 카운트 없음: {out!r}"
     )
-    assert "제거(removed): 2건" in out, (
-        f"stdout '제거(removed): 2건' 카운트 없음: {out!r}"
-    )
+    assert "제거(removed): 2건" in out, f"stdout '제거(removed): 2건' 카운트 없음: {out!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -335,9 +310,7 @@ def test_real_mode_lock_conflict_raises(
 # ---------------------------------------------------------------------------
 
 
-def test_dry_run_does_not_attempt_lock(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_dry_run_does_not_attempt_lock(tmp_path: Path, cleanup_log_fn) -> None:
     """``--dry-run`` 은 lock 미시도 → 다른 명령이 lock 을 보유 중이어도 정상 실행.
 
     (FR-C05e · 계약 §6/§7) dry-run 은 csv 미터치이므로 lock 을 잡지 않아야 한다.
@@ -376,18 +349,14 @@ def test_dry_run_does_not_attempt_lock(
         )
 
         # csv unchanged (dry-run never writes).
-        assert _sha256_of(log) == sha_before, (
-            "dry-run 인데 csv 가 변경됨"
-        )
+        assert _sha256_of(log) == sha_before, "dry-run 인데 csv 가 변경됨"
 
         # No backup or temp artifacts (dry-run does not create them).
         _no_lock_or_backup_artifacts(log)
 
         # stdout sanity — at minimum mentions dry-run/미리보기 mode.
         out = stdout.getvalue()
-        assert "dry-run" in out or "미리보기" in out, (
-            f"dry-run stdout 에 mode 안내 없음: {out!r}"
-        )
+        assert "dry-run" in out or "미리보기" in out, f"dry-run stdout 에 mode 안내 없음: {out!r}"
     finally:
         with contextlib.suppress(OSError):
             fcntl.flock(fd, fcntl.LOCK_UN)
@@ -516,8 +485,7 @@ def test_cross_command_mutex_with_send(
         # cleanup-log must not have produced any side-effects
         _no_lock_or_backup_artifacts(log)
         assert _sha256_of(log) == sha_before, (
-            "send 가 lock 보유 중인데 cleanup-log 가 csv 를 변경함 — "
-            "kernel-level mutex 위반"
+            "send 가 lock 보유 중인데 cleanup-log 가 csv 를 변경함 — kernel-level mutex 위반"
         )
     finally:
         with contextlib.suppress(OSError):
@@ -535,8 +503,7 @@ def test_cross_command_mutex_with_send(
 
         # send writer must not have appended (csv unchanged).
         assert _sha256_of(log) == sha_before, (
-            "cleanup-log 가 lock 보유 중인데 send 가 csv 에 append — "
-            "kernel-level mutex 위반"
+            "cleanup-log 가 lock 보유 중인데 send 가 csv 에 append — kernel-level mutex 위반"
         )
     finally:
         with contextlib.suppress(OSError):

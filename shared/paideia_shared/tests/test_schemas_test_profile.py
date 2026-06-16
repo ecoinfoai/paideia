@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import pytest
 import yaml
-from pydantic import ValidationError
-
 from paideia_shared.schemas import DummyStudent, TestProfile
+from pydantic import ValidationError
 
 
 def _valid_test_yaml(tmp_path) -> str:

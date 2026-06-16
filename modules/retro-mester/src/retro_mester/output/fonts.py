@@ -124,9 +124,7 @@ def _resolve_face(face: FaceKind, env_var: str, fc_pattern: str) -> Path:
 
     fc_path = _run_fc_match(fc_pattern)
     if fc_path is None or "NanumGothic" not in str(fc_path) or not fc_path.is_file():
-        status = (
-            f"matched {fc_path!r} (not valid)" if fc_path else "fc-match failed"
-        )
+        status = f"matched {fc_path!r} (not valid)" if fc_path else "fc-match failed"
         raise KoreanFontUnavailableError(
             _format_error_block(
                 face=face,

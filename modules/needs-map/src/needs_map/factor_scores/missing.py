@@ -22,9 +22,7 @@ import pandas as pd
 MissingPolicy = Literal["drop", "mean_impute"]
 
 
-def apply_missing_policy(
-    values: pd.Series, policy: MissingPolicy
-) -> tuple[pd.Series, pd.Series]:
+def apply_missing_policy(values: pd.Series, policy: MissingPolicy) -> tuple[pd.Series, pd.Series]:
     """Apply the per-axis missing-value policy and return (resolved, missing_flags).
 
     Args:

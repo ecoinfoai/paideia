@@ -122,9 +122,9 @@ class NeedsMapArgs(BaseModel):
     input_root: Path
     output_root: Path
     seed: int
-    created_at_utc: Annotated[
-        str, Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-    ] = Field(default_factory=_now_utc_iso)
+    created_at_utc: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")] = (
+        Field(default_factory=_now_utc_iso)
+    )
     k_override: Annotated[int, Field(ge=2, le=6)] | None = None
     llm_enabled: bool
     llm_provider: Literal["anthropic", "openai"]
@@ -160,18 +160,12 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _likert_columns_for_axis(
-    mapping: DiagnosticMappingConfig, axis_key: str
-) -> list[str]:
+def _likert_columns_for_axis(mapping: DiagnosticMappingConfig, axis_key: str) -> list[str]:
     return [c.source for c in mapping.columns if c.kind == "likert" and c.axis == axis_key]
 
 
-def _multiselect_columns_for_axis(
-    mapping: DiagnosticMappingConfig, axis_key: str
-) -> list[str]:
-    return [
-        c.source for c in mapping.columns if c.kind == "multiselect" and c.axis == axis_key
-    ]
+def _multiselect_columns_for_axis(mapping: DiagnosticMappingConfig, axis_key: str) -> list[str]:
+    return [c.source for c in mapping.columns if c.kind == "multiselect" and c.axis == axis_key]
 
 
 def _aggregate_for_axis(
@@ -334,9 +328,7 @@ def _run_phase_c(
             # ClusterReport V1 still requires k_used to appear in candidates when
             # k_used > 1, so compute silhouette specifically for the override k.
             try:
-                _, candidate_table = recommend_k(
-                    fs_df, candidate_k=[k_used], seed=args.seed
-                )
+                _, candidate_table = recommend_k(fs_df, candidate_k=[k_used], seed=args.seed)
             except ValueError:
                 candidate_table = []
             k_override_reason = (
@@ -378,9 +370,7 @@ def _run_phase_c(
         (cand.silhouette_score for cand in candidate_table if cand.k == k_used),
         None,
     )
-    weak_structure = (
-        silhouette_used is not None and silhouette_used < _WEAK_STRUCTURE_THRESHOLD
-    )
+    weak_structure = silhouette_used is not None and silhouette_used < _WEAK_STRUCTURE_THRESHOLD
 
     centroid_df = pd.DataFrame(centroids, columns=info["axes_used"])
 
@@ -528,9 +518,7 @@ def _emit_v011_exports(
         if cats:
             dictionary_lookup[(ft_row.student_id, area)] = cats
 
-    semester_str = next(
-        iter({r.get("semester") for r in fs_rows if r.get("semester")}), ""
-    )
+    semester_str = next(iter({r.get("semester") for r in fs_rows if r.get("semester")}), "")
     course_slug_str = next(
         iter({r.get("course_slug") for r in fs_rows if r.get("course_slug")}),
         "",
@@ -549,8 +537,7 @@ def _emit_v011_exports(
 
     summary_rows = build_axis_summary_rows(
         scale_reliability=[
-            r.model_dump() if hasattr(r, "model_dump") else r
-            for r in scale_reliability_rows
+            r.model_dump() if hasattr(r, "model_dump") else r for r in scale_reliability_rows
         ],
         factor_scores_long=[lr.model_dump() for lr in long_rows],
         auxiliary_columns={},
@@ -638,9 +625,7 @@ def _run_sentiment_phase(
 
     audit_rows: list[FreetextAuditRow] = []
     sentiment_lookup: dict[tuple[str, str], object] = {}
-    for (sid, source, redacted), result in zip(
-        redacted_lookup, sentiment_results, strict=True
-    ):
+    for (sid, source, redacted), result in zip(redacted_lookup, sentiment_results, strict=True):
         freetext_source = _freetext_source_for_column(source)
         if freetext_source is None:
             continue
@@ -652,9 +637,7 @@ def _run_sentiment_phase(
             and result.model_sha256 is not None
             and result.tokenizer_vocab_sha256 is not None
         ):
-            redacted_sha256 = hashlib.sha256(
-                redacted.encode("utf-8")
-            ).hexdigest()
+            redacted_sha256 = hashlib.sha256(redacted.encode("utf-8")).hexdigest()
             for token in result.tokens:
                 audit_rows.append(
                     FreetextAuditRow(
@@ -728,9 +711,7 @@ def _build_font_resolution_info() -> FontResolutionInfo:
     """
     regular_path, bold_path = resolve_korean_font_paths()
     regular_source = (
-        "env-var-PAIDEIA_KR_FONT_PATH"
-        if os.environ.get("PAIDEIA_KR_FONT_PATH")
-        else "fc-match"
+        "env-var-PAIDEIA_KR_FONT_PATH" if os.environ.get("PAIDEIA_KR_FONT_PATH") else "fc-match"
     )
     bold_source = (
         "env-var-PAIDEIA_KR_FONT_BOLD_PATH"
@@ -751,9 +732,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
     Phase A+B wired (T056); Phase C deferred to T074, Phase D-F to T105.
     """
     if not isinstance(args, NeedsMapArgs):
-        raise TypeError(
-            f"run_needs_map: expected NeedsMapArgs, got {type(args).__name__}."
-        )
+        raise TypeError(f"run_needs_map: expected NeedsMapArgs, got {type(args).__name__}.")
 
     if not args.phases:
         raise ValueError("run_needs_map: args.phases must be non-empty.")
@@ -768,9 +747,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
 
     archive_label = archive_previous_run(silver) if not args.dry_run else None
 
-    declared_axes = list(
-        dict.fromkeys(list(mapping.axes.required) + list(mapping.axes.optional))
-    )
+    declared_axes = list(dict.fromkeys(list(mapping.axes.required) + list(mapping.axes.optional)))
     standard_axes_used = [a for a in _STANDARD_AXES if a in declared_axes]
     standard_axes_skipped = [a for a in _STANDARD_AXES if a not in standard_axes_used]
 
@@ -790,22 +767,16 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         sr_df = _scale_reliability_rows_to_df(report.rows)
         if not args.dry_run:
             _write_silver_atomic(silver, "scale_reliability.parquet", sr_df)
-        rows_per_phase.append(
-            NeedsMapPhaseRowCount(phase="A", rows_written=len(report.rows))
-        )
+        rows_per_phase.append(NeedsMapPhaseRowCount(phase="A", rows_written=len(report.rows)))
         phases_executed.append("A")
 
     if "B" in args.phases:
-        fs_rows = _build_factor_score_rows(
-            diag_df, master_df, mapping, standard_axes_used
-        )
+        fs_rows = _build_factor_score_rows(diag_df, master_df, mapping, standard_axes_used)
         _validate_factor_score_rows(fs_rows)
         fs_df = _factor_score_rows_to_df(fs_rows)
         if not args.dry_run:
             _write_silver_atomic(silver, "factor_scores.parquet", fs_df)
-        rows_per_phase.append(
-            NeedsMapPhaseRowCount(phase="B", rows_written=len(fs_df))
-        )
+        rows_per_phase.append(NeedsMapPhaseRowCount(phase="B", rows_written=len(fs_df)))
         phases_executed.append("B")
 
     cluster_report: ClusterReport | None = None
@@ -813,9 +784,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         # Phase C requires Phase B output. fs_df is in scope from above when B was
         # requested; if B was skipped (degenerate caller) we synthesize on the fly.
         if "B" not in args.phases:
-            fs_rows = _build_factor_score_rows(
-                diag_df, master_df, mapping, standard_axes_used
-            )
+            fs_rows = _build_factor_score_rows(diag_df, master_df, mapping, standard_axes_used)
             _validate_factor_score_rows(fs_rows)
             fs_df = _factor_score_rows_to_df(fs_rows)
 
@@ -851,13 +820,9 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         if args.llm_enabled and any(r.match_source == "uncategorized" for r in free_text_rows):
             client = _make_llm_client_or_none(args)
             if client is not None:
-                raw_lookup = {
-                    (sid, item_id): raw for sid, item_id, raw in responses
-                }
+                raw_lookup = {(sid, item_id): raw for sid, item_id, raw in responses}
                 allowed = [entry.category for entry in keyword_dict.entries]
-                names = [
-                    n for n in master_df["name_kr"].dropna().tolist() if n
-                ]
+                names = [n for n in master_df["name_kr"].dropna().tolist() if n]
                 free_text_rows = classify_with_llm_fallback(
                     free_text_rows,
                     raw_lookup,
@@ -888,16 +853,12 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         sentiment_info, freetext_sentiment = _run_sentiment_phase(
             responses=responses,
             silver_dir=silver,
-            student_names=[
-                n for n in master_df["name_kr"].dropna().tolist() if n
-            ],
+            student_names=[n for n in master_df["name_kr"].dropna().tolist() if n],
             roberta_enabled=args.roberta_enabled,
             dry_run=args.dry_run,
         )
 
-        rows_per_phase.append(
-            NeedsMapPhaseRowCount(phase="D", rows_written=len(free_text_rows))
-        )
+        rows_per_phase.append(NeedsMapPhaseRowCount(phase="D", rows_written=len(free_text_rows)))
         phases_executed.append("D")
 
     # Group means in z-space (always 0 by construction; pre-computed for downstream)
@@ -910,9 +871,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
             gold.mkdir(parents=True, exist_ok=True)
         # Build distributions + partition comparisons
         if "B" not in args.phases:
-            fs_rows = _build_factor_score_rows(
-                diag_df, master_df, mapping, standard_axes_used
-            )
+            fs_rows = _build_factor_score_rows(diag_df, master_df, mapping, standard_axes_used)
             _validate_factor_score_rows(fs_rows)
             fs_df = _factor_score_rows_to_df(fs_rows)
         distributions = compute_axis_distributions(fs_df)
@@ -958,9 +917,7 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
             new_outputs = _emit_v011_exports(
                 gold_dir=gold,
                 fs_rows=fs_rows,
-                scale_reliability_rows=(
-                    list(report.rows) if "A" in args.phases else []
-                ),
+                scale_reliability_rows=(list(report.rows) if "A" in args.phases else []),
                 free_text_rows=free_text_rows,
                 cluster_report=cluster_report,
                 cohort_size=len(fs_rows),
@@ -996,30 +953,30 @@ def run_needs_map(args: NeedsMapArgs) -> NeedsMapManifest:
         if not args.dry_run:
             gold.mkdir(parents=True, exist_ok=True)
         if "B" not in args.phases:
-            fs_rows = _build_factor_score_rows(
-                diag_df, master_df, mapping, standard_axes_used
-            )
+            fs_rows = _build_factor_score_rows(diag_df, master_df, mapping, standard_axes_used)
             _validate_factor_score_rows(fs_rows)
             fs_df = _factor_score_rows_to_df(fs_rows)
         client = _make_llm_client_or_none(args) if args.llm_enabled else None
-        cards_count = generate_all_cards(
-            factor_scores_df=fs_df,
-            student_master_df=master_df,
-            cluster_report=cluster_report,
-            free_text_rows=free_text_rows,
-            group_means=group_means_z,
-            semester=args.semester,
-            course_name_kr=mapping.metadata.course_name_kr or args.course_slug,
-            output_dir=gold / "cards",
-            created_at_utc=args.created_at_utc,
-            llm_client=client,
-            llm_tracker=tracker,
-            llm_model=args.llm_model,
-            llm_retries=args.llm_retries,
-        ) if not args.dry_run else 0
-        rows_per_phase.append(
-            NeedsMapPhaseRowCount(phase="F", rows_written=cards_count)
+        cards_count = (
+            generate_all_cards(
+                factor_scores_df=fs_df,
+                student_master_df=master_df,
+                cluster_report=cluster_report,
+                free_text_rows=free_text_rows,
+                group_means=group_means_z,
+                semester=args.semester,
+                course_name_kr=mapping.metadata.course_name_kr or args.course_slug,
+                output_dir=gold / "cards",
+                created_at_utc=args.created_at_utc,
+                llm_client=client,
+                llm_tracker=tracker,
+                llm_model=args.llm_model,
+                llm_retries=args.llm_retries,
+            )
+            if not args.dry_run
+            else 0
         )
+        rows_per_phase.append(NeedsMapPhaseRowCount(phase="F", rows_written=cards_count))
         phases_executed.append("F")
 
     # ------------------------------------------- assemble manifest + write

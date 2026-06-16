@@ -37,9 +37,7 @@ def cohen_d(group1: Sequence[float] | np.ndarray, group2: Sequence[float] | np.n
     n1, n2 = g1.size, g2.size
 
     if n1 < 2 or n2 < 2:
-        raise ValueError(
-            f"cohen_d: each group needs n ≥ 2 (got n1={n1}, n2={n2})"
-        )
+        raise ValueError(f"cohen_d: each group needs n ≥ 2 (got n1={n1}, n2={n2})")
 
     s1 = float(g1.std(ddof=1))
     s2 = float(g2.std(ddof=1))
@@ -48,8 +46,7 @@ def cohen_d(group1: Sequence[float] | np.ndarray, group2: Sequence[float] | np.n
 
     if s_pooled == 0.0:
         raise ValueError(
-            "cohen_d: pooled SD is zero — both groups appear constant; "
-            "effect size undefined"
+            "cohen_d: pooled SD is zero — both groups appear constant; effect size undefined"
         )
 
     return (float(g1.mean()) - float(g2.mean())) / s_pooled
@@ -76,9 +73,7 @@ def eta_squared(ss_between: float, ss_within: float) -> float:
         )
     total = ss_between + ss_within
     if total == 0.0:
-        raise ValueError(
-            "eta_squared: ss_between + ss_within is zero — η² undefined"
-        )
+        raise ValueError("eta_squared: ss_between + ss_within is zero — η² undefined")
     return ss_between / total
 
 
@@ -137,15 +132,11 @@ def r_squared(
     yh = np.asarray(y_pred, dtype=float)
 
     if y.shape != yh.shape:
-        raise ValueError(
-            f"r_squared: y_true/y_pred length mismatch ({y.shape} vs {yh.shape})"
-        )
+        raise ValueError(f"r_squared: y_true/y_pred length mismatch ({y.shape} vs {yh.shape})")
 
     ss_tot = float(((y - y.mean()) ** 2).sum())
     if ss_tot == 0.0:
-        raise ValueError(
-            "r_squared: y_true is constant (ss_tot=0) — R² undefined"
-        )
+        raise ValueError("r_squared: y_true is constant (ss_tot=0) — R² undefined")
 
     ss_res = float(((y - yh) ** 2).sum())
     return 1.0 - ss_res / ss_tot

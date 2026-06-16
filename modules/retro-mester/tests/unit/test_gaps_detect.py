@@ -119,7 +119,13 @@ def _make_item(
         top_distractor_no=None,
         top_distractor_rate=None,
         is_top_distractor_adjacent=False,
-        option_distribution={1: correct_rate, 2: (1 - correct_rate) / 4, 3: (1 - correct_rate) / 4, 4: (1 - correct_rate) / 4, 5: (1 - correct_rate) / 4},
+        option_distribution={
+            1: correct_rate,
+            2: (1 - correct_rate) / 4,
+            3: (1 - correct_rate) / 4,
+            4: (1 - correct_rate) / 4,
+            5: (1 - correct_rate) / 4,
+        },
         distractor_label="특이사항 없음",
     )
 

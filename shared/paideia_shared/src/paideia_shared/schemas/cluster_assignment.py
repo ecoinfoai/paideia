@@ -63,9 +63,7 @@ class ClusterReport(BaseModel):
     def v1_candidates_match_k_range(self) -> Self:
         """``k_used > 1`` requires the candidate table to contain that k."""
         if self.k_used > 1 and not any(c.k == self.k_used for c in self.candidates):
-            raise ValueError(
-                f"ClusterReport V1: k_used={self.k_used} not present in candidates."
-            )
+            raise ValueError(f"ClusterReport V1: k_used={self.k_used} not present in candidates.")
         return self
 
     @model_validator(mode="after")

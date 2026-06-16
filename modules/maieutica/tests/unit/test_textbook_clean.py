@@ -137,9 +137,7 @@ class TestNoiseRemoval:
     def test_captions_in_removed_spans(self) -> None:
         """Removed figure/table captions appear in removed_spans."""
         _, removed = _clean(FIXTURE_LINES)
-        assert any(
-            "caption" in r.lower() or "그림" in r or "표" in r for r in removed
-        )
+        assert any("caption" in r.lower() or "그림" in r or "표" in r for r in removed)
 
     def test_footnote_removed(self) -> None:
         """Lines starting with '†' (footnote marker) are removed."""
@@ -353,9 +351,7 @@ class TestLoadCleanChain:
     even when earlier lines were removed by cleaning.
     """
 
-    def test_kept_line_keeps_original_lineno_after_chain(
-        self, tmp_path: Path
-    ) -> None:
+    def test_kept_line_keeps_original_lineno_after_chain(self, tmp_path: Path) -> None:
         """A surviving body line carries its ORIGINAL lineno through the chain.
 
         FIXTURE_LINES has noise on lines 1–5, 9, 11, 13 (etc.) that the cleaner

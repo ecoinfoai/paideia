@@ -65,9 +65,7 @@ def compute_overall_summary(
         )
 
     if exam_result_df.empty:
-        raise ValueError(
-            "compute_overall_summary: exam_result_df is empty but n_responders > 0"
-        )
+        raise ValueError("compute_overall_summary: exam_result_df is empty but n_responders > 0")
 
     scores = exam_result_df["exam_total_score"].dropna().to_numpy(dtype=float)
     if scores.size == 0:
@@ -88,9 +86,7 @@ def compute_overall_summary(
         mean_100 = mean / max_score * 100.0
         sd_100 = sd / max_score * 100.0
     else:
-        raise ValueError(
-            f"compute_overall_summary: max_score must be > 0, got {max_score}"
-        )
+        raise ValueError(f"compute_overall_summary: max_score must be > 0, got {max_score}")
 
     values: dict[str, float | int] = {
         "응시자 수": n_responders,

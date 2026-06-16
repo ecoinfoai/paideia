@@ -13,6 +13,7 @@ import pytest
 # Path convention helpers
 # ---------------------------------------------------------------------------
 
+
 class TestDataPaths:
     def test_bronze_dir_convention(self, tmp_path: Path) -> None:
         from examen.output.paths import bronze_dir
@@ -44,6 +45,7 @@ class TestDataPaths:
 # ---------------------------------------------------------------------------
 # atomic_write
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicWrite:
     def test_successful_write_produces_file(self, tmp_path: Path) -> None:
@@ -107,6 +109,7 @@ class TestAtomicWrite:
 # ---------------------------------------------------------------------------
 # Output separation (run-versioned Gold paths)
 # ---------------------------------------------------------------------------
+
 
 class TestOutputSeparation:
     def test_run_gold_path_differs_per_run_id(self, tmp_path: Path) -> None:

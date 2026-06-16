@@ -98,9 +98,7 @@ class EvidenceIndex:
         idx._chunks = list(chunks)
         # Char offset of line N (1-based) = sum(len(line_k) + 1 for k < N).
         # accumulate over (len + 1), prefixed with 0 for the first line.
-        idx._line_char_start = [0, *accumulate(len(line) + 1 for line in lines)][
-            : len(lines)
-        ]
+        idx._line_char_start = [0, *accumulate(len(line) + 1 for line in lines)][: len(lines)]
         return idx
 
     def _chunk_id_for_line(self, lineno: int) -> str | None:
@@ -129,9 +127,7 @@ class EvidenceIndex:
         stripped = text.strip()
         return term in text or (bool(stripped) and stripped in term)
 
-    def lookup(
-        self, term: str, *, chunk_id: str | None = None
-    ) -> MaieuticaTextbookEvidence:
+    def lookup(self, term: str, *, chunk_id: str | None = None) -> MaieuticaTextbookEvidence:
         """Locate ``term`` and return its groundedness evidence.
 
         Two match modes by line, both scanning in ascending line order and

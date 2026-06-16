@@ -57,10 +57,7 @@ def test_fitting_combined_returned_unchanged() -> None:
 
     item = _candidate("오답 설명", "도약 설명")
     # A generous max_len that the combined already fits within.
-    assert (
-        lms_answer_explanation(item, max_len=1000)
-        == item.answer_explanation_combined
-    )
+    assert lms_answer_explanation(item, max_len=1000) == item.answer_explanation_combined
 
 
 def test_overflow_truncates_leap_first_keeping_wrong_intact() -> None:

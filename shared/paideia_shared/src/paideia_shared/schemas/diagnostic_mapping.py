@@ -70,8 +70,7 @@ class MappingColumn(BaseModel):
                 )
         elif self.axis is None:
             raise ValueError(
-                f"MappingColumn V1: kind={self.kind!r} requires axis "
-                f"(source={self.source!r})."
+                f"MappingColumn V1: kind={self.kind!r} requires axis (source={self.source!r})."
             )
         return self
 

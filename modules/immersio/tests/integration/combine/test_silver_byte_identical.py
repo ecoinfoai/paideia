@@ -19,7 +19,6 @@ from types import ModuleType
 
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.combine.joiner import join_silver_phase3
 from immersio.combine.silver_writer import write_combined_silver
 
@@ -27,9 +26,7 @@ from immersio.combine.silver_writer import write_combined_silver
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -40,22 +37,16 @@ def _load_builder() -> ModuleType:
 def _run_pipe(*, fixture_root: Path, output: Path) -> None:
     nm = fixture_root / "silver" / "needs-map" / "2026-1-anatomy"
     im = fixture_root / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
 
     df, _ = join_silver_phase3(
         student_master=pq.read_table(im / "student_master.parquet").to_pandas(),
         factor_scores=pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        cluster_assignment=pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        cluster_assignment=pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         cluster_names=cluster_names,
         student_metrics=pq.read_table(im / "학생지표.parquet").to_pandas(),
-        diagnostic_response=pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        diagnostic_response=pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     )
     write_combined_silver(df, output)
 
@@ -79,8 +70,7 @@ def test_full_pipe_byte_identical(tmp_path_factory: pytest.TempPathFactory) -> N
     bytes1 = out1.read_bytes()
     bytes2 = out2.read_bytes()
     assert bytes1 == bytes2, (
-        f"byte-identical violation — len(run1)={len(bytes1)}, "
-        f"len(run2)={len(bytes2)}"
+        f"byte-identical violation — len(run1)={len(bytes1)}, len(run2)={len(bytes2)}"
     )
 
 
@@ -94,22 +84,16 @@ def test_same_input_two_writes_byte_identical(
 
     nm = root / "silver" / "needs-map" / "2026-1-anatomy"
     im = root / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
 
     df, _ = join_silver_phase3(
         student_master=pq.read_table(im / "student_master.parquet").to_pandas(),
         factor_scores=pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        cluster_assignment=pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        cluster_assignment=pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         cluster_names=cluster_names,
         student_metrics=pq.read_table(im / "학생지표.parquet").to_pandas(),
-        diagnostic_response=pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        diagnostic_response=pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     )
 
     out1 = tmp_path / "twice1.parquet"

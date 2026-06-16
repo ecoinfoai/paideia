@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import io
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 import matplotlib
 
@@ -32,6 +33,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 from paideia_shared.schemas import HistogramBin, MetadataAggregate  # noqa: E402
 
 from .. import fonts as _fonts  # noqa: E402
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 
 PNG_METADATA: dict[str, str] = {"Software": "paideia"}
 _DPI = 150
@@ -43,13 +47,11 @@ def _ensure_korean_font() -> str:
     return _fonts.register_for_matplotlib(regular_path)
 
 
-def _save(fig, output_path: Path) -> None:
+def _save(fig: Figure, output_path: Path) -> None:
     """Save ``fig`` to ``output_path`` with the deterministic kwargs."""
     output_path = Path(output_path)
     if not output_path.parent.is_dir():
-        raise FileNotFoundError(
-            f"render figure: parent directory missing: {output_path.parent}"
-        )
+        raise FileNotFoundError(f"render figure: parent directory missing: {output_path.parent}")
     # Render to a buffer first so the on-disk write is one atomic
     # operation; this also lets two consecutive calls share the same
     # internal byte stream regardless of OS-level write timing.

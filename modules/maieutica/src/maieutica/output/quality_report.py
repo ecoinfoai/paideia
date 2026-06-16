@@ -201,9 +201,7 @@ def build_quality_report(
         lines.append("")
     else:
         confirmed = sum(
-            1
-            for i in quiz_items
-            if i.textbook_evidence and i.textbook_evidence.status == "확인"
+            1 for i in quiz_items if i.textbook_evidence and i.textbook_evidence.status == "확인"
         )
         unconfirmed = quiz_total - confirmed
         conf_ratio = confirmed / quiz_total
@@ -246,17 +244,13 @@ def build_quality_report(
     lines.append("## 주의 항목")
     lines.append("")
     option_violations = sum(1 for i in quiz_items if not i.option_length_ok)
-    explanation_violations = sum(
-        1 for i in quiz_items if not i.explanation_length_ok
-    )
+    explanation_violations = sum(1 for i in quiz_items if not i.explanation_length_ok)
     duplicate_count = sum(1 for i in quiz_items if i.duplicate_flag)
 
     lines.append("| 항목 | 건수 |")
     lines.append("|------|------|")
     lines.append(f"| 보기 길이 위반 (option_length_violations) | {option_violations} |")
-    lines.append(
-        f"| 설명 길이 위반 (explanation_length_violations) | {explanation_violations} |"
-    )
+    lines.append(f"| 설명 길이 위반 (explanation_length_violations) | {explanation_violations} |")
     lines.append(f"| 중복 문항 (duplicate_count) | {duplicate_count} |")
     lines.append("")
 
@@ -329,13 +323,9 @@ def _append_shortfall_sections(lines: list[str], shortfall: QuizShortfall) -> No
                 f"→ {shortfall.capacity_short}건 미달"
             )
         if shortfall.dedup_removed > 0:
-            lines.append(
-                f"- 정답 앵커 중복 제거 {shortfall.dedup_removed}건"
-            )
+            lines.append(f"- 정답 앵커 중복 제거 {shortfall.dedup_removed}건")
         if shortfall.unconfirmed_excluded > 0:
-            lines.append(
-                f"- 정답 근거 앵커 미확인 제외 {shortfall.unconfirmed_excluded}건"
-            )
+            lines.append(f"- 정답 근거 앵커 미확인 제외 {shortfall.unconfirmed_excluded}건")
         lines.append("")
 
 

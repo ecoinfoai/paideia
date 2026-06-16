@@ -55,34 +55,34 @@ from examen.output.paths import atomic_write
 # ---------------------------------------------------------------------------
 
 _HEADERS = [
-    "번호",           # 1
-    "출처",           # 2
+    "번호",  # 1
+    "출처",  # 2
     "원본출처식별자",  # 3
-    "챕터",           # 4
-    "절",             # 5
-    "주차",           # 6
-    "핵심개념",        # 7
-    "강조여부",        # 8
-    "문제유형",        # 9
-    "난이도",          # 10
-    "문두방향",        # 11
-    "문제",           # 12
-    "보기1",          # 13
-    "보기2",          # 14
-    "보기3",          # 15
-    "보기4",          # 16
-    "보기5",          # 17
-    "정답",           # 18
+    "챕터",  # 4
+    "절",  # 5
+    "주차",  # 6
+    "핵심개념",  # 7
+    "강조여부",  # 8
+    "문제유형",  # 9
+    "난이도",  # 10
+    "문두방향",  # 11
+    "문제",  # 12
+    "보기1",  # 13
+    "보기2",  # 14
+    "보기3",  # 15
+    "보기4",  # 16
+    "보기5",  # 17
+    "정답",  # 18
     "보기별오답근거",  # 19
-    "오답설명",        # 20
-    "도약설명",        # 21
-    "교재근거위치",    # 22
-    "출제의도",        # 23
+    "오답설명",  # 20
+    "도약설명",  # 21
+    "교재근거위치",  # 22
+    "출제의도",  # 23
     "보기글자수검증",  # 24
-    "중복플래그",      # 25
-    "문제검증",        # 26
-    "채택상태",        # 27
-    "비고",           # 28
+    "중복플래그",  # 25
+    "문제검증",  # 26
+    "채택상태",  # 27
+    "비고",  # 28
 ]
 
 if len(_HEADERS) != 28:  # pragma: no cover
@@ -141,40 +141,41 @@ def _row_values(item: ExamItemDraft) -> list[object]:
     distractor_joined = "\n".join(item.distractor_rationale)
 
     return [
-        item.item_no,                                           # 1  번호
-        _SOURCE_LABELS.get(item.source, item.source),          # 2  출처
-        item.source_ref or "",                                  # 3  원본출처식별자
-        item.chapter,                                           # 4  챕터
-        item.section or "",                                     # 5  절
-        item.week,                                              # 6  주차
-        item.key_concept or "",                                 # 7  핵심개념
-        _emphasis_label(item),                                  # 8  강조여부
-        item.question_type,                                     # 9  문제유형
-        item.difficulty,                                        # 10 난이도
-        item.stem_polarity,                                     # 11 문두방향
-        item.text,                                              # 12 문제
-        options[0],                                             # 13 보기1
-        options[1],                                             # 14 보기2
-        options[2],                                             # 15 보기3
-        options[3],                                             # 16 보기4
-        options[4],                                             # 17 보기5
-        item.answer_no,                                         # 18 정답
-        distractor_joined,                                      # 19 보기별오답근거
-        item.wrong_explanation,                                 # 20 오답설명
-        item.leap_explanation,                                  # 21 도약설명
-        _evidence_cell(item),                                   # 22 교재근거위치
-        item.intent,                                            # 23 출제의도
-        _option_length_label(item),                             # 24 보기글자수검증
-        item.duplicate_flag,                                    # 25 중복플래그
-        item.review_note,                                       # 26 문제검증
-        item.adoption_status,                                   # 27 채택상태
-        item.note or "",                                        # 28 비고
+        item.item_no,  # 1  번호
+        _SOURCE_LABELS.get(item.source, item.source),  # 2  출처
+        item.source_ref or "",  # 3  원본출처식별자
+        item.chapter,  # 4  챕터
+        item.section or "",  # 5  절
+        item.week,  # 6  주차
+        item.key_concept or "",  # 7  핵심개념
+        _emphasis_label(item),  # 8  강조여부
+        item.question_type,  # 9  문제유형
+        item.difficulty,  # 10 난이도
+        item.stem_polarity,  # 11 문두방향
+        item.text,  # 12 문제
+        options[0],  # 13 보기1
+        options[1],  # 14 보기2
+        options[2],  # 15 보기3
+        options[3],  # 16 보기4
+        options[4],  # 17 보기5
+        item.answer_no,  # 18 정답
+        distractor_joined,  # 19 보기별오답근거
+        item.wrong_explanation,  # 20 오답설명
+        item.leap_explanation,  # 21 도약설명
+        _evidence_cell(item),  # 22 교재근거위치
+        item.intent,  # 23 출제의도
+        _option_length_label(item),  # 24 보기글자수검증
+        item.duplicate_flag,  # 25 중복플래그
+        item.review_note,  # 26 문제검증
+        item.adoption_status,  # 27 채택상태
+        item.note or "",  # 28 비고
     ]
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def write_xlsx(items: list[ExamItemDraft], path: Path) -> None:
     """Write exam items to an xlsx file with the canonical 28-column layout.
@@ -191,6 +192,7 @@ def write_xlsx(items: list[ExamItemDraft], path: Path) -> None:
         runs — openpyxl stamps ``<dcterms:modified>`` with the current time.
         Always pair with ``finalize_xlsx``.
     """
+
     def _write(tmp: Path) -> None:
         wb = openpyxl.Workbook()
         ws = wb.active

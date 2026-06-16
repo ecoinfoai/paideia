@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import argparse
 import io
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-
-import pytest
+from datetime import datetime, timedelta, timezone
 
 from immersio.email.log import append_dispatch_log_rows
 from immersio.email.pipeline import run_email_dispatch
@@ -71,9 +68,7 @@ class _CountingDispatcher:
         )
 
 
-def _seed_row(
-    sid: str, status: DispatchStatus, error_kind: str = ""
-) -> DispatchLogRow:
+def _seed_row(sid: str, status: DispatchStatus, error_kind: str = "") -> DispatchLogRow:
     return DispatchLogRow(
         student_id=sid,
         name_kr="홍길동",
@@ -83,9 +78,7 @@ def _seed_row(
         attempt_at_kst=datetime(2026, 4, 30, 12, 0, 0, tzinfo=KST),
         mode=DispatchMode.PRODUCTION,
         status=status,
-        smtp_message_id="<x@example.ac.kr>"
-        if status == DispatchStatus.SUCCESS
-        else "",
+        smtp_message_id="<x@example.ac.kr>" if status == DispatchStatus.SUCCESS else "",
         error_kind=error_kind,
         error_detail="",
         exam_name="중간고사",
@@ -93,9 +86,7 @@ def _seed_row(
     )
 
 
-def test_retry_failed_only_failed_and_temporary(
-    email_fixture, monkeypatch
-) -> None:
+def test_retry_failed_only_failed_and_temporary(email_fixture, monkeypatch) -> None:
     """--retry-failed: only failed + temporary_failure students re-tried."""
     sids = [s[0] for s in email_fixture["students"]]
     # Seed: success/success/failed/temporary_failure/skipped
@@ -106,24 +97,18 @@ def test_retry_failed_only_failed_and_temporary(
         [
             _seed_row(sids[0], DispatchStatus.SUCCESS),
             _seed_row(sids[1], DispatchStatus.SUCCESS),
-            _seed_row(
-                sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"
-            ),
+            _seed_row(sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"),
             _seed_row(
                 sids[3],
                 DispatchStatus.TEMPORARY_FAILURE,
                 error_kind="gmail_api_rate_limit",
             ),
-            _seed_row(
-                sids[4], DispatchStatus.SKIPPED, error_kind="invalid_email"
-            ),
+            _seed_row(sids[4], DispatchStatus.SKIPPED, error_kind="invalid_email"),
         ],
     )
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args(retry_failed=True))
     assert rc == 0
 

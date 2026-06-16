@@ -40,9 +40,7 @@ def aggregate_axis(
             ``axis_columns``.
     """
     if kind not in ("mean", "sum"):
-        raise ValueError(
-            f"aggregate_axis: kind={kind!r} not in {{'mean', 'sum'}} (FR-006)."
-        )
+        raise ValueError(f"aggregate_axis: kind={kind!r} not in {{'mean', 'sum'}} (FR-006).")
     if not axis_columns:
         raise ValueError("aggregate_axis: axis_columns must be non-empty.")
 

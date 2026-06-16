@@ -22,9 +22,7 @@ def sha256_file(path: Path) -> str:
         FileNotFoundError: If the file does not exist (propagated from open).
     """
     if not isinstance(path, Path):
-        raise TypeError(
-            f"sha256_file: expected pathlib.Path, got {type(path).__name__}."
-        )
+        raise TypeError(f"sha256_file: expected pathlib.Path, got {type(path).__name__}.")
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         while True:

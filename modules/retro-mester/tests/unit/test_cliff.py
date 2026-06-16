@@ -46,7 +46,8 @@ def _make_item(
         top_distractor_rate=0.20,
         is_top_distractor_adjacent=False,
         option_distribution={1: correct_rate, 2: 0.2, 3: 0.2, 4: 0.3, 5: 0.3 - correct_rate}
-        if correct_rate <= 0.7 else {1: correct_rate, 2: 0.1, 3: 0.1, 4: 0.1, 5: 0.7 - correct_rate},
+        if correct_rate <= 0.7
+        else {1: correct_rate, 2: 0.1, 3: 0.1, 4: 0.1, 5: 0.7 - correct_rate},
         distractor_label="특이사항 없음",
     )
 
@@ -167,8 +168,8 @@ class TestDetectCliff:
 
         items = [
             _make_item(1, "1장", "지식축적", 0.85),
-            _make_item(2, "1장", "이해", 0.60),   # 0.85 - 0.60 = 0.25 > 0.15
-            _make_item(3, "1장", "적용", 0.45),   # 0.85 - 0.45 = 0.40 > 0.15
+            _make_item(2, "1장", "이해", 0.60),  # 0.85 - 0.60 = 0.25 > 0.15
+            _make_item(3, "1장", "적용", 0.45),  # 0.85 - 0.45 = 0.40 > 0.15
         ]
         config = _make_config(cliff_drop=0.15)
         result = detect_cliff(items, config)
@@ -194,9 +195,9 @@ class TestDetectCliff:
 
         items = [
             _make_item(1, "1장", "지식축적", 0.80),
-            _make_item(2, "1장", "이해", 0.50),   # cliff
+            _make_item(2, "1장", "이해", 0.50),  # cliff
             _make_item(3, "2장", "지식축적", 0.80),
-            _make_item(4, "2장", "이해", 0.75),   # no cliff
+            _make_item(4, "2장", "이해", 0.75),  # no cliff
         ]
         config = _make_config(cliff_drop=0.15)
         result = detect_cliff(items, config)

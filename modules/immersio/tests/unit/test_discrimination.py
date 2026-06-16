@@ -9,11 +9,9 @@ Spec 004 research §R-03 — 27% top/bottom + 동점자 포함 + point-biserial:
 
 from __future__ import annotations
 
+import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
 import numpy as np
 import pytest
-
-import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
 from immersio.analysis.discrimination import compute_discrimination  # noqa: E402
 
 
@@ -90,7 +88,7 @@ def test_discrimination_point_biserial_present() -> None:
 def test_discrimination_constant_correctness_returns_zero_d() -> None:
     """모든 학생이 정답이면 D=0, point_biserial=None (constant binary)."""
     total_scores = {f"S{i}": float(i) for i in range(10)}
-    item_responses = {1: {sid: 1 for sid in total_scores}}
+    item_responses = {1: dict.fromkeys(total_scores, 1)}
     out = compute_discrimination(item_responses, total_scores, top_pct=0.27)
     assert out[1].discrimination_index == pytest.approx(0.0)
     assert out[1].point_biserial is None

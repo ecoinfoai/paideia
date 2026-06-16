@@ -466,9 +466,7 @@ class TestLoadExamSpec:
         from retro_mester.load.examen import load_exam_spec
 
         bronze = tmp_path / "bronze"
-        bp_path, cm_path = self._write_pair(
-            bronze, bp_semester="2025-2", cm_semester="2025-2"
-        )
+        bp_path, cm_path = self._write_pair(bronze, bp_semester="2025-2", cm_semester="2025-2")
 
         with pytest.raises(InputError) as exc_info:
             load_exam_spec(bp_path, cm_path, semester="2026-1", course_slug="anatomy")
@@ -479,16 +477,11 @@ class TestLoadExamSpec:
         from retro_mester.load.examen import load_exam_spec
 
         bronze = tmp_path / "bronze"
-        bp_path, cm_path = self._write_pair(
-            bronze, bp_course="physiology", cm_course="physiology"
-        )
+        bp_path, cm_path = self._write_pair(bronze, bp_course="physiology", cm_course="physiology")
 
         with pytest.raises(InputError) as exc_info:
             load_exam_spec(bp_path, cm_path, semester="2026-1", course_slug="anatomy")
-        assert (
-            "physiology" in str(exc_info.value)
-            or "course_slug" in str(exc_info.value).lower()
-        )
+        assert "physiology" in str(exc_info.value) or "course_slug" in str(exc_info.value).lower()
 
 
 # ---------------------------------------------------------------------------

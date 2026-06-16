@@ -102,8 +102,7 @@ class TestFinalizeXlsx:
         def _inject_core(path: Path, ts: str) -> None:
             with zipfile.ZipFile(path, "r") as src:
                 members = [
-                    (i.filename, src.read(i.filename), i.compress_type)
-                    for i in src.infolist()
+                    (i.filename, src.read(i.filename), i.compress_type) for i in src.infolist()
                 ]
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as dst:
@@ -282,11 +281,7 @@ class TestConfigTemplates:
 
         import yaml
 
-        template_path = (
-            Path(__file__).parent.parent.parent
-            / "templates"
-            / "quiz_column_map.yaml"
-        )
+        template_path = Path(__file__).parent.parent.parent / "templates" / "quiz_column_map.yaml"
         assert template_path.exists(), f"Template not found: {template_path}"
         data = yaml.safe_load(template_path.read_text(encoding="utf-8"))
 
@@ -315,11 +310,7 @@ class TestConfigTemplates:
 
         import yaml
 
-        template_path = (
-            Path(__file__).parent.parent.parent
-            / "templates"
-            / "quiz_column_map.yaml"
-        )
+        template_path = Path(__file__).parent.parent.parent / "templates" / "quiz_column_map.yaml"
         data = yaml.safe_load(template_path.read_text(encoding="utf-8"))
         columns = data["columns"]
 
@@ -337,11 +328,7 @@ class TestConfigTemplates:
         """prompt_quiz.txt contains all documented {named} placeholders."""
         from pathlib import Path
 
-        template_path = (
-            Path(__file__).parent.parent.parent
-            / "templates"
-            / "prompt_quiz.txt"
-        )
+        template_path = Path(__file__).parent.parent.parent / "templates" / "prompt_quiz.txt"
         assert template_path.exists()
         content = template_path.read_text(encoding="utf-8")
 
@@ -357,19 +344,13 @@ class TestConfigTemplates:
             "{question_type}",
         }
         for placeholder in required:
-            assert placeholder in content, (
-                f"Missing placeholder {placeholder} in prompt_quiz.txt"
-            )
+            assert placeholder in content, f"Missing placeholder {placeholder} in prompt_quiz.txt"
 
     def test_prompt_formative_contains_required_placeholders(self) -> None:
         """prompt_formative.txt contains all documented {named} placeholders."""
         from pathlib import Path
 
-        template_path = (
-            Path(__file__).parent.parent.parent
-            / "templates"
-            / "prompt_formative.txt"
-        )
+        template_path = Path(__file__).parent.parent.parent / "templates" / "prompt_formative.txt"
         assert template_path.exists()
         content = template_path.read_text(encoding="utf-8")
 

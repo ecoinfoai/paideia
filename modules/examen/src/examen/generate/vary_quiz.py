@@ -99,9 +99,7 @@ def _build_prompt(entry: SourceInventoryEntry) -> str:
         Formatted prompt string for the LLM.
     """
     options = entry.options or []
-    options_text = "\n".join(
-        f"{i+1}. {opt}" for i, opt in enumerate(options)
-    )
+    options_text = "\n".join(f"{i + 1}. {opt}" for i, opt in enumerate(options))
     return _PROMPT_TEMPLATE.format(
         source_ref=entry.source_ref,
         original_answer=entry.answer or "?",
@@ -174,8 +172,7 @@ def _parse_answer_no(value: object, source_ref: str) -> int:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"vary_quiz: {source_ref!r} has a malformed 'answer_no' "
-            f"value {value!r} (expected 1-5)."
+            f"vary_quiz: {source_ref!r} has a malformed 'answer_no' value {value!r} (expected 1-5)."
         ) from exc
 
 

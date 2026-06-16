@@ -15,12 +15,9 @@ Anti-payload (qa Rule 5 페어):
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pandas as pd
 import pytest
-
 from immersio.combine.subgroup_compare import compute_subgroup_score_comparison
 
 
@@ -121,9 +118,7 @@ def test_n_lt_10_category_excluded() -> None:
     )
     rows, _ = compute_subgroup_score_comparison(df)
     excluded = [
-        r
-        for r in rows
-        if r.meta_kind == "section" and r.meta_value == "C" and r.excluded_reason
+        r for r in rows if r.meta_kind == "section" and r.meta_value == "C" and r.excluded_reason
     ]
     assert excluded, "n<10 category C must be excluded with reason"
     assert "10" in excluded[0].excluded_reason
@@ -179,9 +174,7 @@ def test_occupation_small_subgroup_auto_exclude() -> None:
     )
     rows, headers = compute_subgroup_score_comparison(df)
     occ_excluded = [
-        r
-        for r in rows
-        if r.meta_kind == "occupation" and r.meta_value == "industry-edge"
+        r for r in rows if r.meta_kind == "occupation" and r.meta_value == "industry-edge"
     ]
     assert occ_excluded
     assert occ_excluded[0].excluded_reason is not None
@@ -219,9 +212,7 @@ def test_repeat_call_byte_identical_headers() -> None:
     assert [(r.meta_kind, r.meta_value) for r in rows1] == [
         (r.meta_kind, r.meta_value) for r in rows2
     ]
-    assert [(h.meta_kind, h.test_used) for h in h1] == [
-        (h.meta_kind, h.test_used) for h in h2
-    ]
+    assert [(h.meta_kind, h.test_used) for h in h1] == [(h.meta_kind, h.test_used) for h in h2]
 
 
 # ----------------------------------------------------------------------

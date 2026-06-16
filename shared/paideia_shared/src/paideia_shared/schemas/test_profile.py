@@ -22,11 +22,11 @@ from pydantic import (
 )
 
 from .professor_profile import (
+    _PROFILE_NAME_RE,
     _Booking,
     _GmailApi,
     _Institution,
     _OperationalDefaults,
-    _PROFILE_NAME_RE,
     _SecretsRef,
     _SendAccount,
     _Sender,
@@ -47,9 +47,7 @@ class DummyStudent(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"DummyStudent.student_id must match ^\\d{{10}}$ (got {value!r})"
-            )
+            raise ValueError(f"DummyStudent.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
 
@@ -62,9 +60,7 @@ class TestProfile(BaseModel):
 
     __test__ = False  # disable pytest collection for this Pydantic model
 
-    model_config = ConfigDict(
-        extra="forbid", frozen=True, str_strip_whitespace=True
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     profile_kind: Literal["test"]
     profile_name: str
@@ -83,8 +79,7 @@ class TestProfile(BaseModel):
     def _v_profile_name(self) -> Self:
         if not _PROFILE_NAME_RE.fullmatch(self.profile_name):
             raise ValueError(
-                f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ "
-                f"(got {self.profile_name!r})"
+                f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ (got {self.profile_name!r})"
             )
         return self
 
@@ -103,9 +98,7 @@ class TestProfile(BaseModel):
         seen: set[str] = set()
         for addr in self.recipient_pool:
             if addr in seen:
-                raise ValueError(
-                    f"recipient_pool contains duplicate address {addr!r}"
-                )
+                raise ValueError(f"recipient_pool contains duplicate address {addr!r}")
             seen.add(addr)
         return self
 
@@ -123,9 +116,7 @@ class TestProfile(BaseModel):
     def _v_dummy_students_unique(self) -> Self:
         ids = [s.student_id for s in self.dummy_students]
         if len(set(ids)) != len(ids):
-            raise ValueError(
-                "dummy_students.student_id values must be unique"
-            )
+            raise ValueError("dummy_students.student_id values must be unique")
         return self
 
     @model_validator(mode="after")
@@ -133,8 +124,7 @@ class TestProfile(BaseModel):
         path = Path(str(self.dummy_fixture_dir))
         if not path.is_absolute():
             raise ValueError(
-                f"dummy_fixture_dir must be absolute path "
-                f"(got {self.dummy_fixture_dir!r})"
+                f"dummy_fixture_dir must be absolute path (got {self.dummy_fixture_dir!r})"
             )
         return self
 

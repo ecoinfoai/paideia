@@ -63,6 +63,7 @@ _N_TEXTBOOK = 40 - _N_FORMATIVE - _N_QUIZ  # 13
 # FakeBackend (canned JSON, mirrors US5)
 # ---------------------------------------------------------------------------
 
+
 def _make_canned_json(answer_no: int = 1) -> dict[str, Any]:
     return {
         "question_type": "지식축적",
@@ -171,6 +172,7 @@ class FakeBackend(LLMBackend):
 # ---------------------------------------------------------------------------
 # Fixture builders
 # ---------------------------------------------------------------------------
+
 
 def _make_blueprint() -> ExamenBlueprint:
     return ExamenBlueprint(
@@ -290,6 +292,7 @@ def _run_build(
 # STT dir fixture builders
 # ---------------------------------------------------------------------------
 
+
 def _write_stt(
     stt_dir: Path,
     class_id: str,
@@ -305,6 +308,7 @@ def _write_stt(
 # ---------------------------------------------------------------------------
 # Scenario 1 — degrade (no STT)
 # ---------------------------------------------------------------------------
+
 
 class TestDegradeNoStt:
     def test_build_completes_with_stt_none(self, tmp_path: Path) -> None:
@@ -340,9 +344,7 @@ class TestDegradeNoStt:
     def test_manifest_emphasis_summary_zero_on_degrade(self, tmp_path: Path) -> None:
         """manifest carries a first-class emphasis_summary; on degrade it's all-zeros."""
         _, run_dir = _run_build(tmp_path, stt_dir=None)
-        manifest = json.loads(
-            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
         assert "emphasis_summary" in manifest, (
             "emphasis_summary must be a top-level manifest field (immersio SC-9 seam)"
         )
@@ -357,6 +359,7 @@ class TestDegradeNoStt:
 # ---------------------------------------------------------------------------
 # Scenario 2 — intersection with a missing session
 # ---------------------------------------------------------------------------
+
 
 class TestIntersectionMissingSession:
     def _setup_stt(self, tmp_path: Path) -> Path:
@@ -381,9 +384,7 @@ class TestIntersectionMissingSession:
         cmap = _make_curriculum_map()
         scan = scan_stt_dir(stt_dir)
         kw = build_keyword_dict(cmap)
-        cells = aggregate_emphasis(
-            scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE
-        )
+        cells = aggregate_emphasis(scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE)
         # The week-8 chapter (8장) section "1. 기본구조": all 4 classes have data
         # for week 8 (1C has 1차시), and '기본구조' appears in all → emphasized.
         week8 = [c for c in cells if c.chapter_no == 8 and "기본구조" in c.section]
@@ -418,19 +419,13 @@ class TestIntersectionMissingSession:
         assert report["stt"]["found"] > 0
 
         # With present STT, the manifest emphasis_summary is populated (non-degrade).
-        manifest = json.loads(
-            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
         summary = manifest["emphasis_summary"]
         assert summary["sections_total"] > 0
-        assert summary["emphasized"] >= 1, (
-            f"expected ≥1 emphasized section in {summary}"
-        )
+        assert summary["emphasized"] >= 1, f"expected ≥1 emphasized section in {summary}"
         assert summary["by_chapter"], "by_chapter must be populated when emphasis present"
 
-    def test_missing_class_excluded_not_counted_as_unemphasized(
-        self, tmp_path: Path
-    ) -> None:
+    def test_missing_class_excluded_not_counted_as_unemphasized(self, tmp_path: Path) -> None:
         """1C has only 1차시 (no keyword absent there) — it still counts in week-8
         availability because it has week-8 data, and the keyword IS in its 1차시.
         """
@@ -441,9 +436,7 @@ class TestIntersectionMissingSession:
         cmap = _make_curriculum_map()
         scan = scan_stt_dir(stt_dir)
         kw = build_keyword_dict(cmap)
-        cells = aggregate_emphasis(
-            scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE
-        )
+        cells = aggregate_emphasis(scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE)
         cell = next(c for c in cells if c.chapter_no == 8 and "기본구조" in c.section)
         # availability == emphasized → intersection holds despite 1C missing 2차시.
         assert cell.available_class_count == cell.emphasized_class_count
@@ -452,6 +445,7 @@ class TestIntersectionMissingSession:
 # ---------------------------------------------------------------------------
 # Scenario 3 — partial emphasis
 # ---------------------------------------------------------------------------
+
 
 class TestPartialEmphasis:
     def test_partial_not_emphasized(self, tmp_path: Path) -> None:
@@ -467,9 +461,7 @@ class TestPartialEmphasis:
         cmap = _make_curriculum_map()
         scan = scan_stt_dir(stt_dir)
         kw = build_keyword_dict(cmap)
-        cells = aggregate_emphasis(
-            scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE
-        )
+        cells = aggregate_emphasis(scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE)
         cell = next(c for c in cells if c.chapter_no == 8 and "기본구조" in c.section)
         assert cell.available_class_count == 4
         assert cell.emphasized_class_count == 2
@@ -479,6 +471,7 @@ class TestPartialEmphasis:
 # ---------------------------------------------------------------------------
 # Scenario 4 — filename violation (FR-024)
 # ---------------------------------------------------------------------------
+
 
 class TestFilenameViolation:
     def test_malformed_filename_recorded(self, tmp_path: Path) -> None:
@@ -512,6 +505,7 @@ class TestFilenameViolation:
 # ---------------------------------------------------------------------------
 # Scenario 5 — determinism
 # ---------------------------------------------------------------------------
+
 
 class TestDeterminism:
     def _setup_stt(self, tmp_path: Path) -> Path:
@@ -567,6 +561,7 @@ class TestDeterminism:
 # Scenario 6 — unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestParseSttFilename:
     def test_valid(self) -> None:
         from examen.ingest.stt import parse_stt_filename
@@ -598,7 +593,9 @@ class TestAggregateEmphasisMath:
             course_slug=_COURSE,
             entries=[
                 CurriculumEntry(
-                    week=8, chapter="8장 호흡계통", chapter_no=8,
+                    week=8,
+                    chapter="8장 호흡계통",
+                    chapter_no=8,
                     sections=["1. 기본구조", "2. 기능"],
                 )
             ],
@@ -622,9 +619,7 @@ class TestAggregateEmphasisMath:
         scan = scan_stt_dir(tmp_path / "nonexistent")
         cmap = _make_curriculum_map()
         kw = build_keyword_dict(cmap)
-        assert aggregate_emphasis(
-            scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE
-        ) == []
+        assert aggregate_emphasis(scan, cmap, kw, semester=_SEMESTER, course_slug=_COURSE) == []
 
     def test_evidence_refs_sorted(self, tmp_path: Path) -> None:
         from examen.ingest.stt import scan_stt_dir
@@ -638,7 +633,9 @@ class TestAggregateEmphasisMath:
             course_slug=_COURSE,
             entries=[
                 CurriculumEntry(
-                    week=8, chapter="8장 호흡계통", chapter_no=8,
+                    week=8,
+                    chapter="8장 호흡계통",
+                    chapter_no=8,
                     sections=["1. 기본구조"],
                 )
             ],
@@ -653,6 +650,7 @@ class TestAggregateEmphasisMath:
 # ---------------------------------------------------------------------------
 # N3 — direct unit tests for label_items_with_emphasis
 # ---------------------------------------------------------------------------
+
 
 def _make_item(
     *,

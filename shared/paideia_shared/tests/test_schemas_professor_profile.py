@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import pytest
 import yaml
-from pydantic import ValidationError
-
 from paideia_shared.schemas import ProfessorProfile
+from pydantic import ValidationError
 
 _VALID_OPERATOR_YAML = """
 profile_kind: operator

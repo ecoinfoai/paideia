@@ -10,9 +10,7 @@ from ..ingest.errors import DuplicateStudentIdError
 from ..normalize import normalize_student_id
 
 EXPECTED_HEADER: tuple[str, ...] = (
-    ("학번", "이름")
-    + tuple(f"W{week:02d}" for week in range(1, 17))
-    + ("비고",)
+    ("학번", "이름") + tuple(f"W{week:02d}" for week in range(1, 17)) + ("비고",)
 )
 ALLOWED_CODES: frozenset[str] = frozenset({"O", "X", "L", "E"})
 

@@ -198,9 +198,7 @@ def test_clean_quiz_keeps_blank() -> None:
 
 def test_option_length_violation() -> None:
     """option_length_ok=False → review_note mentions length."""
-    reviewed, _ = review_candidates(
-        [_make_quiz(option_length_ok=False)], [], backend=None
-    )
+    reviewed, _ = review_candidates([_make_quiz(option_length_ok=False)], [], backend=None)
     note = reviewed[0].review_note
     assert note != ""
     assert "length" in note.lower() or "길이" in note
@@ -208,9 +206,7 @@ def test_option_length_violation() -> None:
 
 def test_explanation_length_violation() -> None:
     """explanation_length_ok=False → review_note is non-empty."""
-    reviewed, _ = review_candidates(
-        [_make_quiz(explanation_length_ok=False)], [], backend=None
-    )
+    reviewed, _ = review_candidates([_make_quiz(explanation_length_ok=False)], [], backend=None)
     assert reviewed[0].review_note != ""
 
 
@@ -301,9 +297,7 @@ def test_adversarial_finding_appended_after_rule_note() -> None:
     """Layer 2 finding is appended after an existing layer-1 rule note."""
     backend = FindingBackend("교재밖 사실 의심")
     # leap_evidence=None triggers a layer-1 note first.
-    reviewed, _ = review_candidates(
-        [_make_quiz(leap_evidence=None)], [], backend=backend
-    )
+    reviewed, _ = review_candidates([_make_quiz(leap_evidence=None)], [], backend=backend)
     note = reviewed[0].review_note
     assert "도약" in note  # layer-1 note retained
     assert "[review_agent] 교재밖 사실 의심" in note  # layer-2 appended
@@ -334,9 +328,7 @@ def test_degrade_keeps_layer1_notes_intact() -> None:
     """Unreachable backend + degrade default True → layer-1 notes intact, no raise."""
     backend = UnreachableBackend()
     # Item carries a layer-1 violation (leap_evidence None).
-    reviewed, _ = review_candidates(
-        [_make_quiz(leap_evidence=None)], [], backend=backend
-    )
+    reviewed, _ = review_candidates([_make_quiz(leap_evidence=None)], [], backend=backend)
     # No raise; the layer-1 rule note survives the degrade.
     note = reviewed[0].review_note
     assert "도약" in note
@@ -355,6 +347,4 @@ def test_no_degrade_propagates_for_api_mode() -> None:
     """degrade_on_unreachable=False → BackendUnreachableError propagates (exit 4)."""
     backend = UnreachableBackend()
     with pytest.raises(BackendUnreachableError):
-        review_candidates(
-            [_make_quiz()], [], backend=backend, degrade_on_unreachable=False
-        )
+        review_candidates([_make_quiz()], [], backend=backend, degrade_on_unreachable=False)

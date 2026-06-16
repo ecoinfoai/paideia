@@ -8,7 +8,9 @@ import pytest
 from immersio.ingest import IngestValidationError, run_ingest
 
 
-def test_undefined_likert_blocks_silver(corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path) -> None:
+def test_undefined_likert_blocks_silver(
+    corrupt_bronze: Path, corrupt_mapping: Path, tmp_path: Path
+) -> None:
     diag_csv = corrupt_bronze / "진단평가" / "diag_test.csv"
     text = diag_csv.read_text(encoding="utf-8")
     bad_text = text.replace("매우 그렇다", "매우 좋아요", 1)

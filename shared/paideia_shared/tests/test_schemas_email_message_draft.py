@@ -6,12 +6,11 @@ guard against silent multi-recipient sends (FR-C03).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas import DispatchMode, EmailMessageDraft
+from pydantic import ValidationError
 
 
 def _valid_kwargs() -> dict:
@@ -27,7 +26,7 @@ def _valid_kwargs() -> dict:
         attachment_filename="1234567890_홍길동.pdf",
         attachment_sha256="a" * 64,
         attachment_bytes_size=1024,
-        date_header=datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc),
+        date_header=datetime(2026, 5, 1, 12, 0, 0, tzinfo=UTC),
         message_id="<deterministic@example.ac.kr>",
         mime_boundary="===PAIDEIA_BOUNDARY_001===",
         mode=DispatchMode.PRODUCTION,

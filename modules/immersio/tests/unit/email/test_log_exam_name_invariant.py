@@ -7,11 +7,10 @@ csv 안에 2종 이상의 exam_name 이 섞여 있을 경우 ``ExamNameInvariant
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-
 from immersio.email.log import (
     ExamNameInvariantError,
     append_dispatch_log_rows,
@@ -116,9 +115,7 @@ def test_three_distinct_exam_names_sorted_in_message(tmp_path: Path) -> None:
     last_idx = -1
     for name in sorted_names:
         idx = msg.index(name)
-        assert idx > last_idx, (
-            f"exam_name '{name}' 가 sorted 순서대로 메시지에 등장하지 않음"
-        )
+        assert idx > last_idx, f"exam_name '{name}' 가 sorted 순서대로 메시지에 등장하지 않음"
         last_idx = idx
 
 
@@ -150,9 +147,7 @@ def test_single_exam_name_passes(tmp_path: Path) -> None:
 def test_single_row_passes(tmp_path: Path) -> None:
     """csv 에 row 1개만 있어도 정상 통과 (distinct 1종)."""
     log = tmp_path / "log.csv"
-    append_dispatch_log_rows(
-        log, [_row("1234567001", exam_name="중간고사_진단")]
-    )
+    append_dispatch_log_rows(log, [_row("1234567001", exam_name="중간고사_진단")])
     result = read_dispatch_log(log)
     assert len(result) == 1
     assert result[0].exam_name == "중간고사_진단"

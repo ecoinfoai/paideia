@@ -145,6 +145,7 @@ def _file_sha256(path: Path) -> str:
 def _find_chapter_file(bronze_dir_path: Path, chapter_no: int) -> Path | None:
     """Find the .txt file for chapter_no in bronze_dir (mirrors textbook.py logic)."""
     import re
+
     n = str(chapter_no)
     pattern = re.compile(rf"(?:^|(?<=\D)){re.escape(n)}장")
     for p in sorted(bronze_dir_path.glob("*.txt")):
@@ -252,6 +253,7 @@ def _backend_label(backend: LLMBackend) -> str:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def build_exam(
     *,
@@ -409,15 +411,14 @@ def build_exam(
     # 동일 장 내부는 원래 순서를 보존(stable sort)한다.
     sorted_formative = sorted(
         formative_inventory or [],
-        key=lambda e: (e.chapter_no if e.chapter_no is not None else 0),
+        key=lambda e: e.chapter_no if e.chapter_no is not None else 0,
     )
     formative_iter = iter(sorted_formative)
 
     # 퀴즈 슬롯: solver 가 slot.source_ref 에 선택된 source_ref 를 첨부했으므로
     # source_ref → SourceInventoryEntry 맵으로 조회한다.
     quiz_entry_map: dict[str, SourceInventoryEntry] = {
-        entry.source_ref: entry
-        for entry in (quiz_inventory or [])
+        entry.source_ref: entry for entry in (quiz_inventory or [])
     }
 
     items: list[ExamItemDraft] = []
@@ -473,12 +474,14 @@ def build_exam(
             )
             # chapter 필드를 실제 장 이름으로 보정 (slot 에서 조회).
             # item_no 는 GLOBAL 슬롯 위치를 사용해야 교과서 item_no 와 충돌하지 않는다.
-            item = item.model_copy(update={
-                "item_no": _slot_position(slot.slot_id),
-                "chapter": slot.chapter,
-                "chapter_no": slot.chapter_no,
-                "difficulty": slot.difficulty,
-            })
+            item = item.model_copy(
+                update={
+                    "item_no": _slot_position(slot.slot_id),
+                    "chapter": slot.chapter,
+                    "chapter_no": slot.chapter_no,
+                    "difficulty": slot.difficulty,
+                }
+            )
             item = check_format(item)
             item = check_formative(item)  # T035 formative 전용 검증
 
@@ -504,19 +507,20 @@ def build_exam(
                 cache=cache,
             )
             # 글로벌 슬롯 위치, 장 이름, 난이도를 slot 에서 보정 (formative 와 동일 패턴)
-            item = item.model_copy(update={
-                "item_no": _slot_position(slot.slot_id),
-                "chapter": slot.chapter,
-                "chapter_no": slot.chapter_no,
-                "difficulty": slot.difficulty,
-            })
+            item = item.model_copy(
+                update={
+                    "item_no": _slot_position(slot.slot_id),
+                    "chapter": slot.chapter,
+                    "chapter_no": slot.chapter_no,
+                    "difficulty": slot.difficulty,
+                }
+            )
             item = check_format(item)
             item = check_quiz_variation(item, quiz_entry)  # T042 자카드 가드
 
         else:
             raise ValueError(
-                f"build_exam: unknown slot source {slot.source!r} "
-                f"(slot_id={slot.slot_id})"
+                f"build_exam: unknown slot source {slot.source!r} (slot_id={slot.slot_id})"
             )
 
         items.append(item)
@@ -562,9 +566,7 @@ def build_exam(
     # actually computed.  Degrade path writes nothing.
     if emphasis_cells:
         emphasis_yaml_path = silver_base / "emphasis.yaml"
-        emphasis_payload = [
-            cell.model_dump(mode="python") for cell in emphasis_cells
-        ]
+        emphasis_payload = [cell.model_dump(mode="python") for cell in emphasis_cells]
         emphasis_serialized = dump_yaml(emphasis_payload)
         emphasis_yaml_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -622,9 +624,7 @@ def build_exam(
     )
 
     # 5c: manifest
-    generated_at = datetime.datetime.now(datetime.UTC).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    generated_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     input_hashes = _build_input_hashes(bronze_dir, curriculum_map)
     config_ids = _build_config_ids(blueprint_path, curriculum_map_path)
 
@@ -635,8 +635,7 @@ def build_exam(
     groundedness_counts = dict(
         sorted(
             Counter(
-                (i.textbook_evidence.status if i.textbook_evidence else "미확인")
-                for i in items
+                (i.textbook_evidence.status if i.textbook_evidence else "미확인") for i in items
             ).items()
         )
     )
@@ -680,8 +679,7 @@ def build_exam(
         "chapters_required": len(seen_chapters),
         "chapters_found": len(chapter_file_map),
         "removed_span_counts": {
-            str(ch_no): len(spans)
-            for ch_no, spans in sorted(removed_spans_by_chapter.items())
+            str(ch_no): len(spans) for ch_no, spans in sorted(removed_spans_by_chapter.items())
         },
     }
     n_formative = len(formative_inventory) if formative_inventory else 0
@@ -711,6 +709,7 @@ def build_exam(
 # Re-export run_gold_dir for CLI convenience
 # ---------------------------------------------------------------------------
 
+
 def _run_gold_dir(
     semester: str,
     course_slug: str,
@@ -720,6 +719,7 @@ def _run_gold_dir(
 ) -> Path:
     """Delegate to ``examen.output.paths.run_gold_dir``."""
     from examen.output.paths import run_gold_dir as _rgd
+
     return _rgd(semester, course_slug, run_id=run_id, data_root=data_root)
 
 

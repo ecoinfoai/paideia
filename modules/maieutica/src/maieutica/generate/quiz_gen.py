@@ -273,10 +273,7 @@ def _check_explanation_lengths(wrong_explanation: str, leap_text: str) -> bool:
     Returns:
         ``True`` iff both strings are at most ``200`` codepoints (incl. spaces).
     """
-    return (
-        len(wrong_explanation) <= _EXPLANATION_MAX_LEN
-        and len(leap_text) <= _EXPLANATION_MAX_LEN
-    )
+    return len(wrong_explanation) <= _EXPLANATION_MAX_LEN and len(leap_text) <= _EXPLANATION_MAX_LEN
 
 
 __all__ = ["MISSING_EVIDENCE_PLACEHOLDER", "generate_quiz_item"]

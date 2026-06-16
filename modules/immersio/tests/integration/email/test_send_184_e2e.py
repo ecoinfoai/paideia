@@ -10,11 +10,6 @@ from __future__ import annotations
 
 import argparse
 import io
-from pathlib import Path
-
-import pyarrow as pa
-import pyarrow.parquet as pq
-import pytest
 
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
@@ -73,9 +68,7 @@ class _AlwaysSucceeds:
 def test_e2e_all_students_succeed(email_fixture, monkeypatch) -> None:
     """SC-005: 5-student fixture all send successfully + log/report counts match."""
     _AlwaysSucceeds.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds)
     rc = run_email_dispatch(_args())
     assert rc == 0
     assert len(_AlwaysSucceeds.captured) == 5
@@ -88,18 +81,15 @@ def test_e2e_all_students_succeed(email_fixture, monkeypatch) -> None:
     assert text.count(",success,") == 5
 
     # Report file present + summary table renders 성공: 5
-    report = (email_fixture["gold_email_dir"] / "메일_발송보고서.md").read_text(
-        encoding="utf-8"
-    )
+    report = (email_fixture["gold_email_dir"] / "메일_발송보고서.md").read_text(encoding="utf-8")
     assert "성공" in report
     assert "| 5 |" in report  # SUCCESS count column
 
     # manifest counts
     import json
+
     manifest = json.loads(
-        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(
-            encoding="utf-8"
-        )
+        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(encoding="utf-8")
     )
     assert manifest["counts"]["success"] == 5
     assert manifest["counts"]["failed"] == 0

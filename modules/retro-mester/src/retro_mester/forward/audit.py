@@ -90,8 +90,7 @@ def audit_prior(
                 "this_year_value": None,
                 "met": False,
                 "note": (
-                    f"현재 기준선에 해당 데이터 없음 — "
-                    f"segment={segment!r}, chapter={chapter!r}"
+                    f"현재 기준선에 해당 데이터 없음 — segment={segment!r}, chapter={chapter!r}"
                 ),
             }
 

@@ -24,10 +24,7 @@ class EmailMappingEntry(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"EmailMappingEntry.student_id must match ^\\d{{10}}$ "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"EmailMappingEntry.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
     @field_validator("email", mode="before")

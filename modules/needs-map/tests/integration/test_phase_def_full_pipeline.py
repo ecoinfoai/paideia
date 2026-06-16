@@ -174,7 +174,11 @@ def test_archival_on_rerun(tmp_path: Path) -> None:
     manifest_second = run_needs_map(args)
     assert manifest_second.previous_run_archive_path is not None
     archive_dir = (
-        out_dir / "silver" / "needs-map" / "2026-1-anatomy" / manifest_second.previous_run_archive_path
+        out_dir
+        / "silver"
+        / "needs-map"
+        / "2026-1-anatomy"
+        / manifest_second.previous_run_archive_path
     )
     assert archive_dir.is_dir()
     # First-run silver outputs survived in _archive

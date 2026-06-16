@@ -8,11 +8,9 @@ Spec 004 contracts/xlsx_sheets.md §3 — `2_메타데이터통계` 시트 + res
 
 from __future__ import annotations
 
+import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
 import pandas as pd
 import pytest
-
-import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
 from immersio.analysis.metadata_stats import compute_metadata_aggregates  # noqa: E402
 from paideia_shared.schemas import MetadataAggregate
 
@@ -24,6 +22,7 @@ def _build_section_fixture() -> tuple[pd.DataFrame, list[dict]]:
     """
     rng_seed = 42
     import numpy as np
+
     rng = np.random.default_rng(rng_seed)
     students = []
     for section_label, mean_offset in zip("ABCD", [10, 0, 0, 0]):
@@ -40,8 +39,14 @@ def _build_section_fixture() -> tuple[pd.DataFrame, list[dict]]:
             )
     student_df = pd.DataFrame(students)
     items = [
-        {"item_no": 1, "chapter": "1장", "expected_difficulty": "보통",
-         "difficulty_level": 3, "item_type": "지식축적", "source": "형성평가"},
+        {
+            "item_no": 1,
+            "chapter": "1장",
+            "expected_difficulty": "보통",
+            "difficulty_level": 3,
+            "item_type": "지식축적",
+            "source": "형성평가",
+        },
     ]
     return student_df, items
 
@@ -96,9 +101,15 @@ def test_metadata_empty_input_raises() -> None:
     student_df = pd.DataFrame(columns=["student_id", "section", "total_score"])
     with pytest.raises(ValueError, match=r"empty"):
         compute_metadata_aggregates(
-            student_metrics_df=student_df, items=[{"item_no": 1, "chapter": "1장",
-                                                  "expected_difficulty": "보통",
-                                                  "difficulty_level": 3,
-                                                  "item_type": "지식축적",
-                                                  "source": "형성평가"}]
+            student_metrics_df=student_df,
+            items=[
+                {
+                    "item_no": 1,
+                    "chapter": "1장",
+                    "expected_difficulty": "보통",
+                    "difficulty_level": 3,
+                    "item_type": "지식축적",
+                    "source": "형성평가",
+                }
+            ],
         )

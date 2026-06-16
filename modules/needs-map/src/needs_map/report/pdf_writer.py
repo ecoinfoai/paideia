@@ -104,7 +104,8 @@ def render_group_distribution_pdf(
     c.drawString(left, page_h - 25 * mm, "needs-map 집단 분포 보고서")
     c.setFont(font, 11)
     c.drawString(
-        left, page_h - 32 * mm,
+        left,
+        page_h - 32 * mm,
         f"{course_name_kr} ({semester})    발행: {created_at_utc[:10]}",
     )
 
@@ -123,7 +124,8 @@ def render_group_distribution_pdf(
             c.drawString(left, y, f"  • {axis}: (no data)")
         else:
             c.drawString(
-                left, y,
+                left,
+                y,
                 f"  • {axis}: n={stats['n']} mean={stats['mean']:.2f} std={stats['std']:.2f} "
                 f"p25={stats['p25']:.2f} p50={stats['p50']:.2f} p75={stats['p75']:.2f}",
             )
@@ -142,9 +144,7 @@ def render_group_distribution_pdf(
         c.setFont(font, 11)
         sil = cluster_report.silhouette_used
         sil_str = f"{sil:.3f}" if sil is not None else "n/a"
-        c.drawString(
-            left, y, f"  k_used={cluster_report.k_used}  silhouette={sil_str}"
-        )
+        c.drawString(left, y, f"  k_used={cluster_report.k_used}  silhouette={sil_str}")
         for cid, name in sorted(cluster_report.cluster_names.items()):
             y -= 6 * mm
             size = sum(1 for r in cluster_report.rows if r.cluster_id == cid)

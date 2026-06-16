@@ -38,6 +38,7 @@ from paideia_shared.schemas import (
 # Shared fixtures and helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_blueprint(
     *,
     total_items: int = 40,
@@ -125,7 +126,7 @@ def _make_chunks(
                 line_start=1 + i * 20,
                 line_end=20 + i * 20,
                 text=f"Chapter {chapter_no} section {i + 1} 내용입니다. "
-                     f"호르몬이 조절한다. 뇌하수체에서 분비된다.",
+                f"호르몬이 조절한다. 뇌하수체에서 분비된다.",
                 removed_spans=[],
             )
         )
@@ -237,18 +238,18 @@ class TestBlueprintSolver:
     def test_chapter_counts_max_diff_one(self) -> None:
         """Each chapter's slot count differs from others by at most 1."""
         from collections import Counter
+
         bp = _make_blueprint(total_items=40)  # 6 chapters → 6 or 7 each
         slots = self._solve(blueprint=bp)
         counts = Counter(s.chapter for s in slots)
         max_c = max(counts.values())
         min_c = min(counts.values())
-        assert max_c - min_c <= 1, (
-            f"Chapter allocation not chapter-even: {dict(counts)}"
-        )
+        assert max_c - min_c <= 1, f"Chapter allocation not chapter-even: {dict(counts)}"
 
     def test_chapter_counts_for_45_items(self) -> None:
         """45 items / 6 chapters → (7,7,7,8,8,8) or similar max-diff-1."""
         from collections import Counter
+
         bp = _make_blueprint(total_items=45)
         slots = self._solve(blueprint=bp)
         counts = Counter(s.chapter for s in slots)
@@ -267,6 +268,7 @@ class TestBlueprintSolver:
     def test_source_counts_match_source_mix_textbook_only(self) -> None:
         """Textbook-only blueprint: all slots have source='textbook'."""
         from collections import Counter
+
         bp = _make_blueprint(source_mix={"textbook": 40, "formative": 0, "quiz": 0})
         slots = self._solve(blueprint=bp)
         counts = Counter(s.source for s in slots)
@@ -277,6 +279,7 @@ class TestBlueprintSolver:
     def test_source_counts_mixed(self) -> None:
         """Mixed source_mix: source counts match blueprint."""
         from collections import Counter
+
         bp = _make_blueprint(
             total_items=40,
             source_mix={"textbook": 20, "formative": 12, "quiz": 8},
@@ -300,6 +303,7 @@ class TestBlueprintSolver:
     def test_difficulty_distribution_within_tolerance(self) -> None:
         """easy/medium/hard slot fractions within ±0.10 of blueprint targets."""
         from collections import Counter
+
         bp = _make_blueprint(
             total_items=40,
             difficulty_targets={"easy": 0.45, "medium": 0.35, "hard": 0.20},
@@ -349,6 +353,7 @@ class TestBlueprintSolver:
     def test_solve_is_deterministic(self) -> None:
         """Same inputs → identical slot list (same order, same values)."""
         from examen.plan.blueprint import solve
+
         bp = _make_blueprint()
         cm = _make_curriculum_map()
         slots_a = solve(bp, cm)
@@ -378,6 +383,7 @@ class TestBuildBundle:
         difficulty: str = "1_쉬움",
     ):  # type: ignore[return]
         from examen.plan.blueprint import Slot
+
         return Slot(
             slot_id=slot_id,
             chapter=chapter,
@@ -389,6 +395,7 @@ class TestBuildBundle:
 
     def _build(self, slot=None, chunks=None):  # type: ignore[return]
         from examen.generate.bundle import build_bundle
+
         if slot is None:
             slot = self._make_slot()
         if chunks is None:
@@ -433,9 +440,7 @@ class TestBuildBundle:
     def test_prompt_contains_5_option_instruction(self) -> None:
         """Prompt instructs 5-option single-answer format."""
         req = self._build()
-        assert "5" in req.prompt or "다섯" in req.prompt, (
-            "prompt must specify 5 options"
-        )
+        assert "5" in req.prompt or "다섯" in req.prompt, "prompt must specify 5 options"
 
     def test_prompt_contains_negative_polarity_instruction(self) -> None:
         """Prompt specifies 부정형 stem ('가장 옳지 않은 것')."""
@@ -464,8 +469,15 @@ class TestBuildBundle:
         """build_bundle called twice with identical input produces identical output."""
         from examen.generate.bundle import build_bundle
         from examen.plan.blueprint import Slot
-        slot = Slot(slot_id="s1", chapter="10장", chapter_no=10,
-                    source="textbook", difficulty="1_쉬움", section=None)
+
+        slot = Slot(
+            slot_id="s1",
+            chapter="10장",
+            chapter_no=10,
+            source="textbook",
+            difficulty="1_쉬움",
+            section=None,
+        )
         chunks = _make_chunks(chapter_no=10)
         req_a = build_bundle(slot, chunks)
         req_b = build_bundle(slot, chunks)
@@ -477,10 +489,23 @@ class TestBuildBundle:
         """Different slot_ids produce different GenerationRequests."""
         from examen.generate.bundle import build_bundle
         from examen.plan.blueprint import Slot
-        s1 = Slot(slot_id="s1", chapter="10장", chapter_no=10,
-                  source="textbook", difficulty="1_쉬움", section=None)
-        s2 = Slot(slot_id="s2", chapter="10장", chapter_no=10,
-                  source="textbook", difficulty="3_어려움", section=None)
+
+        s1 = Slot(
+            slot_id="s1",
+            chapter="10장",
+            chapter_no=10,
+            source="textbook",
+            difficulty="1_쉬움",
+            section=None,
+        )
+        s2 = Slot(
+            slot_id="s2",
+            chapter="10장",
+            chapter_no=10,
+            source="textbook",
+            difficulty="3_어려움",
+            section=None,
+        )
         chunks = _make_chunks(chapter_no=10)
         r1 = build_bundle(s1, chunks)
         r2 = build_bundle(s2, chunks)
@@ -493,12 +518,19 @@ class TestBuildBundle:
         """Only chunks matching the slot's chapter_no are included."""
         from examen.generate.bundle import build_bundle
         from examen.plan.blueprint import Slot
+
         # Mix chunks from chapters 10 and 11
         chunks_10 = _make_chunks(chapter_no=10, chapter="10장 내분비계통")
         chunks_11 = _make_chunks(chapter_no=11, chapter="11장 순환계통")
         all_chunks = chunks_10 + chunks_11
-        slot = Slot(slot_id="s1", chapter="10장 내분비계통", chapter_no=10,
-                    source="textbook", difficulty="1_쉬움", section=None)
+        slot = Slot(
+            slot_id="s1",
+            chapter="10장 내분비계통",
+            chapter_no=10,
+            source="textbook",
+            difficulty="1_쉬움",
+            section=None,
+        )
         req = build_bundle(slot, all_chunks)
         # Chapter 11 text should NOT appear in the prompt
         for c in chunks_11:
@@ -522,6 +554,7 @@ class TestGenerateItem:
         difficulty: str = "1_쉬움",
     ):  # type: ignore[return]
         from examen.plan.blueprint import Slot
+
         return Slot(
             slot_id=slot_id,
             chapter=chapter,
@@ -549,6 +582,7 @@ class TestGenerateItem:
         tmp_path: Path | None = None,
     ) -> ExamItemDraft:
         from examen.generate.item_gen import generate_item
+
         if slot is None:
             slot = self._make_slot()
         if chunks is None:
@@ -561,6 +595,7 @@ class TestGenerateItem:
             cache_dir = tmp_path / "cache"
         elif cache_dir is None:
             import tempfile
+
             td = tempfile.mkdtemp()
             cache_dir = Path(td)
         cache = InputHashCache(backend=backend, cache_dir=cache_dir)
@@ -648,6 +683,7 @@ class TestGenerateItem:
         chunks = _make_chunks(chapter_no=10)
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_miss")
         from examen.generate.item_gen import generate_item
+
         item = generate_item(
             slot=slot,
             chunks=chunks,
@@ -669,6 +705,7 @@ class TestGenerateItem:
     def test_formative_source_raises_not_implemented(self, tmp_path: Path) -> None:
         """generate_item raises NotImplementedError for source='formative'."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(source="formative")
         chunks = _make_chunks(chapter_no=10)
         backend = FakeBackend()
@@ -685,6 +722,7 @@ class TestGenerateItem:
     def test_quiz_source_raises_not_implemented(self, tmp_path: Path) -> None:
         """generate_item raises NotImplementedError for source='quiz'."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(source="quiz")
         chunks = _make_chunks(chapter_no=10)
         backend = FakeBackend()
@@ -703,6 +741,7 @@ class TestGenerateItem:
     def test_empty_chunks_raises_located_value_error(self, tmp_path: Path) -> None:
         """An empty chunk list raises a ValueError naming the slot, no backend call."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(slot_id="slot-007", chapter_no=10)
         backend = FakeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_empty")
@@ -720,6 +759,7 @@ class TestGenerateItem:
     def test_no_matching_chapter_chunks_raises(self, tmp_path: Path) -> None:
         """Chunks present but none matching the slot's chapter → ValueError."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(slot_id="slot-009", chapter_no=10)
         # Provide chunks for chapter 11 only — none match chapter 10.
         chunks = _make_chunks(chapter_no=11, chapter="11장 순환계통")
@@ -740,6 +780,7 @@ class TestGenerateItem:
     def test_null_answer_no_raises_located_value_error(self, tmp_path: Path) -> None:
         """LLM returning answer_no=null raises a located ValueError, not TypeError."""
         from examen.generate.item_gen import generate_item
+
         custom_item = dict(_CANNED_ITEM_JSON)
         custom_item["answer_no"] = None
         backend = FakeBackend(raw_json=custom_item)
@@ -760,18 +801,25 @@ class TestGenerateItem:
     def test_cache_rerun_produces_byte_identical_item(self, tmp_path: Path) -> None:
         """Two calls with identical input return identical ExamItemDraft."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(slot_id="s-det")
         chunks = _make_chunks(chapter_no=10)
         evidence_index = self._make_evidence_index()
         backend = FakeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_det")
         item1 = generate_item(
-            slot=slot, chunks=chunks,
-            evidence_index=evidence_index, backend=backend, cache=cache,
+            slot=slot,
+            chunks=chunks,
+            evidence_index=evidence_index,
+            backend=backend,
+            cache=cache,
         )
         item2 = generate_item(
-            slot=slot, chunks=chunks,
-            evidence_index=evidence_index, backend=backend, cache=cache,
+            slot=slot,
+            chunks=chunks,
+            evidence_index=evidence_index,
+            backend=backend,
+            cache=cache,
         )
         # Serialise to dict for field-by-field comparison
         assert item1.model_dump() == item2.model_dump()
@@ -781,18 +829,25 @@ class TestGenerateItem:
     def test_second_call_is_cache_hit(self, tmp_path: Path) -> None:
         """Re-running with same input: backend called only once (cache hit)."""
         from examen.generate.item_gen import generate_item
+
         slot = self._make_slot(slot_id="s-hit")
         chunks = _make_chunks(chapter_no=10)
         evidence_index = self._make_evidence_index()
         backend = FakeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache_hit")
         generate_item(
-            slot=slot, chunks=chunks,
-            evidence_index=evidence_index, backend=backend, cache=cache,
+            slot=slot,
+            chunks=chunks,
+            evidence_index=evidence_index,
+            backend=backend,
+            cache=cache,
         )
         generate_item(
-            slot=slot, chunks=chunks,
-            evidence_index=evidence_index, backend=backend, cache=cache,
+            slot=slot,
+            chunks=chunks,
+            evidence_index=evidence_index,
+            backend=backend,
+            cache=cache,
         )
         assert backend.call_count == 1, (
             f"Backend called {backend.call_count} times; expected 1 (cache should hit)"

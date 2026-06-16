@@ -161,9 +161,7 @@ class TestConvertFormativeInvariants:
         """source_ref on the item matches the entry source_ref."""
         entry = _make_entry(sn=3, chapter_no=8)
         item = self._convert(tmp_path, entry=entry)
-        assert item.source_ref == "형성평가:8장#3", (
-            f"source_ref mismatch: {item.source_ref!r}"
-        )
+        assert item.source_ref == "형성평가:8장#3", f"source_ref mismatch: {item.source_ref!r}"
 
     def test_chapter_no_copied(self, tmp_path: Path) -> None:
         """chapter_no on the item matches the entry chapter_no."""
@@ -215,9 +213,7 @@ class TestConvertFormativeInvariants:
             f"(the false statement), got {answer_rationale!r}"
         )
         # The other 4 rationales must NOT carry the 틀린 marker (they are 옳은)
-        others = [
-            r for i, r in enumerate(item.distractor_rationale) if i != idx
-        ]
+        others = [r for i, r in enumerate(item.distractor_rationale) if i != idx]
         assert all("틀린" not in r for r in others), (
             "only the answer's rationale should be marked '틀린'; "
             f"found a non-answer rationale also marked: {others!r}"
@@ -284,6 +280,7 @@ class TestConvertFormativeOptionShape:
 
     def _convert(self, tmp_path: Path) -> ExamItemDraft:
         from examen.generate.convert_formative import convert_formative
+
         entry = _make_entry()
         backend = FakeFormativeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache")
@@ -306,6 +303,7 @@ class TestConvertFormativeOptionShape:
         """semester and course_slug on the item match the entry values."""
         entry = _make_entry()
         from examen.generate.convert_formative import convert_formative
+
         backend = FakeFormativeBackend()
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache")
         item = convert_formative(entry=entry, backend=backend, cache=cache)

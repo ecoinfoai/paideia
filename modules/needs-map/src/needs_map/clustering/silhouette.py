@@ -46,9 +46,7 @@ def recommend_k(
     candidates_list = list(candidate_k)
     invalid = [k for k in candidates_list if k < 2 or k > 6]
     if invalid:
-        raise ValueError(
-            f"recommend_k: candidate_k contains values outside [2, 6]: {invalid}."
-        )
+        raise ValueError(f"recommend_k: candidate_k contains values outside [2, 6]: {invalid}.")
     if not candidates_list:
         raise ValueError("recommend_k: candidate_k must be non-empty.")
 

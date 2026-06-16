@@ -112,9 +112,7 @@ def read_candidate_yaml(
     quiz_raw = raw.get("quiz")
     formative_raw = raw.get("formative")
     if quiz_raw is None or formative_raw is None:
-        raise ValueError(
-            f"candidate yaml must have 'quiz' and 'formative' top-level keys: {path}"
-        )
+        raise ValueError(f"candidate yaml must have 'quiz' and 'formative' top-level keys: {path}")
 
     quiz_items = [QuizItemCandidate.model_validate(d) for d in quiz_raw]
     formative_items = [FormativeItemCandidate.model_validate(d) for d in formative_raw]

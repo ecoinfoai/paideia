@@ -138,9 +138,7 @@ def render_cliff_bar(
         rc_params["font.family"] = font_family
 
     # Collect all item_types in a deterministic order (sorted)
-    all_types: list[str] = sorted(
-        {itype for f in findings for itype in f.cognitive_profile}
-    )
+    all_types: list[str] = sorted({itype for f in findings for itype in f.cognitive_profile})
     chapters = [f.chapter for f in findings if f.cognitive_profile]
 
     if not chapters or not all_types:
@@ -161,11 +159,7 @@ def render_cliff_bar(
         fig, ax = plt.subplots(figsize=(max(6, n_chapters * 1.5), 4))
 
         for i, itype in enumerate(all_types):
-            rates = [
-                f.cognitive_profile.get(itype, 0.0)
-                for f in findings
-                if f.cognitive_profile
-            ]
+            rates = [f.cognitive_profile.get(itype, 0.0) for f in findings if f.cognitive_profile]
             offset = (i - n_types / 2 + 0.5) * bar_width
             ax.bar(x + offset, rates, bar_width * 0.9, label=itype)
 

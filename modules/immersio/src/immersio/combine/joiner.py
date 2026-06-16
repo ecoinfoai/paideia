@@ -23,11 +23,10 @@ default to ``None``).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
-import json
 import pandas as pd
-
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
 
 # Per data-model.md M1 / contracts/parquet_silver_combined.md.
@@ -40,11 +39,7 @@ _COMBINED_COLUMN_ORDER: tuple[str, ...] = (
     "semester",
     "course_slug",
     # Group 2 — needs-map factor_scores (24 = 8 axes × 3)
-    *[
-        f"{axis}_{suffix}"
-        for axis in STANDARD_AXIS_KEYS
-        for suffix in ("raw", "z", "missing")
-    ],
+    *[f"{axis}_{suffix}" for axis in STANDARD_AXIS_KEYS for suffix in ("raw", "z", "missing")],
     # Group 3 — needs-map cluster (3)
     "cluster_id",
     "cluster_label",
@@ -82,9 +77,8 @@ _COMBINED_COLUMN_ORDER: tuple[str, ...] = (
     "immersio_phase2_schema_version",
 )
 
-assert len(_COMBINED_COLUMN_ORDER) == 60, (
-    f"60-column contract drift: got {len(_COMBINED_COLUMN_ORDER)}"
-)
+if len(_COMBINED_COLUMN_ORDER) != 60:
+    raise ValueError(f"60-column contract drift: got {len(_COMBINED_COLUMN_ORDER)}")
 
 _GROUP6_AUX_COLUMNS: tuple[str, ...] = (
     "prior_readiness_q5",
@@ -143,9 +137,7 @@ def _decode_json_dict_column(value: object) -> dict:
         if not value:
             return {}
         return json.loads(value)
-    raise TypeError(
-        f"unexpected dict-column value type {type(value).__name__}: {value!r}"
-    )
+    raise TypeError(f"unexpected dict-column value type {type(value).__name__}: {value!r}")
 
 
 def join_silver_phase3(
@@ -195,9 +187,7 @@ def join_silver_phase3(
     # cluster_assignment (that delta is the legitimate non-respondent group).
     respondent_master_ids: set[str]
     if "responded" in factor_scores.columns:
-        respondents_in_fs = set(
-            factor_scores.loc[factor_scores["responded"], "student_id"]
-        )
+        respondents_in_fs = set(factor_scores.loc[factor_scores["responded"], "student_id"])
         respondent_master_ids = master_ids & respondents_in_fs
     else:
         respondent_master_ids = master_ids & fs_ids
@@ -210,9 +200,7 @@ def join_silver_phase3(
     )
 
     # Validate cluster_names coverage.
-    used_cluster_ids = {
-        int(cid) for cid in cluster_assignment["cluster_id"].dropna().unique()
-    }
+    used_cluster_ids = {int(cid) for cid in cluster_assignment["cluster_id"].dropna().unique()}
     missing_labels = used_cluster_ids - set(cluster_names)
     if missing_labels:
         raise ValueError(
@@ -241,9 +229,9 @@ def join_silver_phase3(
     # ------------------------------------------------------------------
     # Group 3 — cluster_assignment merge (3 columns)
     # ------------------------------------------------------------------
-    ca_subset = cluster_assignment[
-        ["student_id", "cluster_id", "distance_to_centroid"]
-    ].rename(columns={"distance_to_centroid": "cluster_distance"})
+    ca_subset = cluster_assignment[["student_id", "cluster_id", "distance_to_centroid"]].rename(
+        columns={"distance_to_centroid": "cluster_distance"}
+    )
     df = df.merge(ca_subset, on="student_id", how="left")
 
     # cluster_id can be NaN for non-respondents → keep nullable Int64
@@ -299,9 +287,7 @@ def join_silver_phase3(
     # Final column ordering + row sort.
     # ------------------------------------------------------------------
     df = df[list(_COMBINED_COLUMN_ORDER)]
-    df = df.sort_values("student_id", ascending=True, kind="stable").reset_index(
-        drop=True
-    )
+    df = df.sort_values("student_id", ascending=True, kind="stable").reset_index(drop=True)
 
     # Convert pandas NA / NaT / NaN sentinels to None for Pydantic
     # downstream — Pydantic V2 only accepts None for ``Optional`` fields,

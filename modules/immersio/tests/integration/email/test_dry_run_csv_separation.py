@@ -41,9 +41,7 @@ import time
 from pathlib import Path
 
 import responses
-
 from immersio.email.pipeline import run_email_dispatch
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -124,8 +122,7 @@ def test_dry_run_does_not_touch_send_mode_log_csv(email_fixture) -> None:
         assert rc == 0, f"dry-run #{run_idx} returned non-zero rc"
 
         assert send_log.exists(), (
-            f"after dry-run #{run_idx}: ``메일_발송로그.csv`` was deleted "
-            "(should be untouched)"
+            f"after dry-run #{run_idx}: ``메일_발송로그.csv`` was deleted (should be untouched)"
         )
         post_mtime, post_sha = _stat_pair(send_log)
         assert post_sha == pre_sha, (
@@ -172,8 +169,7 @@ def test_dry_run_dryrun_csv_truncate_write_byte_identical(email_fixture) -> None
     text = first_bytes.decode("utf-8")
     lines = text.splitlines()
     assert len(lines) >= 2, (
-        f"dryrun csv has only {len(lines)} line(s); expected header + "
-        f"≥1 dry_run row"
+        f"dryrun csv has only {len(lines)} line(s); expected header + ≥1 dry_run row"
     )
     # Exactly N=5 student rows for the 5-student fixture (cohort=all).
     students = email_fixture["students"]
@@ -182,8 +178,7 @@ def test_dry_run_dryrun_csv_truncate_write_byte_identical(email_fixture) -> None
         f"{1 + len(students)} (header + {len(students)} students)"
     )
     assert text.count(",dry_run,") == len(students), (
-        f"expected {len(students)} ``dry_run`` rows; got "
-        f"{text.count(',dry_run,')}"
+        f"expected {len(students)} ``dry_run`` rows; got {text.count(',dry_run,')}"
     )
 
     # Runs #2 and #3 must produce byte-identical truncate-write output.

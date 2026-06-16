@@ -8,11 +8,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import openpyxl
 import pytest
-
 from immersio.combine.xlsx_writer import write_us1_xlsx
 from paideia_shared.schemas import (
     CorrelationCell,
@@ -215,6 +212,5 @@ def test_dcterms_modified_pinned(
     with zipfile.ZipFile(out, "r") as zf:
         core_xml = zf.read("docProps/core.xml").decode("utf-8")
     assert "2000-01-01T00:00:00Z" in core_xml, (
-        f"<dcterms:modified> not pinned to epoch (got core.xml excerpt: "
-        f"{core_xml[:500]})"
+        f"<dcterms:modified> not pinned to epoch (got core.xml excerpt: {core_xml[:500]})"
     )

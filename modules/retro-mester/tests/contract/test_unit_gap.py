@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -40,6 +41,7 @@ def _valid_kwargs() -> dict:
 # Valid construction
 # ---------------------------------------------------------------------------
 
+
 def test_valid_construction() -> None:
     """A fully specified valid UnitGap is accepted."""
     gap = UnitGap(**_valid_kwargs())
@@ -51,6 +53,7 @@ def test_valid_construction() -> None:
 # ---------------------------------------------------------------------------
 # V1: n_below <= evidence_n
 # ---------------------------------------------------------------------------
+
 
 def test_v1_n_below_exceeds_evidence_n() -> None:
     """V1: n_below > evidence_n raises ValidationError."""
@@ -72,6 +75,7 @@ def test_v1_n_below_equals_evidence_n_accepted() -> None:
 # ---------------------------------------------------------------------------
 # V2: impact_score == n_below * weight
 # ---------------------------------------------------------------------------
+
 
 def test_v2_impact_score_mismatch() -> None:
     """V2: impact_score != n_below * weight raises ValidationError."""
@@ -96,6 +100,7 @@ def test_v2_impact_score_within_float_tolerance() -> None:
 # Extra-field rejection
 # ---------------------------------------------------------------------------
 
+
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""
     with pytest.raises(ValidationError):
@@ -105,6 +110,7 @@ def test_extra_field_rejected() -> None:
 # ---------------------------------------------------------------------------
 # Frozen
 # ---------------------------------------------------------------------------
+
 
 def test_frozen_prevents_mutation() -> None:
     """frozen=True prevents in-place attribute mutation."""

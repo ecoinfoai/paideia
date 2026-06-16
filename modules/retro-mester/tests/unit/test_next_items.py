@@ -146,7 +146,8 @@ class TestProposeNextItems:
         proposals = propose_next_items(gaps, rows, config)
 
         chapter_proposals = [
-            p for p in proposals
+            p
+            for p in proposals
             if _CHAPTER_A in p.target_unit_or_axis and p.proposed_kind == "likert"
         ]
         assert len(chapter_proposals) >= 1
@@ -161,10 +162,7 @@ class TestProposeNextItems:
 
         proposals = propose_next_items(gaps, rows, config)
 
-        bio_proposals = [
-            p for p in proposals
-            if p.missing_signal == "생물 최종학습 시기"
-        ]
+        bio_proposals = [p for p in proposals if p.missing_signal == "생물 최종학습 시기"]
         assert len(bio_proposals) == 1
         assert bio_proposals[0].proposed_kind == "single_select"
 
@@ -179,7 +177,8 @@ class TestProposeNextItems:
         proposals = propose_next_items(gaps, rows, config)
 
         chapter_proposals = [
-            p for p in proposals
+            p
+            for p in proposals
             if _CHAPTER_B in p.target_unit_or_axis and p.proposed_kind == "likert"
         ]
         assert len(chapter_proposals) == 0

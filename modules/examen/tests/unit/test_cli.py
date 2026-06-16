@@ -20,6 +20,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _invoke(argv: list[str]) -> int:
     """Invoke the examen CLI app with the given argv, returning the exit code."""
     from examen.cli.main import app
@@ -79,6 +80,7 @@ def _write_invalid_blueprint(tmp_path: Path, name: str = "bad_blueprint.yaml") -
 # Import / help tests
 # ---------------------------------------------------------------------------
 
+
 class TestCLIImport:
     def test_app_is_importable(self) -> None:
         """examen.cli.main.app must be importable."""
@@ -125,27 +127,38 @@ class TestMissingRequiredOptions:
 # Bad blueprint → exit 2
 # ---------------------------------------------------------------------------
 
+
 class TestBlueprintValidation:
     def test_explicit_invalid_blueprint_returns_exit2(self, tmp_path: Path) -> None:
         """Explicit --blueprint pointing to an invalid YAML returns exit 2."""
         bad_bp = _write_invalid_blueprint(tmp_path)
-        code = _invoke([
-            "ingest",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--blueprint", str(bad_bp),
-        ])
+        code = _invoke(
+            [
+                "ingest",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--blueprint",
+                str(bad_bp),
+            ]
+        )
         assert code == 2
 
     def test_explicit_missing_blueprint_returns_exit2(self, tmp_path: Path) -> None:
         """Explicit --blueprint pointing to a non-existent file returns exit 2."""
         missing = tmp_path / "no_such_blueprint.yaml"
-        code = _invoke([
-            "ingest",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--blueprint", str(missing),
-        ])
+        code = _invoke(
+            [
+                "ingest",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--blueprint",
+                str(missing),
+            ]
+        )
         assert code == 2
 
     def test_valid_blueprint_does_not_return_exit2(self, tmp_path: Path) -> None:
@@ -155,12 +168,17 @@ class TestBlueprintValidation:
         NOT for blueprint validation failure.
         """
         valid_bp = _write_valid_blueprint(tmp_path)
-        code = _invoke([
-            "ingest",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--blueprint", str(valid_bp),
-        ])
+        code = _invoke(
+            [
+                "ingest",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--blueprint",
+                str(valid_bp),
+            ]
+        )
         # Should NOT be exit 2 (validation error); may be 0 or 3 depending
         # on whether bronze data exists, but blueprint itself is valid.
         assert code != 2
@@ -170,32 +188,45 @@ class TestBlueprintValidation:
 # Backend option — only accepted values
 # ---------------------------------------------------------------------------
 
+
 class TestBackendOption:
     def test_generate_accepts_subscription_backend(self, tmp_path: Path) -> None:
         """--backend subscription is accepted (even if generate is a stub)."""
         valid_bp = _write_valid_blueprint(tmp_path)
         # We pass a valid blueprint; the command may fail for other reasons
         # but should NOT exit 2 for unknown backend value.
-        code = _invoke([
-            "generate",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--backend", "subscription",
-            "--blueprint", str(valid_bp),
-        ])
+        code = _invoke(
+            [
+                "generate",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--backend",
+                "subscription",
+                "--blueprint",
+                str(valid_bp),
+            ]
+        )
         # Exit 2 = validation failure; we only check it's not a config error.
         assert code != 2
 
     def test_generate_accepts_api_backend(self, tmp_path: Path) -> None:
         """--backend api is accepted (even if generate is a stub)."""
         valid_bp = _write_valid_blueprint(tmp_path)
-        code = _invoke([
-            "generate",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--backend", "api",
-            "--blueprint", str(valid_bp),
-        ])
+        code = _invoke(
+            [
+                "generate",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--backend",
+                "api",
+                "--blueprint",
+                str(valid_bp),
+            ]
+        )
         assert code != 2
 
 
@@ -203,23 +234,30 @@ class TestBackendOption:
 # no-emphasis flag
 # ---------------------------------------------------------------------------
 
+
 class TestNoEmphasisFlag:
     def test_generate_accepts_no_emphasis(self, tmp_path: Path) -> None:
         """--no-emphasis flag is accepted (even if generate is a stub)."""
         valid_bp = _write_valid_blueprint(tmp_path)
-        code = _invoke([
-            "generate",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--no-emphasis",
-            "--blueprint", str(valid_bp),
-        ])
+        code = _invoke(
+            [
+                "generate",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--no-emphasis",
+                "--blueprint",
+                str(valid_bp),
+            ]
+        )
         assert code != 2
 
 
 # ---------------------------------------------------------------------------
 # Pipeline exception trap → exit 3 / 4
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineExceptionTrap:
     """app() must map pipeline exceptions to exit codes 3/4 now (T016).
@@ -255,6 +293,7 @@ class TestPipelineExceptionTrap:
 # ---------------------------------------------------------------------------
 # build: pipeline ValueError → exit 2 (config/coverage fault, NOT a RuntimeError)
 # ---------------------------------------------------------------------------
+
 
 def _write_valid_curriculum_map(tmp_path: Path, name: str = "curriculum_map.yaml") -> Path:
     """Write a valid curriculum_map.yaml matching the valid blueprint chapters."""
@@ -296,21 +335,26 @@ class TestBuildPipelineValueError:
         valid_cm = _write_valid_curriculum_map(tmp_path)
 
         def _boom(**_kwargs: object) -> tuple[list, Path]:
-            raise ValueError(
-                "build_exam: slot 'slot-001' chapter_no=99 has no chapter data"
-            )
+            raise ValueError("build_exam: slot 'slot-001' chapter_no=99 has no chapter data")
 
         # Patch build_exam where _run_build imports it (examen.pipeline).
         import examen.pipeline as pipeline_mod
+
         monkeypatch.setattr(pipeline_mod, "build_exam", _boom)
         # _run_build does `from examen.pipeline import build_exam`, so patching
         # the module attribute is sufficient (import happens at call time).
 
-        code = cli_main.app([
-            "build",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--blueprint", str(valid_bp),
-            "--curriculum-map", str(valid_cm),
-        ])
+        code = cli_main.app(
+            [
+                "build",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--blueprint",
+                str(valid_bp),
+                "--curriculum-map",
+                str(valid_cm),
+            ]
+        )
         assert code == 2

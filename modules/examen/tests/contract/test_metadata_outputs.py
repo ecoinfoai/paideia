@@ -217,7 +217,9 @@ class TestExcelYamlConsistency:
 
         item = _make_item(item_no=1)
         # Simulate a length-flagged item by adding a review_note
-        item_with_note = item.model_copy(update={"review_note": "[length_check] wrong_explanation 길이 위반"})
+        item_with_note = item.model_copy(
+            update={"review_note": "[length_check] wrong_explanation 길이 위반"}
+        )
         items = [item_with_note]
 
         xlsx_path = tmp_path / "note.xlsx"
@@ -445,9 +447,10 @@ class TestExamItemProjection:
         """write_exam_item_projection writes a loadable yaml sidecar."""
         from examen.output.exam_item_projection import write_exam_item_projection
 
-        items = [_make_item(item_no=i, difficulty=d) for i, d in enumerate(
-            ["1_쉬움", "2_보통", "3_어려움"], start=1
-        )]
+        items = [
+            _make_item(item_no=i, difficulty=d)
+            for i, d in enumerate(["1_쉬움", "2_보통", "3_어려움"], start=1)
+        ]
         dest = tmp_path / "exam_items.yaml"
         write_exam_item_projection(items, dest, semester="2026-1", course_slug="anatomy")
         assert dest.exists()
@@ -511,7 +514,9 @@ class TestDetectDuplicates:
         ]
         result = detect_duplicates(items)
         assert result[0].duplicate_flag is False, "first item should NOT be flagged"
-        assert result[1].duplicate_flag is True, "second item with same key_concept should be flagged"
+        assert result[1].duplicate_flag is True, (
+            "second item with same key_concept should be flagged"
+        )
         assert result[2].duplicate_flag is False, "different key_concept should NOT be flagged"
 
     def test_three_duplicates_flags_second_and_third(self) -> None:

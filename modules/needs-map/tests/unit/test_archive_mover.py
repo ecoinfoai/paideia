@@ -40,7 +40,9 @@ def test_second_run_moves_contents_into_timestamp_dir(tmp_path: Path) -> None:
     archive_subdir = direct / label
     assert archive_subdir.is_dir()
     assert (archive_subdir / "a.parquet").read_text(encoding="utf-8") == "content of a.parquet\n"
-    assert (archive_subdir / "manifest.json").read_text(encoding="utf-8") == "content of manifest.json\n"
+    assert (archive_subdir / "manifest.json").read_text(
+        encoding="utf-8"
+    ) == "content of manifest.json\n"
 
     # direct path now contains only _archive (entries moved)
     remaining = [p.name for p in direct.iterdir() if p.name != "_archive"]

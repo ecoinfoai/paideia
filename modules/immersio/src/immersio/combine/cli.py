@@ -49,9 +49,7 @@ def _stderr(phase: str, category: str, message: str) -> None:
     print(f"ERROR [combine.{phase}]: {category} — {message}", file=sys.stderr)
 
 
-def _required_silver_inputs(
-    *, silver_dir: Path, semester: str, course_slug: str
-) -> list[Path]:
+def _required_silver_inputs(*, silver_dir: Path, semester: str, course_slug: str) -> list[Path]:
     """Return the 8 silver inputs the pipeline needs (cli_combine.md
     Resolved input paths)."""
     nm = silver_dir / "needs-map" / f"{semester}-{course_slug}"

@@ -14,12 +14,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from immersio.combine.figures import render_fig3_heatmap, render_fig4_beta_bar
 from paideia_shared.schemas import (
     CorrelationCell,
     RegressionCoefficient,
-    RegressionFitSummary,
 )
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
 
@@ -68,9 +66,7 @@ def _coef(axis: str, *, beta: float = 0.5, q: float = 0.01) -> RegressionCoeffic
 
 
 def test_fig3_writes_png_file(tmp_path: Path) -> None:
-    cells = [
-        _cell(axis, "total_score") for axis in STANDARD_AXIS_KEYS
-    ]
+    cells = [_cell(axis, "total_score") for axis in STANDARD_AXIS_KEYS]
     out = tmp_path / "fig3.png"
     render_fig3_heatmap(cells, out)
     assert out.exists()
@@ -116,8 +112,9 @@ def test_fig3_handles_multiple_metrics(tmp_path: Path) -> None:
 
 def test_fig3_handles_none_pearson_r(tmp_path: Path) -> None:
     """Cells with r=None (n<3 / constant) must not crash; rendered as blank."""
-    cells = [_cell(axis, "total_score", r=None, p=None, q=None, sig=False)
-             for axis in STANDARD_AXIS_KEYS]
+    cells = [
+        _cell(axis, "total_score", r=None, p=None, q=None, sig=False) for axis in STANDARD_AXIS_KEYS
+    ]
     out = tmp_path / "fig3_none.png"
     render_fig3_heatmap(cells, out)
     assert out.stat().st_size > 0

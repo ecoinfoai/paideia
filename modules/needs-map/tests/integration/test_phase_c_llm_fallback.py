@@ -46,9 +46,7 @@ def test_llm_failure_falls_back_with_manifest_record(
 
         chat = _Chat()
 
-    monkeypatch.setattr(
-        pipeline_mod, "make_client", lambda **_kw: _FakeTimeout(), raising=False
-    )
+    monkeypatch.setattr(pipeline_mod, "make_client", lambda **_kw: _FakeTimeout(), raising=False)
 
     args = NeedsMapArgs(
         semester="2026-1",

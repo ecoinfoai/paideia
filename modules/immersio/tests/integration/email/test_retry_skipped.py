@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import argparse
 import io
-from datetime import datetime, timezone, timedelta
-
-import pytest
+from datetime import datetime, timedelta, timezone
 
 from immersio.email.log import append_dispatch_log_rows
 from immersio.email.pipeline import run_email_dispatch
@@ -80,9 +78,7 @@ def _seed_row(sid: str, status: DispatchStatus, error_kind: str = ""):
         attempt_at_kst=datetime(2026, 4, 30, 12, 0, 0, tzinfo=KST),
         mode=DispatchMode.PRODUCTION,
         status=status,
-        smtp_message_id="<x@example.ac.kr>"
-        if status == DispatchStatus.SUCCESS
-        else "",
+        smtp_message_id="<x@example.ac.kr>" if status == DispatchStatus.SUCCESS else "",
         error_kind=error_kind,
         error_detail="",
         exam_name="중간고사",
@@ -100,22 +96,14 @@ def test_retry_skipped_only_skipped(email_fixture, monkeypatch) -> None:
         [
             _seed_row(sids[0], DispatchStatus.SUCCESS),
             _seed_row(sids[1], DispatchStatus.SUCCESS),
-            _seed_row(
-                sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"
-            ),
-            _seed_row(
-                sids[3], DispatchStatus.SKIPPED, error_kind="invalid_email"
-            ),
-            _seed_row(
-                sids[4], DispatchStatus.SKIPPED, error_kind="email_not_found"
-            ),
+            _seed_row(sids[2], DispatchStatus.FAILED, error_kind="gmail_api_unknown"),
+            _seed_row(sids[3], DispatchStatus.SKIPPED, error_kind="invalid_email"),
+            _seed_row(sids[4], DispatchStatus.SKIPPED, error_kind="email_not_found"),
         ],
     )
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args())
     assert rc == 0
 

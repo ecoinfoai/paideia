@@ -94,8 +94,7 @@ def polish_with_llm(
 
     prompt = (
         "다음 코칭 멘트의 어조를 더 자연스럽게 다듬으세요. "
-        "수치·구조는 변경하지 마세요. 2-3줄로 작성하세요.\n\n"
-        + redacted
+        "수치·구조는 변경하지 마세요. 2-3줄로 작성하세요.\n\n" + redacted
     )
     result, outcome = call_with_response_model(
         llm_client,

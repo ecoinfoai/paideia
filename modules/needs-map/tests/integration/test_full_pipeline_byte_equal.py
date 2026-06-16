@@ -60,9 +60,7 @@ def _gold(out_root: Path) -> Path:
 def _assert_byte_equal(path_a: Path, path_b: Path) -> None:
     assert path_a.is_file(), f"missing {path_a}"
     assert path_b.is_file(), f"missing {path_b}"
-    assert filecmp.cmp(path_a, path_b, shallow=False), (
-        f"bytes differ: {path_a.name}"
-    )
+    assert filecmp.cmp(path_a, path_b, shallow=False), f"bytes differ: {path_a.name}"
 
 
 def test_full_pipeline_byte_equal_two_runs(tmp_path: Path) -> None:
@@ -157,27 +155,19 @@ def test_full_pipeline_determinism_keys_match(tmp_path: Path) -> None:
 
     # Mapping yaml hash (input fingerprint)
     assert (
-        manifest_a.inputs.diagnostic_mapping_sha256
-        == manifest_b.inputs.diagnostic_mapping_sha256
+        manifest_a.inputs.diagnostic_mapping_sha256 == manifest_b.inputs.diagnostic_mapping_sha256
     )
     # Font hashes (regular + bold)
     assert manifest_a.font_resolution is not None
     assert manifest_b.font_resolution is not None
-    assert (
-        manifest_a.font_resolution.regular_sha256
-        == manifest_b.font_resolution.regular_sha256
-    )
-    assert (
-        manifest_a.font_resolution.bold_sha256
-        == manifest_b.font_resolution.bold_sha256
-    )
+    assert manifest_a.font_resolution.regular_sha256 == manifest_b.font_resolution.regular_sha256
+    assert manifest_a.font_resolution.bold_sha256 == manifest_b.font_resolution.bold_sha256
     # Sentiment fallback path: model hashes are None on both sides.
     assert manifest_a.sentiment is not None
     assert manifest_b.sentiment is not None
     assert manifest_a.sentiment.model_sha256 == manifest_b.sentiment.model_sha256
     assert (
-        manifest_a.sentiment.tokenizer_vocab_sha256
-        == manifest_b.sentiment.tokenizer_vocab_sha256
+        manifest_a.sentiment.tokenizer_vocab_sha256 == manifest_b.sentiment.tokenizer_vocab_sha256
     )
     assert (
         manifest_a.sentiment.negative_label_subset_sha256

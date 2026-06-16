@@ -40,16 +40,22 @@ KST = timezone(timedelta(hours=9))
 # no student/professor identifiers — ADR-009 exception #3).
 # ---------------------------------------------------------------------------
 
-EMAIL_BODY_TEMPLATE_KO = """안녕하세요 {university_name} {department_name} {sender_name} 교수입니다. 여러분이 얼마 전에 치른 {exam_name}의 결과를 이메일로 전달합니다.
-첨부파일 내용을 확인하시고, 자신의 학습 방식이나 기타 궁금한 점은 상담을 통해 함께 고민해 봅시다. 상담이 필요한 학생은 아래 구글 캘린더 링크를 통해 상담 예약을 만들어주세요.
-만약 상담예약을 넣었는데 일정을 바꿔야 할 일이 있다면, 다른 학생이 그 시간대를 사용할 수 있도록 꼭 상담예약을 수정해주세요(구글캘린더 링크 접속해서 수정/변경 가능합니다).
-
-{google_calendar_url}
-
-{sent_date_kr}
-
-{sender_name} 교수
-"""
+EMAIL_BODY_TEMPLATE_KO = (
+    "안녕하세요 {university_name} {department_name} {sender_name} 교수입니다. "
+    "여러분이 얼마 전에 치른 {exam_name}의 결과를 이메일로 전달합니다.\n"
+    "첨부파일 내용을 확인하시고, 자신의 학습 방식이나 기타 궁금한 점은 "
+    "상담을 통해 함께 고민해 봅시다. "
+    "상담이 필요한 학생은 아래 구글 캘린더 링크를 통해 상담 예약을 만들어주세요.\n"
+    "만약 상담예약을 넣었는데 일정을 바꿔야 할 일이 있다면, "
+    "다른 학생이 그 시간대를 사용할 수 있도록 꼭 "
+    "상담예약을 수정해주세요(구글캘린더 링크 접속해서 수정/변경 가능합니다).\n"
+    "\n"
+    "{google_calendar_url}\n"
+    "\n"
+    "{sent_date_kr}\n"
+    "\n"
+    "{sender_name} 교수\n"
+)
 
 
 _PLACEHOLDER_RE = re.compile(r"\{[a-z_]+\}")
@@ -134,9 +140,7 @@ def build_email_draft(
 
     from_display = f"{course_name_kr} ({profile.sender.display_name} 교수)"
     from_header = formataddr((from_display, profile.send_account.email))
-    reply_to_header = formataddr(
-        (profile.sender.display_name, profile.sender.email)
-    )
+    reply_to_header = formataddr((profile.sender.display_name, profile.sender.email))
 
     to_header = override_to if override_to is not None else str(mapping_entry.email)
 
@@ -154,15 +158,10 @@ def build_email_draft(
     body_text = _build_body(profile, exam_name=exam_name, sent_date=sent_date)
 
     # Deterministic Message-ID and boundary
-    message_id = (
-        f"<{pdf_bundle.student_id}.{iso_date}.{course_slug}.{semester}"
-        f"@{sender_domain}>"
-    )
+    message_id = f"<{pdf_bundle.student_id}.{iso_date}.{course_slug}.{semester}@{sender_domain}>"
     mime_boundary = f"boundary-{pdf_bundle.student_id}-{iso_date}"
 
-    date_header = datetime.combine(sent_date, datetime.min.time(), tzinfo=KST).replace(
-        hour=12
-    )
+    date_header = datetime.combine(sent_date, datetime.min.time(), tzinfo=KST).replace(hour=12)
 
     return EmailMessageDraft(
         student_id=pdf_bundle.student_id,

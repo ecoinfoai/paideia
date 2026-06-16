@@ -71,7 +71,5 @@ def test_input_hash_changes_when_input_changes(tmp_path: Path) -> None:
     manifest_second = json.loads(
         (tmp_path / "silver2" / "2026-1-anatomy" / "manifest.json").read_text()
     )
-    diag_input_second = next(
-        i for i in manifest_second["inputs"] if i["role"] == "diagnostic_csv"
-    )
+    diag_input_second = next(i for i in manifest_second["inputs"] if i["role"] == "diagnostic_csv")
     assert diag_input_first["sha256"] != diag_input_second["sha256"]

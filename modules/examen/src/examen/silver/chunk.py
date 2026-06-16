@@ -50,9 +50,7 @@ from examen.ingest.textbook_clean import clean_textbook
 
 # Matches "N. 절제목" where N is one or more digits.
 # Covers both TOC entries (near chapter top) and body headings.
-_RE_SECTION_HEADING: Final = re.compile(
-    r"^\s*(\d+)\.\s+(.+)$"
-)
+_RE_SECTION_HEADING: Final = re.compile(r"^\s*(\d+)\.\s+(.+)$")
 
 
 def _make_chunk_id(
@@ -249,18 +247,14 @@ def chunk_chapter(
 
         # Collect body lines for this section (heading + body, no blanks)
         section_lines = [
-            text
-            for lineno, text in non_blank_kept
-            if heading_lineno <= lineno <= end_lineno
+            text for lineno, text in non_blank_kept if heading_lineno <= lineno <= end_lineno
         ]
 
         text_body = "\n".join(section_lines)
         if txt_summary:
             text_body = f"{text_body}\n\n[auxiliary_summary]\n{txt_summary}"
 
-        chunk_id = _make_chunk_id(
-            semester, course_slug, chapter_no, section_text, ordinal
-        )
+        chunk_id = _make_chunk_id(semester, course_slug, chapter_no, section_text, ordinal)
 
         chunks.append(
             TextbookChunk(

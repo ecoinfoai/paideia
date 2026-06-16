@@ -33,21 +33,22 @@ from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
-from scipy.stats import (
-    f_oneway,
-    levene,
-    studentized_range,
-    t as t_dist,
-    tukey_hsd,
-)
-
-from immersio.analysis.stat_tests import welch_anova_manual, welch_t_test
-
 from paideia_shared.schemas.cluster_score_comparison import (
     ClusterPairwise,
     ClusterRow,
     ClusterScoreComparison,
 )
+from scipy.stats import (
+    f_oneway,
+    levene,
+    studentized_range,
+    tukey_hsd,
+)
+from scipy.stats import (
+    t as t_dist,
+)
+
+from immersio.analysis.stat_tests import welch_anova_manual, welch_t_test
 
 from .effect_sizes import eta_squared
 from .fdr import bh_fdr_adjust
@@ -98,9 +99,7 @@ def _build_row(
     )
 
 
-def _games_howell_pair(
-    g1: np.ndarray, g2: np.ndarray, k_groups: int
-) -> tuple[float, float]:
+def _games_howell_pair(g1: np.ndarray, g2: np.ndarray, k_groups: int) -> tuple[float, float]:
     """Manual Games-Howell pairwise comparison (research §R3).
 
     Returns ``(mean_diff, p_value)`` where p is computed via the
@@ -116,38 +115,26 @@ def _games_howell_pair(
     if se == 0.0:
         return m1 - m2, 1.0
     t_stat = (m1 - m2) / se
-    df = ((v1 / n1 + v2 / n2) ** 2) / (
-        (v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1)
-    )
+    df = ((v1 / n1 + v2 / n2) ** 2) / ((v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1))
     q = abs(t_stat) * math.sqrt(2.0)
     p = float(studentized_range.sf(q, k_groups, df))
     return (m1 - m2, max(0.0, min(1.0, p)))
 
 
-def _validate_inputs(
-    df: pd.DataFrame, cluster_names: Mapping[int, str]
-) -> pd.DataFrame:
+def _validate_inputs(df: pd.DataFrame, cluster_names: Mapping[int, str]) -> pd.DataFrame:
     """Filter to exam takers + cluster_id present + Fail-Fast on bad inputs."""
     if not cluster_names:
-        raise ValueError(
-            "compute_cluster_score_comparison: cluster_names sidecar is empty"
-        )
+        raise ValueError("compute_cluster_score_comparison: cluster_names sidecar is empty")
     if df.empty:
-        raise ValueError(
-            "compute_cluster_score_comparison: empty input DataFrame"
-        )
+        raise ValueError("compute_cluster_score_comparison: empty input DataFrame")
 
-    if "exam_taken" in df.columns:
-        work = df[df["exam_taken"].astype(bool)].copy()
-    else:
-        work = df.copy()
+    work = df[df["exam_taken"].astype(bool)].copy() if "exam_taken" in df.columns else df.copy()
     work = work[work["cluster_id"].notna()].copy()
     work = work[work["total_score"].notna()].copy()
 
     if work.empty:
         raise ValueError(
-            "compute_cluster_score_comparison: no exam-taking respondents "
-            "with cluster_id assigned"
+            "compute_cluster_score_comparison: no exam-taking respondents with cluster_id assigned"
         )
 
     used_cluster_ids = sorted({int(c) for c in work["cluster_id"].unique()})
@@ -166,9 +153,7 @@ def _validate_inputs(
 def _eta_squared_safe(arrays: list[np.ndarray]) -> float | None:
     all_vals = np.concatenate(arrays)
     ss_total = float(((all_vals - all_vals.mean()) ** 2).sum())
-    ss_between = float(
-        sum(arr.size * (arr.mean() - all_vals.mean()) ** 2 for arr in arrays)
-    )
+    ss_between = float(sum(arr.size * (arr.mean() - all_vals.mean()) ** 2 for arr in arrays))
     ssw = ss_total - ss_between
     if (ss_between + ssw) <= 0:
         return None
@@ -212,9 +197,7 @@ def compute_cluster_score_comparison(
     rows: list[ClusterRow] = []
     eligible: dict[int, np.ndarray] = {}
     for cid in used_cluster_ids:
-        subset = work[work["cluster_id"] == cid]["total_score"].to_numpy(
-            dtype=float
-        )
+        subset = work[work["cluster_id"] == cid]["total_score"].to_numpy(dtype=float)
         label = cluster_names[int(cid)]
         if subset.size < _MIN_CLUSTER_N:
             rows.append(
@@ -222,9 +205,7 @@ def compute_cluster_score_comparison(
                     int(cid),
                     label,
                     subset,
-                    excluded_reason=(
-                        f"n < 5 군집 자동 제외 (n={subset.size})"
-                    ),
+                    excluded_reason=(f"n < 5 군집 자동 제외 (n={subset.size})"),
                 )
             )
         else:
@@ -309,9 +290,7 @@ def compute_cluster_score_comparison(
             raw_ps.append(float(tukey.pvalue[i, j]))
             diffs.append(float(arrays[i].mean() - arrays[j].mean()))
         qs = bh_fdr_adjust(raw_ps)
-        for (i, j, cid_a, cid_b), diff, p, q in zip(
-            pair_specs, diffs, raw_ps, qs
-        ):
+        for (_i, _j, cid_a, cid_b), diff, p, q in zip(pair_specs, diffs, raw_ps, qs, strict=False):
             pairwise.append(
                 ClusterPairwise(
                     cluster_pair=(cid_a, cid_b),
@@ -336,8 +315,8 @@ def compute_cluster_score_comparison(
             diffs.append(diff)
             raw_ps_gh.append(p)
         qs = bh_fdr_adjust(raw_ps_gh)
-        for (i, j, cid_a, cid_b), diff, p, q in zip(
-            pair_specs, diffs, raw_ps_gh, qs
+        for (_i, _j, cid_a, cid_b), diff, p, q in zip(
+            pair_specs, diffs, raw_ps_gh, qs, strict=False
         ):
             pairwise.append(
                 ClusterPairwise(

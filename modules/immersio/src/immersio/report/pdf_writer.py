@@ -22,11 +22,17 @@ from __future__ import annotations
 import contextlib
 import datetime
 import os
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate
+
+if TYPE_CHECKING:
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import BaseDocTemplate
 
 from .. import fonts as _fonts
 from .md_parser import parse_markdown_to_flowables
@@ -35,7 +41,7 @@ _PRODUCER = "paideia/immersio/0.1.0"
 
 
 @contextlib.contextmanager
-def pin_source_date_epoch(epoch: int):
+def pin_source_date_epoch(epoch: int) -> Iterator[None]:
     """Set ``SOURCE_DATE_EPOCH`` for the wrapped block, restore on exit.
 
     reportlab's ``TimeStamp`` honours this env-var (see reportlab.pdfbase
@@ -61,11 +67,9 @@ def _to_pdf_date(iso_utc: str) -> str:
     try:
         dt = datetime.datetime.fromisoformat(s)
     except ValueError as exc:
-        raise ValueError(
-            f"created_at_utc is not a valid ISO8601 string: {iso_utc!r}"
-        ) from exc
+        raise ValueError(f"created_at_utc is not a valid ISO8601 string: {iso_utc!r}") from exc
     if dt.tzinfo is not None:
-        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(datetime.UTC).replace(tzinfo=None)
     return "D:" + dt.strftime("%Y%m%d%H%M%S") + "Z"
 
 
@@ -73,7 +77,7 @@ def _to_epoch(iso_utc: str) -> int:
     s = iso_utc.replace("Z", "+00:00")
     dt = datetime.datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
     return int(dt.timestamp())
 
 
@@ -137,7 +141,7 @@ def render_quality_report_pdf(
         producer=_PRODUCER,
     )
 
-    def _pin_metadata(canvas, _doc):
+    def _pin_metadata(canvas: Canvas, _doc: BaseDocTemplate) -> None:
         canvas.setProducer(_PRODUCER)
         canvas.setCreator(_PRODUCER)
         canvas.setTitle("시험품질보고서")

@@ -98,8 +98,7 @@ def get_gmail_credentials(
     env_var = profile.secrets_ref.service_account_json_path_env
     if not _ENV_VAR_RE.fullmatch(env_var):
         raise SecretsError(
-            f"FR-G02: invalid env var name pattern: {env_var!r} "
-            f"(must match ^[A-Z][A-Z0-9_]+$)"
+            f"FR-G02: invalid env var name pattern: {env_var!r} (must match ^[A-Z][A-Z0-9_]+$)"
         )
 
     path_str = os.environ.get(env_var)
@@ -111,18 +110,13 @@ def get_gmail_credentials(
 
     path = Path(path_str)
     if not path.is_file():
-        raise SecretsError(
-            f"FR-C07: SA JSON file not found at {str(path)!r}"
-        )
+        raise SecretsError(f"FR-C07: SA JSON file not found at {str(path)!r}")
 
     # Path-traversal defence (Reflag #2 / AV-A1) — reject any SA JSON path
     # that, after symlink resolution, escapes the canonical allowlist.
     resolved = path.resolve()
     allowed_prefixes = tuple(p.resolve() for p in _allowed_sa_path_prefixes())
-    if not any(
-        resolved == prefix or _is_under(resolved, prefix)
-        for prefix in allowed_prefixes
-    ):
+    if not any(resolved == prefix or _is_under(resolved, prefix) for prefix in allowed_prefixes):
         raise SecretsError(
             f"FR-C07: SA JSON path {str(resolved)!r} not in allowlist. "
             f"Allowed prefixes: {[str(p) for p in allowed_prefixes]}"
@@ -131,9 +125,7 @@ def get_gmail_credentials(
     try:
         st = path.stat()
     except OSError as exc:
-        raise SecretsError(
-            f"FR-C07: cannot stat SA JSON at {str(path)!r}: {exc}"
-        ) from exc
+        raise SecretsError(f"FR-C07: cannot stat SA JSON at {str(path)!r}: {exc}") from exc
 
     loose_bits = st.st_mode & (
         stat.S_IRGRP | stat.S_IROTH | stat.S_IWGRP | stat.S_IWOTH | stat.S_IXGRP | stat.S_IXOTH
@@ -148,28 +140,22 @@ def get_gmail_credentials(
     try:
         raw_text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise SecretsError(
-            f"FR-C07: cannot read SA JSON at {str(path)!r}: {exc}"
-        ) from exc
+        raise SecretsError(f"FR-C07: cannot read SA JSON at {str(path)!r}: {exc}") from exc
 
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError as exc:
         raise SecretsError(
-            f"FR-C07: SA JSON parse error at {str(path)!r}: {exc.msg} "
-            f"(line {exc.lineno})"
+            f"FR-C07: SA JSON parse error at {str(path)!r}: {exc.msg} (line {exc.lineno})"
         ) from exc
 
     if not isinstance(data, dict):
-        raise SecretsError(
-            f"FR-C07: SA JSON top-level must be object at {str(path)!r}"
-        )
+        raise SecretsError(f"FR-C07: SA JSON top-level must be object at {str(path)!r}")
 
     missing = [f for f in _REQUIRED_SA_FIELDS if f not in data]
     if missing:
         raise SecretsError(
-            f"FR-C07: SA JSON missing required field(s) {missing!r} "
-            f"at {str(path)!r}"
+            f"FR-C07: SA JSON missing required field(s) {missing!r} at {str(path)!r}"
         )
 
     if data["type"] != "service_account":

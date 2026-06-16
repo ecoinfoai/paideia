@@ -16,14 +16,12 @@ import math
 
 import numpy as np
 import pytest
-
 from immersio.combine.effect_sizes import (
     cohen_d,
     eta_squared,
     r_squared,
     standardized_beta,
 )
-
 
 # ----------------------------------------------------------------------
 # cohen_d (two-group pooled SD)

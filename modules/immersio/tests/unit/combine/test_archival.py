@@ -12,10 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from immersio.combine.archival import (
-    ArchivalError,
     archive_phase3_previous_run,
 )
 
@@ -23,9 +20,7 @@ from immersio.combine.archival import (
 def _populate_silver(target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     (target / "진단×시험결합.parquet").write_bytes(b"silver-bytes")
-    (target / "manifest_phase3.json").write_text(
-        '{"schema_version": "0.1.0"}\n', encoding="utf-8"
-    )
+    (target / "manifest_phase3.json").write_text('{"schema_version": "0.1.0"}\n', encoding="utf-8")
     # Phase 0/2 inputs that must stay put (whitelist excludes them).
     (target / "student_master.parquet").write_bytes(b"phase0-bytes")
     (target / "학생지표.parquet").write_bytes(b"phase2-bytes")

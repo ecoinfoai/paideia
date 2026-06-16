@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import date, datetime, timezone, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 import yaml
-
 from immersio.email.composer import (
     EMAIL_BODY_TEMPLATE_KO,
     build_email_draft,
@@ -61,7 +60,7 @@ def _entry() -> EmailMappingEntry:
         student_id="1234567890",
         email="student@example.com",
         source_row_index=0,
-        original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+        original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
     )
 
 
@@ -181,9 +180,7 @@ def test_date_header_kst_noon(tmp_path: Path) -> None:
 
 def test_message_id_deterministic_with_send_account_domain(tmp_path: Path) -> None:
     draft = build_email_draft(**_kwargs(tmp_path))
-    assert draft.message_id == (
-        "<1234567890.2026-05-01.anatomy.2026-1@example.ac.kr>"
-    )
+    assert draft.message_id == ("<1234567890.2026-05-01.anatomy.2026-1@example.ac.kr>")
 
 
 def test_mime_boundary_deterministic(tmp_path: Path) -> None:

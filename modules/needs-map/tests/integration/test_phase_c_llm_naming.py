@@ -43,9 +43,7 @@ def test_llm_naming_succeeds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     # the fake client without any real network.
     from needs_map import pipeline as pipeline_mod
 
-    monkeypatch.setattr(
-        pipeline_mod, "make_client", lambda **_kw: _FakeOk(), raising=False
-    )
+    monkeypatch.setattr(pipeline_mod, "make_client", lambda **_kw: _FakeOk(), raising=False)
 
     args = NeedsMapArgs(
         semester="2026-1",

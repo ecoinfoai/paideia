@@ -16,14 +16,11 @@ file path appear).
 from __future__ import annotations
 
 import json
-import os
-import stat
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 import yaml
-
 from immersio.email.secrets import SecretsError, get_gmail_credentials
 from paideia_shared.schemas import ProfessorProfile
 
@@ -57,9 +54,7 @@ operational_defaults:
 
 
 @pytest.fixture
-def whitelist_tmp_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> Path:
+def whitelist_tmp_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Whitelist tmp_path under the SA-allowlist for tests reaching past it.
 
     The production allowlist is /run/agenix, ~/.config/paideia, etc. —
@@ -115,9 +110,7 @@ def test_file_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
         get_gmail_credentials(profile)
 
 
-def test_permission_too_loose(
-    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
-) -> None:
+def test_permission_too_loose(monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path) -> None:
     sa = _make_sa_json(whitelist_tmp_path, mode=0o644)
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
     profile = _profile()
@@ -131,9 +124,7 @@ def test_permission_too_loose(
     assert "fake-sa@fake-project" not in msg
 
 
-def test_json_parse_error(
-    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
-) -> None:
+def test_json_parse_error(monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path) -> None:
     bad = whitelist_tmp_path / "bad.json"
     bad.write_text("{ not valid json", encoding="utf-8")
     bad.chmod(0o400)
@@ -153,13 +144,13 @@ def test_type_not_service_account(
         get_gmail_credentials(profile)
 
 
-def test_missing_required_field(
-    monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path
-) -> None:
+def test_missing_required_field(monkeypatch: pytest.MonkeyPatch, whitelist_tmp_path: Path) -> None:
     # Drop private_key to trigger missing-field check
     sa = whitelist_tmp_path / "missing.json"
     sa.write_text(
-        json.dumps({"type": "service_account", "client_email": "x@y.com"}),  # ALLOW_HARDCODING: fake placeholder for missing-field test
+        json.dumps(
+            {"type": "service_account", "client_email": "x@y.com"}
+        ),  # ALLOW_HARDCODING: fake placeholder for missing-field test
         encoding="utf-8",
     )
     sa.chmod(0o400)
@@ -177,24 +168,18 @@ def test_happy_path_calls_from_service_account_info(
     monkeypatch.setenv("PAIDEIA_GCP_SA_JSON_PATH_ALPHA", str(sa))
     profile = _profile()
 
-    with patch(
-        "immersio.email.secrets.Credentials.from_service_account_info"
-    ) as mock_from_info:
+    with patch("immersio.email.secrets.Credentials.from_service_account_info") as mock_from_info:
         mock_from_info.return_value = "creds-obj"
         result = get_gmail_credentials(profile)
 
     assert result == "creds-obj"
     mock_from_info.assert_called_once()
     call_kwargs = mock_from_info.call_args.kwargs
-    assert call_kwargs["scopes"] == [
-        "https://www.googleapis.com/auth/gmail.send"
-    ]
+    assert call_kwargs["scopes"] == ["https://www.googleapis.com/auth/gmail.send"]
     assert call_kwargs["subject"] == "noreply@example.ac.kr"
 
 
-def test_path_outside_allowlist_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_path_outside_allowlist_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Reflag #2 / AV-A1: SA JSON path outside allowlist → SecretsError.
 
     Even when file content is valid (mode 0400, parses, type=service_
@@ -226,6 +211,7 @@ def test_invalid_env_var_name_pattern() -> None:
     so this is reachable only if a profile is constructed bypassing
     validation. The function still validates as a belt-and-braces check.
     """
+
     # Build a profile with valid uppercase, then mutate via Pydantic
     # update mechanism would fail (frozen=True), so build a ad-hoc duck.
     class _DuckSecretsRef:

@@ -212,7 +212,7 @@ def _apply_llm_review_quiz(
                 raise
             # Degrade: skip LLM for this and all remaining items.
             result.append(item)
-            result.extend(items[len(result):])
+            result.extend(items[len(result) :])
             return result
 
         finding = response.raw_text.strip()

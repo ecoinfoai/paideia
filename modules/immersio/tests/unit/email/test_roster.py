@@ -6,13 +6,11 @@ import csv
 from pathlib import Path
 
 import pytest
-
 from immersio.email.roster import (
     RosterError,
     load_email_mapping,
     write_mapping_silver,
 )
-
 
 _HEADER = ["타임스탬프", "사용자 이름", "학번"]
 

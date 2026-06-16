@@ -46,9 +46,12 @@ def _section_1_overview(
         f"- 시험응시-only: {manifest.n_exam_only}\n"
         f"- 둘 다 없음 (n_neither): {manifest.n_neither}\n"
         f"- 명단 외 응답자 (n_off_roster_respondents): {manifest.n_off_roster_respondents}\n"
-        f"- factor_scores 미매칭 (n_unmatched_factor_scores): {manifest.n_unmatched_factor_scores}\n"
-        f"- cluster_assignment 미매칭 (n_unmatched_cluster_assignment): {manifest.n_unmatched_cluster_assignment}\n"
-        f"- 학생지표 미매칭 (n_unmatched_student_metrics): {manifest.n_unmatched_student_metrics}\n\n"
+        f"- factor_scores 미매칭 (n_unmatched_factor_scores): "
+        f"{manifest.n_unmatched_factor_scores}\n"
+        f"- cluster_assignment 미매칭 (n_unmatched_cluster_assignment): "
+        f"{manifest.n_unmatched_cluster_assignment}\n"
+        f"- 학생지표 미매칭 (n_unmatched_student_metrics): "
+        f"{manifest.n_unmatched_student_metrics}\n\n"
         "**통계 정의**:\n\n"
         f"- 회귀: {manifest.regression_method} (다중 선형회귀, 8 z-axis predictors)\n"
         f"- 다중비교 보정: {manifest.multiple_comparison_method} (q < 0.05)\n"
@@ -62,10 +65,13 @@ def _section_2_correlation(
     fig3_path: Path,
 ) -> str:
     sig = [c for c in cells if c.significant_after_correction]
-    sig_lines = "\n".join(
-        f"  - {c.axis_key} × {c.exam_metric_key}: r={c.pearson_r:+.3f}, q={c.fdr_q:.4f}"
-        for c in sig[:10]
-    ) or "  - 유의 셀 없음 (q ≥ 0.05 across 모든 셀)"
+    sig_lines = (
+        "\n".join(
+            f"  - {c.axis_key} × {c.exam_metric_key}: r={c.pearson_r:+.3f}, q={c.fdr_q:.4f}"
+            for c in sig[:10]
+        )
+        or "  - 유의 셀 없음 (q ≥ 0.05 across 모든 셀)"
+    )
 
     return (
         "## 2. 상관 매트릭스\n\n"
@@ -163,9 +169,7 @@ def _section_4_clusters(
         pairwise_block = ""
 
     fig5_md = (
-        f"\n![군집별 시험 점수 boxplot]({fig5_path.as_posix()})\n"
-        if fig5_path is not None
-        else ""
+        f"\n![군집별 시험 점수 boxplot]({fig5_path.as_posix()})\n" if fig5_path is not None else ""
     )
 
     # ADR-016 #7 군집 명명 prose (ruleset_version 0.1.1).
@@ -228,9 +232,7 @@ def _section_5_subgroups(
             f"{r.excluded_reason or '-'} |"
             for r in meta_rows
         )
-        eff_str = (
-            "-" if h.effect_size_value is None else f"{h.effect_size_value:.3f}"
-        )
+        eff_str = "-" if h.effect_size_value is None else f"{h.effect_size_value:.3f}"
         q_str = "-" if h.fdr_q is None else f"{h.fdr_q:.4f}"
         sub_idx = meta_order.index(meta_kind) + 1
         block = (
@@ -262,9 +264,11 @@ def _section_6_recommendations(
     text = recommendations.get("prescriptive_text", "")
     cited = ""
     if top3:
-        cited = "**Top-3 강예측 축** (manifest.top3_predictor_axes 정합):\n\n" + "\n".join(
-            f"- {a}" for a in top3
-        ) + "\n\n"
+        cited = (
+            "**Top-3 강예측 축** (manifest.top3_predictor_axes 정합):\n\n"
+            + "\n".join(f"- {a}" for a in top3)
+            + "\n\n"
+        )
     return (
         "## 6. 한계와 권고\n\n"
         f"{cited}"
@@ -336,9 +340,7 @@ def build_us1_report(
         section_4 = _section_4_placeholder()
 
     if subgroup_rows is not None and subgroup_headers is not None:
-        section_5 = _section_5_subgroups(
-            subgroup_rows, subgroup_headers, fig6_path
-        )
+        section_5 = _section_5_subgroups(subgroup_rows, subgroup_headers, fig6_path)
     else:
         section_5 = _section_5_placeholder()
 

@@ -94,9 +94,7 @@ class FactorScoresLongRow(BaseModel):
     def _student_id_is_ten_digits(cls, value: str) -> str:
         """student_id MUST be a 10-character ASCII digit string."""
         if not (isinstance(value, str) and value.isdigit() and len(value) == 10):
-            raise ValueError(
-                f"FactorScoresLongRow: student_id must be 10 digits, got {value!r}."
-            )
+            raise ValueError(f"FactorScoresLongRow: student_id must be 10 digits, got {value!r}.")
         return value
 
     @model_validator(mode="after")

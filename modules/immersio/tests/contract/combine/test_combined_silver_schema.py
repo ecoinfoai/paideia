@@ -19,10 +19,8 @@ from types import ModuleType
 
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.combine.joiner import join_silver_phase3
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
-
 
 _EXPECTED_COLUMNS_IN_ORDER: tuple[str, ...] = (
     # Group 1 — Identity (6)
@@ -33,11 +31,7 @@ _EXPECTED_COLUMNS_IN_ORDER: tuple[str, ...] = (
     "semester",
     "course_slug",
     # Group 2 — needs-map factor_scores (24 = 8 axes × {raw, z, missing})
-    *[
-        f"{axis}_{suffix}"
-        for axis in STANDARD_AXIS_KEYS
-        for suffix in ("raw", "z", "missing")
-    ],
+    *[f"{axis}_{suffix}" for axis in STANDARD_AXIS_KEYS for suffix in ("raw", "z", "missing")],
     # Group 3 — needs-map cluster (3)
     "cluster_id",
     "cluster_label",
@@ -79,9 +73,7 @@ _EXPECTED_COLUMNS_IN_ORDER: tuple[str, ...] = (
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -98,22 +90,16 @@ def joined_frame(tmp_path_factory: pytest.TempPathFactory) -> tuple:
 
     nm = out / "silver" / "needs-map" / "2026-1-anatomy"
     im = out / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
 
     df, counts = join_silver_phase3(
         student_master=pq.read_table(im / "student_master.parquet").to_pandas(),
         factor_scores=pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        cluster_assignment=pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        cluster_assignment=pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         cluster_names=cluster_names,
         student_metrics=pq.read_table(im / "학생지표.parquet").to_pandas(),
-        diagnostic_response=pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        diagnostic_response=pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     )
     return df, counts
 

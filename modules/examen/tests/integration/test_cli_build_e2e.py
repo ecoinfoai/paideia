@@ -229,9 +229,7 @@ def _write_curriculum_map(bronze: Path) -> None:
                 "subtopic": None,
                 "sections": ["1. 기본구조", "2. 기능"],
             }
-            for week, chapter, chapter_no in zip(
-                _WEEKS, _CHAPTERS, _CHAPTER_NOS, strict=True
-            )
+            for week, chapter, chapter_no in zip(_WEEKS, _CHAPTERS, _CHAPTER_NOS, strict=True)
         ],
     }
     (bronze / "curriculum_map.yaml").write_text(
@@ -410,34 +408,24 @@ class TestCLIBuildE2E:
         """Item count == blueprint.total_items."""
         _, gold_base = self._run(tmp_path, monkeypatch)
         run_dir = self._latest_run_dir(gold_base)
-        manifest = json.loads(
-            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
         assert manifest["item_count"] == _TOTAL
 
-    def test_all_three_sources_represented(
-        self, tmp_path: Path, monkeypatch: Any
-    ) -> None:
+    def test_all_three_sources_represented(self, tmp_path: Path, monkeypatch: Any) -> None:
         """formative + quiz + textbook all reach the Gold output."""
         _, gold_base = self._run(tmp_path, monkeypatch)
         run_dir = self._latest_run_dir(gold_base)
-        manifest = json.loads(
-            (run_dir / "manifest_examen.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((run_dir / "manifest_examen.json").read_text(encoding="utf-8"))
         breakdown = manifest["source_breakdown"]
         assert breakdown.get("textbook", 0) == _N_TEXTBOOK
         assert breakdown.get("formative", 0) == _N_FORMATIVE
         assert breakdown.get("quiz", 0) == _N_QUIZ
 
-    def test_ingest_report_records_inventories(
-        self, tmp_path: Path, monkeypatch: Any
-    ) -> None:
+    def test_ingest_report_records_inventories(self, tmp_path: Path, monkeypatch: Any) -> None:
         """ingest_report.json reflects loaded formative & quiz inventories."""
         _, gold_base = self._run(tmp_path, monkeypatch)
         run_dir = self._latest_run_dir(gold_base)
-        report = json.loads(
-            (run_dir / "ingest_report.json").read_text(encoding="utf-8")
-        )
+        report = json.loads((run_dir / "ingest_report.json").read_text(encoding="utf-8"))
         assert report["formative"]["found"] == _N_FORMATIVE
         assert report["quiz"]["rows"] == 30  # synthetic pool size
 

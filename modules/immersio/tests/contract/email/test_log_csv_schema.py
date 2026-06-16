@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import pytest
 
 from immersio.email.log import (
     append_dispatch_log_row,
@@ -96,7 +94,7 @@ def test_csv_uses_utf8_lf_line_endings(tmp_path: Path) -> None:
     # No CRLF — pure LF (default csv.writer with newline="" + utf-8)
     assert b"\r\n" not in raw
     # Korean characters present (UTF-8)
-    assert "홍길동".encode("utf-8") in raw
+    assert "홍길동".encode() in raw
 
 
 def test_mask_patterns_strip_secrets() -> None:
@@ -104,8 +102,11 @@ def test_mask_patterns_strip_secrets() -> None:
     assert "<redacted-app-password>" in mask_secrets_in_error_detail(
         "abcd efgh ijkl mnop"  # ALLOW_HARDCODING: intentional fixture
     )
-    assert "<redacted-rsa-private-key>" in mask_secrets_in_error_detail(
-        "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----"  # ALLOW_HARDCODING: intentional fixture
+    assert (
+        "<redacted-rsa-private-key>"
+        in mask_secrets_in_error_detail(
+            "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----"  # ALLOW_HARDCODING: intentional fixture
+        )
     )
     assert "<redacted>" in mask_secrets_in_error_detail(
         '"private_key": "secret-bytes"'  # ALLOW_HARDCODING: intentional fixture
@@ -130,9 +131,7 @@ def test_status_enum_values_serialise_correctly(tmp_path: Path) -> None:
                 attempt_at_kst=datetime(2026, 5, 1, 12, i, 0, tzinfo=KST),
                 mode=DispatchMode.PRODUCTION,
                 status=s,
-                smtp_message_id=(
-                    "<x@example.ac.kr>" if s == DispatchStatus.SUCCESS else ""
-                ),
+                smtp_message_id=("<x@example.ac.kr>" if s == DispatchStatus.SUCCESS else ""),
                 error_kind="invalid_email" if s == DispatchStatus.SKIPPED else "",
                 error_detail="",
                 exam_name="중간고사",

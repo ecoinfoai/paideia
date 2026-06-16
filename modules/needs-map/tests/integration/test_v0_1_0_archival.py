@@ -100,15 +100,11 @@ def test_v0_1_0_archival_suffix_marks_schema_version(tmp_path: Path) -> None:
     ):
         assert (archive_dir / name).is_file(), f"{name} not archived"
     # Confirm the archived manifest.json still holds the v0.1.0 schema_version.
-    archived_manifest = json.loads(
-        (archive_dir / "manifest.json").read_text(encoding="utf-8")
-    )
+    archived_manifest = json.loads((archive_dir / "manifest.json").read_text(encoding="utf-8"))
     assert archived_manifest["schema_version"] == "1.0.0"
 
     # (b) canonical paths now hold v0.1.1 outputs (manifest schema_version 1.1.0)
-    new_manifest = json.loads(
-        (silver_target / "manifest.json").read_text(encoding="utf-8")
-    )
+    new_manifest = json.loads((silver_target / "manifest.json").read_text(encoding="utf-8"))
     assert new_manifest["schema_version"] == "1.1.0"
     # Phase A+B silver shards landed.
     assert (silver_target / "scale_reliability.parquet").is_file()
@@ -117,10 +113,7 @@ def test_v0_1_0_archival_suffix_marks_schema_version(tmp_path: Path) -> None:
     # (c) original directory is *not* commingled — v0.1.0 stubs are gone
     # from the canonical path (the only file with that name now is the
     # v0.1.1 shard, byte-different from the seed).
-    assert (
-        (silver_target / "scale_reliability.parquet").read_bytes()
-        != b"v0.1.0-stub-A"
-    )
+    assert (silver_target / "scale_reliability.parquet").read_bytes() != b"v0.1.0-stub-A"
 
 
 def test_v0_1_1_archival_suffix_marks_schema_version(tmp_path: Path) -> None:

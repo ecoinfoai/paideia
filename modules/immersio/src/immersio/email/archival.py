@@ -17,15 +17,17 @@ from ..analyze.archival import ArchivalError, _archive_one, _detect_schema_versi
 # prior-run outputs are preserved losslessly. The Phase 6 PDF directory
 # (``이메일_발송용/``) is *not* in this set: it carries student PDFs
 # produced upstream and remains in place across re-runs.
-_EMAIL_GOLD_OUTPUT_NAMES: frozenset[str] = frozenset({
-    "메일_발송로그.csv",
-    "메일_발송보고서.md",
-    "manifest_email.json",
-    "cohort_명단.md",
-    "cohort_저득점_명단.md",
-    "cohort_나머지_명단.md",
-    "_test",  # test-mode subdirectory
-})
+_EMAIL_GOLD_OUTPUT_NAMES: frozenset[str] = frozenset(
+    {
+        "메일_발송로그.csv",
+        "메일_발송보고서.md",
+        "manifest_email.json",
+        "cohort_명단.md",
+        "cohort_저득점_명단.md",
+        "cohort_나머지_명단.md",
+        "_test",  # test-mode subdirectory
+    }
+)
 
 
 def archive_previous_run(gold_dir: Path) -> str | None:
@@ -48,8 +50,7 @@ def archive_previous_run(gold_dir: Path) -> str | None:
     """
     if not isinstance(gold_dir, Path):
         raise TypeError(
-            f"archive_previous_run: gold_dir must be pathlib.Path, got "
-            f"{type(gold_dir).__name__}."
+            f"archive_previous_run: gold_dir must be pathlib.Path, got {type(gold_dir).__name__}."
         )
 
     schema_version = _detect_schema_version(gold_dir)
@@ -57,9 +58,7 @@ def archive_previous_run(gold_dir: Path) -> str | None:
     subdir_name = f"{timestamp}__v{schema_version}"
 
     # Whitelist mode — only the 7 email-specific output names move.
-    return _archive_one(
-        gold_dir, subdir_name, only_names=_EMAIL_GOLD_OUTPUT_NAMES
-    )
+    return _archive_one(gold_dir, subdir_name, only_names=_EMAIL_GOLD_OUTPUT_NAMES)
 
 
 __all__ = ["ArchivalError", "archive_previous_run"]

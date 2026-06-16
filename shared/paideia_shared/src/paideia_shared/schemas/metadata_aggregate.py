@@ -31,18 +31,14 @@ class MetadataAggregate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     metadata_kind: MetadataKind
-    metadata_value: str = Field(
-        description="예: 'A반', '예, 심화 과정까지 이수했습니다.', '쉬움'"
-    )
+    metadata_value: str = Field(description="예: 'A반', '예, 심화 과정까지 이수했습니다.', '쉬움'")
 
     n: int = Field(ge=0, description="해당 그룹 응시자 수")
     mean: float | None = Field(default=None, description="평균 점수 또는 정답률")
     sd: float | None = Field(default=None, ge=0.0, description="표준편차")
 
     test_kind: TestKind = Field(description="해당 metadata_kind 그룹간 차이 검정 종류")
-    test_p_value: float | None = Field(
-        default=None, ge=0.0, le=1.0, description="검정 p값"
-    )
+    test_p_value: float | None = Field(default=None, ge=0.0, le=1.0, description="검정 p값")
     levene_p_value: float | None = Field(
         default=None, ge=0.0, le=1.0, description="등분산 검사 p값"
     )

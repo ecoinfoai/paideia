@@ -26,25 +26,36 @@ def _curriculum() -> CurriculumMap:
         semester=_SEMESTER,
         course_slug=_COURSE,
         entries=[
-            CurriculumEntry(week=8, chapter="8장 호흡계통", chapter_no=8,
-                            subtopic=None, sections=["1. 기도"]),
-            CurriculumEntry(week=9, chapter="9장 근육계통", chapter_no=9,
-                            subtopic=None, sections=["1. 골격근"]),
+            CurriculumEntry(
+                week=8, chapter="8장 호흡계통", chapter_no=8, subtopic=None, sections=["1. 기도"]
+            ),
+            CurriculumEntry(
+                week=9, chapter="9장 근육계통", chapter_no=9, subtopic=None, sections=["1. 골격근"]
+            ),
         ],
     )
 
 
 def _write_yaml(path: Path, chapter: int, questions: list[dict]) -> None:
     data = {
-        "metadata": {"chapter": chapter, "chapter_name": "테스트", "week_num": chapter,
-                     "total_questions": len(questions)},
+        "metadata": {
+            "chapter": chapter,
+            "chapter_name": "테스트",
+            "week_num": chapter,
+            "total_questions": len(questions),
+        },
         "questions": questions,
     }
     path.write_text(_yaml.dump(data, allow_unicode=True), encoding="utf-8")
 
 
-def _q(sn: int, question: str, *, model_answer: str = "모범답안입니다.",
-       keywords: list[str] | None = None) -> dict:
+def _q(
+    sn: int,
+    question: str,
+    *,
+    model_answer: str = "모범답안입니다.",
+    keywords: list[str] | None = None,
+) -> dict:
     return {
         "sn": sn,
         "topic": "개념이해",
@@ -66,16 +77,29 @@ class TestLoadFormativeInventoryHappyPath:
             encoding="utf-8",
         )
         ch8 = tmp_path / "Ch8_FormativeTest.yaml"
-        _write_yaml(ch8, 8, [
-            _q(1, "허파꽈리를 구성하는 세포의 종류와 기능을 설명하시오.",
-               model_answer="허파꽈리는 두 종류 세포로 구성된다."),
-            _q(2, "표면활성제의 기능을 설명하시오.",
-               model_answer="표면활성제는 표면장력을 낮춘다."),
-        ])
+        _write_yaml(
+            ch8,
+            8,
+            [
+                _q(
+                    1,
+                    "허파꽈리를 구성하는 세포의 종류와 기능을 설명하시오.",
+                    model_answer="허파꽈리는 두 종류 세포로 구성된다.",
+                ),
+                _q(
+                    2,
+                    "표면활성제의 기능을 설명하시오.",
+                    model_answer="표면활성제는 표면장력을 낮춘다.",
+                ),
+            ],
+        )
 
         inv = load_formative_inventory(
-            actual_txt=txt, chapter_yamls=[ch8],
-            curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+            actual_txt=txt,
+            chapter_yamls=[ch8],
+            curriculum_map=_curriculum(),
+            semester=_SEMESTER,
+            course_slug=_COURSE,
         )
         assert len(inv) == 2
         assert inv[0].source_ref == "형성평가:8장#1"
@@ -102,16 +126,27 @@ class TestStrategy1StemCrossCheck:
             encoding="utf-8",
         )
         ch8 = tmp_path / "Ch8_FormativeTest.yaml"
-        _write_yaml(ch8, 8, [
-            _q(1, "허파꽈리를 구성하는 세포의 종류와 기능을 설명하시오.",
-               model_answer="세포 모범답안."),
-            _q(2, "표면활성제의 기능을 자세히 설명하시오.",
-               model_answer="표면활성제 모범답안."),
-        ])
+        _write_yaml(
+            ch8,
+            8,
+            [
+                _q(
+                    1,
+                    "허파꽈리를 구성하는 세포의 종류와 기능을 설명하시오.",
+                    model_answer="세포 모범답안.",
+                ),
+                _q(
+                    2, "표면활성제의 기능을 자세히 설명하시오.", model_answer="표면활성제 모범답안."
+                ),
+            ],
+        )
 
         inv = load_formative_inventory(
-            actual_txt=txt, chapter_yamls=[ch8],
-            curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+            actual_txt=txt,
+            chapter_yamls=[ch8],
+            curriculum_map=_curriculum(),
+            semester=_SEMESTER,
+            course_slug=_COURSE,
         )
         assert len(inv) == 1
         # Must bind to sn=2 by stem, NOT sn=1 by ordinal
@@ -133,15 +168,22 @@ class TestStrategy2Ambiguity:
             encoding="utf-8",
         )
         ch8 = tmp_path / "Ch8_FormativeTest.yaml"
-        _write_yaml(ch8, 8, [
-            _q(1, "근육의 수축 기전을 설명하시오. 추가 설명 A."),
-            _q(2, "근육의 수축 기전을 설명하시오. 추가 설명 B."),
-        ])
+        _write_yaml(
+            ch8,
+            8,
+            [
+                _q(1, "근육의 수축 기전을 설명하시오. 추가 설명 A."),
+                _q(2, "근육의 수축 기전을 설명하시오. 추가 설명 B."),
+            ],
+        )
 
         with pytest.raises(ValueError, match="모호"):
             load_formative_inventory(
-                actual_txt=txt, chapter_yamls=[ch8],
-                curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+                actual_txt=txt,
+                chapter_yamls=[ch8],
+                curriculum_map=_curriculum(),
+                semester=_SEMESTER,
+                course_slug=_COURSE,
             )
 
 
@@ -157,8 +199,11 @@ class TestFailFast:
 
         with pytest.raises(ValueError, match="찾을 수 없"):
             load_formative_inventory(
-                actual_txt=txt, chapter_yamls=[ch8],
-                curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+                actual_txt=txt,
+                chapter_yamls=[ch8],
+                curriculum_map=_curriculum(),
+                semester=_SEMESTER,
+                course_slug=_COURSE,
             )
 
     def test_missing_week_in_curriculum_raises(self, tmp_path: Path) -> None:
@@ -172,8 +217,11 @@ class TestFailFast:
 
         with pytest.raises(ValueError, match="13주차"):
             load_formative_inventory(
-                actual_txt=txt, chapter_yamls=[ch8],
-                curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+                actual_txt=txt,
+                chapter_yamls=[ch8],
+                curriculum_map=_curriculum(),
+                semester=_SEMESTER,
+                course_slug=_COURSE,
             )
 
     def test_malformed_txt_line_raises(self, tmp_path: Path) -> None:
@@ -187,6 +235,9 @@ class TestFailFast:
 
         with pytest.raises(ValueError, match="format"):
             load_formative_inventory(
-                actual_txt=txt, chapter_yamls=[ch8],
-                curriculum_map=_curriculum(), semester=_SEMESTER, course_slug=_COURSE,
+                actual_txt=txt,
+                chapter_yamls=[ch8],
+                curriculum_map=_curriculum(),
+                semester=_SEMESTER,
+                course_slug=_COURSE,
             )

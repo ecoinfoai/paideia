@@ -179,9 +179,13 @@ def _write_canned_responses(responses_dir: Path) -> None:
     for idx, slot in enumerate(s for s in slots if s.kind == "quiz"):
         key_concept = _KEY_CONCEPTS[idx % len(_KEY_CONCEPTS)]
         answer_no = (idx % 5) + 1
-        _write_envelope(responses_dir, slot.slot_id, _quiz_item_json(slot.ordinal, key_concept, answer_no))
+        _write_envelope(
+            responses_dir, slot.slot_id, _quiz_item_json(slot.ordinal, key_concept, answer_no)
+        )
     for slot in (s for s in slots if s.kind == "formative"):
-        _write_envelope(responses_dir, slot.slot_id, _formative_item_json(slot.ordinal, _FORMATIVE_TOPIC))
+        _write_envelope(
+            responses_dir, slot.slot_id, _formative_item_json(slot.ordinal, _FORMATIVE_TOPIC)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +211,9 @@ def _make_clean_quiz_item(item_no: int = 1) -> QuizItemCandidate:
         found_text=key,
         status="확인",
     )
-    leap = LeapExplanation(text="폐포 다음 개념으로의 도약.", textbook_evidence=evidence.model_copy())
+    leap = LeapExplanation(
+        text="폐포 다음 개념으로의 도약.", textbook_evidence=evidence.model_copy()
+    )
     wrong = "폐포 관련 오답 설명입니다."
     combined = f"{wrong} ─ 도약 ─ {leap.text}"
     return QuizItemCandidate(
@@ -398,9 +404,7 @@ def test_build_leaves_review_note_blank(tmp_path: Path) -> None:
     silver = data_root / "silver" / "maieutica" / f"{_SEMESTER}-{_COURSE}"
     responses_dir = silver / "responses"
     _write_canned_responses(responses_dir)
-    backend = SubscriptionBackend(
-        staging_dir=silver / "staging", responses_dir=responses_dir
-    )
+    backend = SubscriptionBackend(staging_dir=silver / "staging", responses_dir=responses_dir)
 
     items, _run_dir = build(
         spec=spec,
@@ -415,24 +419,19 @@ def test_build_leaves_review_note_blank(tmp_path: Path) -> None:
     # All quiz candidates must have blank review_note after build.
     for item in items:
         assert item.review_note == "", (
-            f"item {item.item_no} has non-empty review_note after build: "
-            f"{item.review_note!r}"
+            f"item {item.item_no} has non-empty review_note after build: {item.review_note!r}"
         )
 
     # Also verify via the written yaml.
     run_dir_path = _run_dir
-    doc = yaml.safe_load(
-        (run_dir_path / "출제후보_완전판.yaml").read_text(encoding="utf-8")
-    )
+    doc = yaml.safe_load((run_dir_path / "출제후보_완전판.yaml").read_text(encoding="utf-8"))
     for d in doc["quiz"]:
         assert d["review_note"] == "", (
-            f"yaml quiz item {d['item_no']} has non-empty review_note: "
-            f"{d['review_note']!r}"
+            f"yaml quiz item {d['item_no']} has non-empty review_note: {d['review_note']!r}"
         )
     for d in doc["formative"]:
         assert d["review_note"] == "", (
-            f"yaml formative item {d['no']} has non-empty review_note: "
-            f"{d['review_note']!r}"
+            f"yaml formative item {d['no']} has non-empty review_note: {d['review_note']!r}"
         )
 
 
@@ -447,9 +446,7 @@ def test_clean_items_keep_blank_review_note() -> None:
 
     clean_quiz = [_make_clean_quiz_item(1)]
     clean_formative = [_make_clean_formative(1)]
-    reviewed_quiz, reviewed_formative = review_candidates(
-        clean_quiz, clean_formative, backend=None
-    )
+    reviewed_quiz, reviewed_formative = review_candidates(clean_quiz, clean_formative, backend=None)
 
     assert reviewed_quiz[0].review_note == ""
     assert reviewed_formative[0].review_note == ""
@@ -531,9 +528,7 @@ def test_item_evidence_unconfirmed_sets_review_note() -> None:
     from maieutica.verify.review_agent import review_candidates
 
     # Take a clean item and override its textbook_evidence to 미확인.
-    unconfirmed_ev = MaieuticaTextbookEvidence(
-        source_file=_SOURCE_FILE, status="미확인"
-    )
+    unconfirmed_ev = MaieuticaTextbookEvidence(source_file=_SOURCE_FILE, status="미확인")
     item = _make_clean_quiz_item(5).model_copy(update={"textbook_evidence": unconfirmed_ev})
     reviewed_quiz, _ = review_candidates([item], [], backend=None)
     note = reviewed_quiz[0].review_note
@@ -649,11 +644,16 @@ def test_cli_verify_missing_run_exits_2(tmp_path: Path) -> None:
     rc = app(
         [
             "verify",
-            "--semester", _SEMESTER,
-            "--course", _COURSE,
-            "--week", str(_WEEK),
-            "--generation-spec", str(bronze / "generation_spec.yaml"),
-            "--curriculum-map", str(bronze / "curriculum_map.yaml"),
+            "--semester",
+            _SEMESTER,
+            "--course",
+            _COURSE,
+            "--week",
+            str(_WEEK),
+            "--generation-spec",
+            str(bronze / "generation_spec.yaml"),
+            "--curriculum-map",
+            str(bronze / "curriculum_map.yaml"),
         ]
     )
     # Run yaml does not exist yet → exit 2.
@@ -683,9 +683,7 @@ def test_cli_verify_after_build_exits_0_and_annotates(tmp_path: Path) -> None:
     silver = data_root / "silver" / "maieutica" / f"{_SEMESTER}-{_COURSE}"
     responses_dir = silver / "responses"
     _write_canned_responses(responses_dir)
-    backend = SubscriptionBackend(
-        staging_dir=silver / "staging", responses_dir=responses_dir
-    )
+    backend = SubscriptionBackend(staging_dir=silver / "staging", responses_dir=responses_dir)
 
     _items, run_dir = build(
         spec=spec,
@@ -714,11 +712,16 @@ def test_cli_verify_after_build_exits_0_and_annotates(tmp_path: Path) -> None:
         rc = app(
             [
                 "verify",
-                "--semester", _SEMESTER,
-                "--course", _COURSE,
-                "--week", str(_WEEK),
-                "--generation-spec", str(bronze / "generation_spec.yaml"),
-                "--curriculum-map", str(bronze / "curriculum_map.yaml"),
+                "--semester",
+                _SEMESTER,
+                "--course",
+                _COURSE,
+                "--week",
+                str(_WEEK),
+                "--generation-spec",
+                str(bronze / "generation_spec.yaml"),
+                "--curriculum-map",
+                str(bronze / "curriculum_map.yaml"),
             ]
         )
     finally:

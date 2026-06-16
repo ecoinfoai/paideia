@@ -29,6 +29,7 @@ from examen.generate.backend import (
 # FakeBackend — deterministic canned backend used in all cache tests
 # ---------------------------------------------------------------------------
 
+
 class FakeBackend(LLMBackend):
     """Canned backend that returns a fixed response and counts calls."""
 
@@ -51,6 +52,7 @@ class FakeBackend(LLMBackend):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_request(slot_id: str = "slot-001") -> GenerationRequest:
     return GenerationRequest(
         slot_id=slot_id,
@@ -63,6 +65,7 @@ def _make_request(slot_id: str = "slot-001") -> GenerationRequest:
 # ---------------------------------------------------------------------------
 # InputHashCache tests
 # ---------------------------------------------------------------------------
+
 
 class TestInputHashCache:
     def test_cache_miss_calls_backend(self, tmp_path: Path) -> None:
@@ -140,8 +143,8 @@ class TestInputHashCache:
         cache = InputHashCache(backend=fake, cache_dir=tmp_path)
         req = _make_request()
 
-        cache.generate(req)   # miss
-        cache.generate(req)   # hit
+        cache.generate(req)  # miss
+        cache.generate(req)  # hit
 
         rate = cache.cache_hit_rate()
         assert rate == 0.5  # 1 hit / 2 total
@@ -178,6 +181,7 @@ class TestInputHashCache:
 # ---------------------------------------------------------------------------
 # dry_run_bundles tests
 # ---------------------------------------------------------------------------
+
 
 class TestDryRunBundles:
     def test_dry_run_writes_bundle_files(self, tmp_path: Path) -> None:
@@ -240,6 +244,7 @@ class TestDryRunBundles:
 # SubscriptionBackend tests
 # ---------------------------------------------------------------------------
 
+
 class TestSubscriptionBackend:
     def test_read_response_when_present(self, tmp_path: Path) -> None:
         """SubscriptionBackend reads the response JSON when it exists."""
@@ -299,8 +304,11 @@ class TestSubscriptionBackend:
 # ApiBackend tests (monkeypatched — never hits live API)
 # ---------------------------------------------------------------------------
 
+
 class TestApiBackend:
-    def test_api_backend_uses_temperature_zero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_api_backend_uses_temperature_zero(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """ApiBackend calls the Anthropic SDK with temperature=0."""
         from examen.generate.backend import ApiBackend
 
@@ -318,7 +326,9 @@ class TestApiBackend:
         class _FakeClient:
             messages = _FakeMessages()
 
-        monkeypatch.setattr("examen.generate.backend.anthropic.Anthropic", lambda **_: _FakeClient())
+        monkeypatch.setattr(
+            "examen.generate.backend.anthropic.Anthropic", lambda **_: _FakeClient()
+        )
 
         backend = ApiBackend(model="claude-haiku-4-5")
         req = _make_request("slot-api")
@@ -328,7 +338,9 @@ class TestApiBackend:
         assert captured_kwargs[0].get("temperature") == 0
         assert resp.raw_text == "api response"
 
-    def test_api_backend_raises_on_connection_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_api_backend_raises_on_connection_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """ApiBackend raises BackendUnreachableError on connection failure (exit-4)."""
         from examen.generate.backend import ApiBackend, BackendUnreachableError
 
@@ -339,7 +351,9 @@ class TestApiBackend:
         class _BrokenClient:
             messages = _BrokenMessages()
 
-        monkeypatch.setattr("examen.generate.backend.anthropic.Anthropic", lambda **_: _BrokenClient())
+        monkeypatch.setattr(
+            "examen.generate.backend.anthropic.Anthropic", lambda **_: _BrokenClient()
+        )
 
         backend = ApiBackend(model="claude-haiku-4-5")
         req = _make_request("slot-fail")

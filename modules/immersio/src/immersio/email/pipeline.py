@@ -25,11 +25,14 @@ from paideia_shared.schemas import (
     EmailManifestInputs,
     EmailManifestOutputs,
     EmailMappingEntry,
+    EmailMessageDraft,
     PreSendSummary,
+    ProfessorProfile,
     StudentPDFBundle,
+    TestProfile,
 )
 
-from . import __version__ as EMAIL_VERSION
+from . import __version__ as EMAIL_VERSION  # noqa: N812  (intentional public version alias)
 from .archival import archive_previous_run
 from .cohort_filter import (
     CohortError,
@@ -92,9 +95,7 @@ def _default_paths(args: argparse.Namespace) -> dict[str, Path]:
         ),
         "silver_email_dir": Path(f"data/silver/immersio/{semester}-{course}"),
         "gold_email_dir": Path(f"data/gold/immersio/{semester}-{course}"),
-        "preview_dir": Path(
-            f"tmp/immersio_email_preview/{semester}-{course}"
-        ),
+        "preview_dir": Path(f"tmp/immersio_email_preview/{semester}-{course}"),
     }
 
 
@@ -158,14 +159,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     course_name_kr = _resolve_course_name_kr(args)
 
-    mode = (
-        DispatchMode.TEST
-        if profile.profile_kind == "test"
-        else DispatchMode.PRODUCTION
-    )
-    cohort = (
-        CohortLabel(args.cohort) if getattr(args, "cohort", None) else CohortLabel.ALL
-    )
+    mode = DispatchMode.TEST if profile.profile_kind == "test" else DispatchMode.PRODUCTION
+    cohort = CohortLabel(args.cohort) if getattr(args, "cohort", None) else CohortLabel.ALL
 
     # v0.1.1 (T014): dry-run vs send 산출 파일 분리 (FR-C03a/b/c).
     # Dry-run 은 ``메일_발송로그_dryrun.csv`` + ``메일_발송보고서_dryrun.md``
@@ -178,9 +173,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # re-run depends on knowing which students already succeeded).
     prior_log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
     if profile.profile_kind == "test":
-        prior_log_csv_path = (
-            paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
-        )
+        prior_log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
     prior_log_rows: list[DispatchLogRow] = []
     if prior_log_csv_path.is_file():
         try:
@@ -205,25 +198,17 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # order — TC-007). The CSV is written to a deterministic test path
     # so Phase A reads it normally.
     if profile.profile_kind == "test":
-        synthetic_bronze = (
-            paths["silver_email_dir"] / "_test_bronze_synthetic.csv"
-        )
+        synthetic_bronze = paths["silver_email_dir"] / "_test_bronze_synthetic.csv"
         synthetic_bronze.parent.mkdir(parents=True, exist_ok=True)
         from csv import writer as _csv_writer
 
-        sorted_students = sorted(
-            profile.dummy_students, key=lambda s: s.student_id
-        )
+        sorted_students = sorted(profile.dummy_students, key=lambda s: s.student_id)
         # recipient_pool is treated as parallel — same length as
         # dummy_students per TestProfile validator
-        with synthetic_bronze.open(
-            "w", encoding="utf-8", newline=""
-        ) as fh:
+        with synthetic_bronze.open("w", encoding="utf-8", newline="") as fh:
             w = _csv_writer(fh)
             w.writerow(["타임스탬프", "사용자 이름", "학번"])
-            for student, recipient in zip(
-                sorted_students, profile.recipient_pool, strict=True
-            ):
+            for student, recipient in zip(sorted_students, profile.recipient_pool, strict=True):
                 w.writerow(
                     [
                         "2026/03/03 11:03:36 AM GMT+9",
@@ -237,9 +222,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     try:
         entries = load_email_mapping(paths["bronze_csv"])
     except RosterError as exc:
-        print(
-            f"ERROR [immersio email]: phase A roster — {exc}", file=sys.stderr
-        )
+        print(f"ERROR [immersio email]: phase A roster — {exc}", file=sys.stderr)
         return 3 if "not found" in str(exc) else 1
 
     # v0.1.1 (T024) — total_roster is cohort-agnostic full roster size,
@@ -249,9 +232,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     total_roster = len({e.student_id for e in entries})
 
     paths["silver_email_dir"].mkdir(parents=True, exist_ok=True)
-    silver_mapping_path = (
-        paths["silver_email_dir"] / "학번_이메일_매핑.parquet"
-    )
+    silver_mapping_path = paths["silver_email_dir"] / "학번_이메일_매핑.parquet"
     write_mapping_silver(entries, silver_mapping_path)
 
     # Phase A.5 — cohort filter (US6 / FR-H02/H06).
@@ -290,9 +271,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
     if student_metrics_path is not None and student_metrics_path.is_file():
         try:
-            cohort_result = filter_by_cohort(
-                entries, student_metrics_path, cohort
-            )
+            cohort_result = filter_by_cohort(entries, student_metrics_path, cohort)
         except CohortError as exc:
             print(
                 f"ERROR [immersio email]: phase A.5 cohort — {exc}",
@@ -338,9 +317,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         missing_in_master = []
     else:
         try:
-            matched, missing_in_master = cross_check_with_master(
-                bundles, paths["silver_master"]
-            )
+            matched, missing_in_master = cross_check_with_master(bundles, paths["silver_master"])
         except MasterMismatchError as exc:
             print(
                 f"ERROR [immersio email]: phase C master — {exc}",
@@ -357,10 +334,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # Phase D — pdf body verify
     attachment_max = profile.operational_defaults.attachment_max_bytes
     verified = [
-        verify_pdf_body_contains_student_id(
-            b, attachment_max_bytes=attachment_max
-        )
-        for b in matched
+        verify_pdf_body_contains_student_id(b, attachment_max_bytes=attachment_max) for b in matched
     ]
     verify_by_sid = {v.bundle.student_id: v for v in verified}
     missing_sids = {b.student_id for b in missing_in_master}
@@ -374,27 +348,17 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     # (idempotent skip prior log 조회) 는 항상 send-mode csv. send 모드는
     # v0.1.0 그대로 — 같은 path 로 읽고 append.
     send_log_csv_path = paths["gold_email_dir"] / "메일_발송로그.csv"
-    dryrun_log_csv_path = (
-        paths["gold_email_dir"] / "메일_발송로그_dryrun.csv"
-    )
+    dryrun_log_csv_path = paths["gold_email_dir"] / "메일_발송로그_dryrun.csv"
     if profile.profile_kind == "test":
-        send_log_csv_path = (
-            paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
-        )
-        dryrun_log_csv_path = (
-            paths["gold_email_dir"] / "_test" / "메일_발송로그_dryrun.csv"
-        )
-    log_csv_path = (
-        dryrun_log_csv_path if is_dry_run else send_log_csv_path
-    )
+        send_log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그.csv"
+        dryrun_log_csv_path = paths["gold_email_dir"] / "_test" / "메일_발송로그_dryrun.csv"
+    log_csv_path = dryrun_log_csv_path if is_dry_run else send_log_csv_path
     # v0.1.1 (T015, FR-C03d + contracts/dry_run_outputs.md §3): dry-run
     # report md → ``메일_발송보고서_dryrun.md`` so the send-mode report is
     # never overwritten by a dry-run preview. Resolved early so the
     # manifest's ``outputs.report_md_path`` (below) can point at the same
     # file the report writer (further down) emits.
-    report_md_filename = (
-        "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
-    )
+    report_md_filename = "메일_발송보고서_dryrun.md" if is_dry_run else "메일_발송보고서.md"
 
     # v0.1.1 (T024) — capture cohort_target_set BEFORE idempotent skip
     # narrows ``bundles``. A student belongs to cohort_target_set iff they
@@ -424,9 +388,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         # filter sees yesterday's success rows even after archival has
         # moved them to _archive/.
         all_sids = [b.student_id for b in bundles]
-        keep_sids = set(
-            idempotent_skip_filter(all_sids, prior_log_rows, mode=retry_mode)
-        )
+        keep_sids = set(idempotent_skip_filter(all_sids, prior_log_rows, mode=retry_mode))
         bundles = [b for b in bundles if b.student_id in keep_sids]
 
     # Phase E — composer + log. ``override_to`` is set when self-test
@@ -443,10 +405,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         try:
             override_str = args.created_at_utc
             if not override_str.endswith("Z"):
-                raise ValueError(
-                    f"--created-at-utc must end with 'Z' (UTC) — got "
-                    f"{override_str!r}"
-                )
+                raise ValueError(f"--created-at-utc must end with 'Z' (UTC) — got {override_str!r}")
             created_at_override = datetime.fromisoformat(
                 override_str.replace("Z", "+00:00")
             ).astimezone(KST)
@@ -465,16 +424,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     if created_at_override is not None:
         started_at = created_at_override
     elif is_dry_run:
-        started_at = datetime.combine(
-            sent_date, datetime.min.time(), tzinfo=KST
-        )
+        started_at = datetime.combine(sent_date, datetime.min.time(), tzinfo=KST)
     else:
         started_at = datetime.now(tz=KST)
     log_rows: list[DispatchLogRow] = []
     drafts_with_pdfs: list[tuple] = []
-    entries_by_sid: dict[str, EmailMappingEntry] = {
-        e.student_id: e for e in entries
-    }
+    entries_by_sid: dict[str, EmailMappingEntry] = {e.student_id: e for e in entries}
 
     for bundle in bundles:
         sid = bundle.student_id
@@ -496,16 +451,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
 
         verify_result = verify_by_sid.get(sid)
         if verify_result is None or not verify_result.ok:
-            kind = (
-                verify_result.error_kind
-                if verify_result is not None
-                else "pdf_no_student_id"
-            )
-            email = (
-                str(entries_by_sid[sid].email)
-                if sid in entries_by_sid
-                else ""
-            )
+            kind = verify_result.error_kind if verify_result is not None else "pdf_no_student_id"
+            email = str(entries_by_sid[sid].email) if sid in entries_by_sid else ""
             status = (
                 DispatchStatus.FAILED
                 if kind == "attachment_size_exceeded"
@@ -533,9 +480,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             # (b) student missing from the diagnostic CSV → invalid_email.
             if sid in cohort_score_unavailable_sids:
                 error_kind = "score_unavailable"
-                error_detail = (
-                    "score_percent absent — student excluded from cohort"
-                )
+                error_detail = "score_percent absent — student excluded from cohort"
             else:
                 error_kind = "invalid_email"
                 error_detail = "student_id has no diagnostic CSV row"
@@ -574,11 +519,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         # plain dry-run (no self-test) the two agree. In send-mode
         # self-test we keep v0.1.0 behaviour (``draft.to_header`` =
         # operator, since that's the address that actually received).
-        csv_email = (
-            str(entry.email)
-            if (not args.send and is_self_test)
-            else draft.to_header
-        )
+        csv_email = str(entry.email) if (not args.send and is_self_test) else draft.to_header
         log_rows.append(
             _ok_row(
                 draft=draft,
@@ -586,9 +527,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
                 email=csv_email,
                 started_at=started_at,
                 mode=mode,
-                status=DispatchStatus.DRY_RUN
-                if not args.send
-                else DispatchStatus.SUCCESS,
+                status=DispatchStatus.DRY_RUN if not args.send else DispatchStatus.SUCCESS,
                 exam_name=args.exam_name,
                 cohort=cohort,
             )
@@ -609,8 +548,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         n = args.self_test
         if n < 1 or n > 10:
             print(
-                f"ERROR [immersio email]: --self-test must be 1 ≤ N ≤ 10 "
-                f"(got {n}).",
+                f"ERROR [immersio email]: --self-test must be 1 ≤ N ≤ 10 (got {n}).",
                 file=sys.stderr,
             )
             return 2
@@ -655,9 +593,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             )
             return 0
         except ValueError as exc:
-            print(
-                f"ERROR [immersio email]: {exc}", file=sys.stderr
-            )
+            print(f"ERROR [immersio email]: {exc}", file=sys.stderr)
             return 2
         rc = _run_self_test_send(
             drafts_with_pdfs[:n],
@@ -707,9 +643,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
                 )
                 return 0
             except ValueError as exc:
-                print(
-                    f"ERROR [immersio email]: {exc}", file=sys.stderr
-                )
+                print(f"ERROR [immersio email]: {exc}", file=sys.stderr)
                 return 2
         # Resolve rate-per-minute from CLI override or profile default.
         rate_per_minute = (
@@ -740,16 +674,12 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     if created_at_override is not None:
         completed_at = created_at_override
     elif is_dry_run:
-        completed_at = datetime.combine(
-            sent_date, datetime.min.time(), tzinfo=KST
-        )
+        completed_at = datetime.combine(sent_date, datetime.min.time(), tzinfo=KST)
     else:
         completed_at = datetime.now(tz=KST)
     bronze_sha = _sha256_file(paths["bronze_csv"])
     master_sha = (
-        _sha256_file(paths["silver_master"])
-        if paths["silver_master"].is_file()
-        else "0" * 64
+        _sha256_file(paths["silver_master"]) if paths["silver_master"].is_file() else "0" * 64
     )
     manifest = EmailManifest(
         semester=args.semester,
@@ -778,12 +708,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
             # ``report_md_filename`` used by the csv writer + report
             # writer so manifest always points at the actual file emitted.
             dispatch_log_path=str(log_csv_path.resolve()),
-            report_md_path=str(
-                (paths["gold_email_dir"] / report_md_filename).resolve()
-            ),
-            preview_dir_path=str(paths["preview_dir"].resolve())
-            if not args.send
-            else "",
+            report_md_path=str((paths["gold_email_dir"] / report_md_filename).resolve()),
+            preview_dir_path=str(paths["preview_dir"].resolve()) if not args.send else "",
         ),
         counts=counts,
         tool_version=EMAIL_VERSION,
@@ -812,9 +738,7 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
     if retry_mode == RetryMode.RETRY_SKIPPED and prior_log_rows:
         latest_status = _latest_status_by_sid(prior_log_rows)
         failed_skipped_count = sum(
-            1
-            for status in latest_status.values()
-            if status == DispatchStatus.FAILED
+            1 for status in latest_status.values() if status == DispatchStatus.FAILED
         )
     # v0.1.1 (T015): ``report_md_filename`` resolved earlier (alongside
     # ``log_csv_path``) so manifest + report writer agree on path.
@@ -822,12 +746,8 @@ def run_email_dispatch(args: argparse.Namespace) -> int:
         DispatchReportData(
             manifest=manifest,
             summary_table=summary,
-            failed_rows=[
-                r for r in log_rows if r.status == DispatchStatus.FAILED
-            ],
-            skipped_rows=[
-                r for r in log_rows if r.status == DispatchStatus.SKIPPED
-            ],
+            failed_rows=[r for r in log_rows if r.status == DispatchStatus.FAILED],
+            skipped_rows=[r for r in log_rows if r.status == DispatchStatus.SKIPPED],
             report_generated_at_kst=completed_at,
         ),
         paths["gold_email_dir"],
@@ -866,7 +786,7 @@ def _resolve_course_name_kr(args: argparse.Namespace) -> str:
 
 def _ok_row(
     *,
-    draft,
+    draft: EmailMessageDraft,
     bundle: StudentPDFBundle,
     email: str | None = None,
     started_at: datetime,
@@ -947,7 +867,7 @@ def _resolve_retry_mode(args: argparse.Namespace) -> RetryMode:
 def _run_production_send(
     drafts_with_pdfs: list[tuple],
     *,
-    profile,
+    profile: ProfessorProfile | TestProfile,
     log_rows: list[DispatchLogRow],
     log_csv_path: Path,
     rate_per_minute: int | None = None,
@@ -986,9 +906,7 @@ def _run_production_send(
     rc: int | None = None
 
     try:
-        with GmailAPIDispatcher(
-            profile, rate_per_minute=rate_per_minute
-        ) as dispatcher:
+        with GmailAPIDispatcher(profile, rate_per_minute=rate_per_minute) as dispatcher:
             total = len(drafts_with_pdfs)
             for index, (draft, bundle) in enumerate(drafts_with_pdfs):
                 attempted_sids.add(draft.student_id)
@@ -1016,9 +934,7 @@ def _run_production_send(
                     status=result.status,
                     smtp_message_id=old.smtp_message_id,
                     error_kind=result.error_kind,
-                    error_detail=mask_secrets_in_error_detail(
-                        result.error_detail
-                    )[:200],
+                    error_detail=mask_secrets_in_error_detail(result.error_detail)[:200],
                     exam_name=old.exam_name,
                     cohort=old.cohort,
                 )
@@ -1027,8 +943,7 @@ def _run_production_send(
 
                 if result.error_kind == "gmail_api_auth_failed":
                     print(
-                        f"ERROR [immersio email]: Gmail API auth failed — "
-                        f"{new_row.error_detail}",
+                        f"ERROR [immersio email]: Gmail API auth failed — {new_row.error_detail}",
                         file=sys.stderr,
                     )
                     rc = 5
@@ -1041,9 +956,7 @@ def _run_production_send(
                 # backward-compatible (they may not implement the
                 # sleep_between_sends method).
                 if index < total - 1:
-                    sleep_fn = getattr(
-                        dispatcher, "sleep_between_sends", None
-                    )
+                    sleep_fn = getattr(dispatcher, "sleep_between_sends", None)
                     if sleep_fn is not None:
                         sleep_fn()
     except DispatchLockError:
@@ -1067,9 +980,7 @@ def _run_production_send(
         attempted_sids=attempted_sids,
         replacement_status=DispatchStatus.TEMPORARY_FAILURE,
         error_kind="not_attempted_after_early_exit",
-        error_detail=(
-            "production-send loop returned early; this row was not attempted"
-        ),
+        error_detail=("production-send loop returned early; this row was not attempted"),
     )
     for row in rewritten:
         append_dispatch_log_row(log_csv_path, row)
@@ -1082,7 +993,7 @@ def _run_production_send(
 def _run_self_test_send(
     drafts_with_pdfs: list[tuple],
     *,
-    profile,
+    profile: ProfessorProfile | TestProfile,
     log_rows: list[DispatchLogRow],
 ) -> int:
     """Send the first N drafts via Gmail API to the operator's own mailbox.
@@ -1154,8 +1065,7 @@ def _run_self_test_send(
                 )
                 if result.error_kind == "gmail_api_auth_failed":
                     print(
-                        f"ERROR [immersio email]: Gmail API auth failed — "
-                        f"{result.error_detail}",
+                        f"ERROR [immersio email]: Gmail API auth failed — {result.error_detail}",
                         file=sys.stderr,
                     )
                     rc = 5
@@ -1181,9 +1091,7 @@ def _run_self_test_send(
         attempted_sids=attempted_sids,
         replacement_status=DispatchStatus.SKIPPED,
         error_kind="self_test_not_attempted",
-        error_detail=(
-            "self-test sent only first N drafts; this row was not attempted"
-        ),
+        error_detail=("self-test sent only first N drafts; this row was not attempted"),
     )
 
     if rc is not None:
@@ -1241,9 +1149,7 @@ def _rewrite_unattempted_success_rows(
     return rewritten
 
 
-def _write_log_csv(
-    rows: list[DispatchLogRow], path: Path, *, truncate: bool = False
-) -> None:
+def _write_log_csv(rows: list[DispatchLogRow], path: Path, *, truncate: bool = False) -> None:
     """Write rows to the dispatch log csv with the locked 13-column header.
 
     Args:
@@ -1257,21 +1163,15 @@ def _write_log_csv(
     """
     if truncate:
         with path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(
-                f, fieldnames=list(DispatchLogRow.COLUMN_ORDER)
-            )
+            writer = csv.DictWriter(f, fieldnames=list(DispatchLogRow.COLUMN_ORDER))
             writer.writeheader()
             for row in rows:
                 dump = row.model_dump(mode="json")
-                writer.writerow(
-                    {c: dump[c] for c in DispatchLogRow.COLUMN_ORDER}
-                )
+                writer.writerow({c: dump[c] for c in DispatchLogRow.COLUMN_ORDER})
         return
     is_new = not path.is_file()
     with path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=list(DispatchLogRow.COLUMN_ORDER)
-        )
+        writer = csv.DictWriter(f, fieldnames=list(DispatchLogRow.COLUMN_ORDER))
         if is_new:
             writer.writeheader()
         for row in rows:

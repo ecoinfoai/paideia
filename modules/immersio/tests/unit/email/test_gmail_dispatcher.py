@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 from googleapiclient.errors import HttpError
-
 from immersio.email.composer import build_email_draft
 from immersio.email.sender import (
     GmailAPIDispatcher,
-    SendResult,
     classify_gmail_api_error,
 )
 from paideia_shared.schemas import (
@@ -66,7 +64,7 @@ def _draft(tmp_path: Path):
             student_id="1234567001",
             email="student@example.com",
             source_row_index=0,
-            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
         ),
         pdf_bundle=StudentPDFBundle(
             student_id="1234567001",
@@ -112,17 +110,13 @@ def test_classify_401_auth_failed() -> None:
 
 
 def test_classify_403_quota_exceeded() -> None:
-    status, kind = classify_gmail_api_error(
-        _make_http_error(403, "Mail sending quota exceeded")
-    )
+    status, kind = classify_gmail_api_error(_make_http_error(403, "Mail sending quota exceeded"))
     assert status == DispatchStatus.TEMPORARY_FAILURE
     assert kind == "gmail_api_quota_exceeded"
 
 
 def test_classify_403_domain_policy() -> None:
-    status, kind = classify_gmail_api_error(
-        _make_http_error(403, "Domain policy violation")
-    )
+    status, kind = classify_gmail_api_error(_make_http_error(403, "Domain policy violation"))
     assert status == DispatchStatus.FAILED
     assert kind == "gmail_api_domain_policy"
 
@@ -154,9 +148,10 @@ def test_send_one_success(tmp_path: Path) -> None:
     """Successful send returns SendResult.SUCCESS with Gmail server id."""
     draft, pdf = _draft(tmp_path)
 
-    with patch("immersio.email.sender.get_gmail_credentials") as mock_creds, patch(
-        "immersio.email.sender.build"
-    ) as mock_build:
+    with (
+        patch("immersio.email.sender.get_gmail_credentials") as mock_creds,
+        patch("immersio.email.sender.build") as mock_build,
+    ):
         mock_creds.return_value = MagicMock()
         service = MagicMock()
         service.users().messages().send.return_value.execute.return_value = {
@@ -176,13 +171,14 @@ def test_send_one_401_invalid_grant(tmp_path: Path) -> None:
     """401 → SendResult.FAILED + gmail_api_auth_failed (caller exits 5)."""
     draft, pdf = _draft(tmp_path)
 
-    with patch("immersio.email.sender.get_gmail_credentials") as mock_creds, patch(
-        "immersio.email.sender.build"
-    ) as mock_build:
+    with (
+        patch("immersio.email.sender.get_gmail_credentials") as mock_creds,
+        patch("immersio.email.sender.build") as mock_build,
+    ):
         mock_creds.return_value = MagicMock()
         service = MagicMock()
-        service.users().messages().send.return_value.execute.side_effect = (
-            _make_http_error(401, "invalid_grant")
+        service.users().messages().send.return_value.execute.side_effect = _make_http_error(
+            401, "invalid_grant"
         )
         mock_build.return_value = service
 
@@ -198,9 +194,10 @@ def test_send_one_response_missing_id(tmp_path: Path) -> None:
     """200 OK but no 'id' field → FAILED + gmail_api_unknown."""
     draft, pdf = _draft(tmp_path)
 
-    with patch("immersio.email.sender.get_gmail_credentials") as mock_creds, patch(
-        "immersio.email.sender.build"
-    ) as mock_build:
+    with (
+        patch("immersio.email.sender.get_gmail_credentials") as mock_creds,
+        patch("immersio.email.sender.build") as mock_build,
+    ):
         mock_creds.return_value = MagicMock()
         service = MagicMock()
         service.users().messages().send.return_value.execute.return_value = {}

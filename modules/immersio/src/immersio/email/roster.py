@@ -55,15 +55,12 @@ def _parse_forms_timestamp(raw: str) -> datetime:
         hour = int(h) % 12
         if ampm == "PM":
             hour += 12
-        return datetime(
-            int(y), int(mo), int(d), hour, int(mi), int(s), tzinfo=KST
-        )
+        return datetime(int(y), int(mo), int(d), hour, int(mi), int(s), tzinfo=KST)
     try:
         dt = datetime.fromisoformat(raw)
     except ValueError as exc:
         raise RosterError(
-            f"roster: cannot parse timestamp {raw!r} (expected Google Forms "
-            f"or ISO 8601 format)"
+            f"roster: cannot parse timestamp {raw!r} (expected Google Forms or ISO 8601 format)"
         ) from exc
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=KST)
@@ -89,8 +86,7 @@ def load_email_mapping(bronze_csv: Path) -> list[EmailMappingEntry]:
     """
     if not isinstance(bronze_csv, Path):
         raise RosterError(
-            f"load_email_mapping: bronze_csv must be Path, got "
-            f"{type(bronze_csv).__name__}"
+            f"load_email_mapping: bronze_csv must be Path, got {type(bronze_csv).__name__}"
         )
     if not bronze_csv.is_file():
         raise RosterError(f"load_email_mapping: file not found at {bronze_csv}")
@@ -137,9 +133,7 @@ def load_email_mapping(bronze_csv: Path) -> list[EmailMappingEntry]:
     return entries
 
 
-def write_mapping_silver(
-    entries: list[EmailMappingEntry], silver_path: Path
-) -> None:
+def write_mapping_silver(entries: list[EmailMappingEntry], silver_path: Path) -> None:
     """Write ``학번_이메일_매핑.parquet`` deterministically.
 
     Args:
@@ -153,8 +147,7 @@ def write_mapping_silver(
     """
     if not isinstance(silver_path, Path):
         raise TypeError(
-            f"write_mapping_silver: silver_path must be Path, got "
-            f"{type(silver_path).__name__}"
+            f"write_mapping_silver: silver_path must be Path, got {type(silver_path).__name__}"
         )
     silver_path.parent.mkdir(parents=True, exist_ok=True)
 

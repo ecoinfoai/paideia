@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_kwargs() -> dict:
     return {
         "module_version": "0.1.0",
@@ -47,6 +48,7 @@ def _valid_kwargs() -> dict:
 # Valid construction
 # ---------------------------------------------------------------------------
 
+
 def test_valid_construction() -> None:
     """A fully specified RetroManifest is accepted."""
     manifest = RetroManifest(**_valid_kwargs())
@@ -79,6 +81,7 @@ def test_empty_dicts_accepted() -> None:
 # ---------------------------------------------------------------------------
 # Extra-field rejection + frozen
 # ---------------------------------------------------------------------------
+
 
 def test_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields."""

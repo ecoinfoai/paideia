@@ -81,9 +81,7 @@ class RetroMesterConfig(BaseModel):
     def _v1_gap_threshold_range(self) -> Self:
         """V1: gap_threshold must be in [0, 1]."""
         if not (0.0 <= self.gap_threshold <= 1.0):
-            raise ValueError(
-                f"V1: gap_threshold={self.gap_threshold!r} must be in [0, 1]."
-            )
+            raise ValueError(f"V1: gap_threshold={self.gap_threshold!r} must be in [0, 1].")
         return self
 
     @model_validator(mode="after")
@@ -111,8 +109,7 @@ class RetroMesterConfig(BaseModel):
         actual = frozenset(self.importance_weights.keys())
         if actual != _IMPORTANCE_KEYS:
             raise ValueError(
-                f"V4: importance_weights keys must be exactly {_IMPORTANCE_KEYS}; "
-                f"got {actual}."
+                f"V4: importance_weights keys must be exactly {_IMPORTANCE_KEYS}; got {actual}."
             )
         return self
 

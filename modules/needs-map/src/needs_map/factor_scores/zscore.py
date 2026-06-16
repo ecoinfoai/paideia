@@ -23,9 +23,7 @@ def zscore(values: pd.Series) -> pd.Series:
         all zeros. All-NaN column: all NaN.
     """
     if not isinstance(values, pd.Series):
-        raise TypeError(
-            f"zscore: expected pd.Series, got {type(values).__name__}."
-        )
+        raise TypeError(f"zscore: expected pd.Series, got {type(values).__name__}.")
 
     substantive = values.dropna()
     if substantive.empty:

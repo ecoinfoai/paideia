@@ -25,27 +25,21 @@ from typing import Any
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.combine.joiner import UnmatchedCounts, join_silver_phase3
 from paideia_shared.schemas import CombinedAnalysisRow
-
 
 # ---------------------------------------------------------------------------
 # Fixture loaders
 # ---------------------------------------------------------------------------
 
 
-_FIXTURE_ROOT = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "silver_phase3_minimal"
-)
+_FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "silver_phase3_minimal"
 
 
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -69,9 +63,7 @@ def _read(path: Path) -> pd.DataFrame:
 def _load_inputs(root: Path) -> dict[str, Any]:
     nm = root / "silver" / "needs-map" / "2026-1-anatomy"
     im = root / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
     return {
         "student_master": _read(im / "student_master.parquet"),
@@ -94,9 +86,7 @@ def test_joiner_produces_60_column_dataframe(minimal_silver: Path) -> None:
     df, _counts = join_silver_phase3(**inputs)
 
     assert len(df) == 30, f"minimal fixture has 30 students, got {len(df)}"
-    assert len(df.columns) == 60, (
-        f"contract requires 60 columns, got {len(df.columns)}"
-    )
+    assert len(df.columns) == 60, f"contract requires 60 columns, got {len(df.columns)}"
 
     # First 6 columns = identity group.
     assert list(df.columns[:6]) == [
@@ -168,9 +158,7 @@ def test_joiner_cluster_label_lookup_via_sidecar(minimal_silver: Path) -> None:
     labelled = df[df["cluster_id"].notna()].copy()
     labels = sorted(labelled["cluster_label"].dropna().unique().tolist())
     # Minimal fixture k=3 names — alphabetic sort.
-    assert labels == sorted(
-        ["성장 잠재형", "안정 학습형", "고성취 자기주도형"]
-    )
+    assert labels == sorted(["성장 잠재형", "안정 학습형", "고성취 자기주도형"])
 
     # When cluster_id is None, the other two cluster columns must also be None.
     no_cluster = df[df["cluster_id"].isna()]
@@ -223,9 +211,7 @@ def test_unmatched_cluster_assignment_counted(minimal_silver: Path) -> None:
 
 def test_unmatched_student_metrics_counted(minimal_silver: Path) -> None:
     inputs = _load_inputs(minimal_silver)
-    inputs["student_metrics"] = _drop_student(
-        inputs["student_metrics"], "2026000000"
-    )
+    inputs["student_metrics"] = _drop_student(inputs["student_metrics"], "2026000000")
     _, counts = join_silver_phase3(**inputs)
     assert counts.unmatched_student_metrics == 1
 
@@ -237,9 +223,7 @@ def test_off_roster_respondent_counted(minimal_silver: Path) -> None:
     new_row = fs.iloc[0].to_dict()
     new_row["student_id"] = "2026099999"  # not in student_master
     new_row["on_roster"] = False
-    inputs["factor_scores"] = pd.concat(
-        [fs, pd.DataFrame([new_row])], ignore_index=True
-    )
+    inputs["factor_scores"] = pd.concat([fs, pd.DataFrame([new_row])], ignore_index=True)
     _, counts = join_silver_phase3(**inputs)
     assert counts.off_roster_respondents == 1
     # Off-roster respondents must NOT appear in the joined silver (left-join

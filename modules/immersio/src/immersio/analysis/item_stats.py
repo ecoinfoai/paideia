@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections import Counter
 
 import pandas as pd
-
 from paideia_shared.schemas import (
     DistractorLabel,
     ItemStatistics,
@@ -31,9 +30,7 @@ def _is_blank(value: object) -> bool:
         return True
     if isinstance(value, float) and pd.isna(value):
         return True
-    if isinstance(value, str) and value.strip() == "":
-        return True
-    return False
+    return isinstance(value, str) and value.strip() == ""
 
 
 def _safe_int_response(value: object) -> int | None:
@@ -103,9 +100,7 @@ def compute_item_statistics(
                 sid = str(row["student_id"])
                 mapping[sid] = 1 if resp == correct_answer else 0
             item_responses_for_disc[item_no] = mapping
-        disc = compute_discrimination(
-            item_responses_for_disc, total_scores, top_pct=0.27
-        )
+        disc = compute_discrimination(item_responses_for_disc, total_scores, top_pct=0.27)
     else:
         disc = {}
 
@@ -118,9 +113,7 @@ def compute_item_statistics(
         if n_responders == 0:
             continue
 
-        responses_int: list[int | None] = [
-            _safe_int_response(v) for v in sub["response"].tolist()
-        ]
+        responses_int: list[int | None] = [_safe_int_response(v) for v in sub["response"].tolist()]
         n_omit = sum(1 for r in responses_int if r is None)
         n_correct = sum(1 for r in responses_int if r == correct_answer)
 
@@ -136,9 +129,7 @@ def compute_item_statistics(
         wrong_only = [r for r in non_blank if r != correct_answer]
         wrong_counts = Counter(wrong_only)
         if wrong_counts:
-            top_distractor_no, top_count = max(
-                wrong_counts.items(), key=lambda kv: (kv[1], -kv[0])
-            )
+            top_distractor_no, top_count = max(wrong_counts.items(), key=lambda kv: (kv[1], -kv[0]))
             top_distractor_rate: float | None = top_count / n_responders
             is_top_distractor_adjacent = _is_adjacent(correct_answer, top_distractor_no)
         else:

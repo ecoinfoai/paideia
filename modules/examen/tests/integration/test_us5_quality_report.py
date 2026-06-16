@@ -59,6 +59,7 @@ _WEEKS = [8, 9, 10, 11, 12, 13]
 # Canned responses — deliberately skewed answer_no so balance is needed
 # ---------------------------------------------------------------------------
 
+
 # All items produced with answer_no=1; balance should redistribute them.
 def _make_canned_json(answer_no: int = 1, source: str = "textbook") -> dict[str, Any]:
     return {
@@ -340,7 +341,7 @@ class TestAnswerKeyBalance:
         for i in range(len(items) - 2):
             a, b, c = items[i].answer_no, items[i + 1].answer_no, items[i + 2].answer_no
             assert not (a == b == c), (
-                f"Run of 3 at positions {i},{i+1},{i+2}: answer_no={a}. "
+                f"Run of 3 at positions {i},{i + 1},{i + 2}: answer_no={a}. "
                 f"Full sequence: {[item.answer_no for item in items]}"
             )
 
@@ -405,8 +406,7 @@ class TestAnswerKeyBalance:
         twice = balance_answer_keys(once)
         for o, t in zip(once, twice, strict=True):
             assert o.answer_no == t.answer_no, (
-                f"item_no={o.item_no}: balance not idempotent "
-                f"({o.answer_no} → {t.answer_no})"
+                f"item_no={o.item_no}: balance not idempotent ({o.answer_no} → {t.answer_no})"
             )
 
 
@@ -427,13 +427,15 @@ class TestSwapRenumbersCircledPrefixes:
             difficulty="2_보통",
             stem_polarity="부정형",
             text="다음 중 가장 옳지 않은 것은?",
-            options=[f"{c} 보기내용 {i+1}번 — 충분히 긴 설명 문장입니다 abcd"
-                     for i, c in enumerate("①②③④⑤")],
+            options=[
+                f"{c} 보기내용 {i + 1}번 — 충분히 긴 설명 문장입니다 abcd"
+                for i, c in enumerate("①②③④⑤")
+            ],
             answer_no=answer_no,
-            distractor_rationale=[f"{c} 근거 {i+1}" for i, c in enumerate("①②③④⑤")],
+            distractor_rationale=[f"{c} 근거 {i + 1}" for i, c in enumerate("①②③④⑤")],
             wrong_explanation="오답 설명." * 30,
             leap_explanation="도약 설명." * 30,
-            intent="출제 의도 설명 문장입니다 충분히 길게 작성." ,
+            intent="출제 의도 설명 문장입니다 충분히 길게 작성.",
             option_length_ok=True,
             key_concept="호흡근육",
         )
@@ -463,9 +465,7 @@ class TestQualityReport:
         """출제품질리포트.md is written to the run Gold dir."""
         _, run_dir = _run_build(tmp_path)
         report_path = run_dir / "출제품질리포트.md"
-        assert report_path.exists(), (
-            f"출제품질리포트.md not found in {run_dir}"
-        )
+        assert report_path.exists(), f"출제품질리포트.md not found in {run_dir}"
 
     def test_quality_report_not_empty(self, tmp_path: Path) -> None:
         """출제품질리포트.md has non-trivial content."""
@@ -478,9 +478,7 @@ class TestQualityReport:
         _, run_dir = _run_build(tmp_path)
         text = (run_dir / "출제품질리포트.md").read_text(encoding="utf-8")
         # Should mention 챕터 or chapter distribution
-        assert "챕터" in text or "장" in text, (
-            "Quality report missing chapter distribution section"
-        )
+        assert "챕터" in text or "장" in text, "Quality report missing chapter distribution section"
 
     def test_quality_report_contains_difficulty_section(self, tmp_path: Path) -> None:
         """Report contains difficulty distribution (목표 vs 실측)."""
@@ -499,9 +497,7 @@ class TestQualityReport:
         _, run_dir = _run_build(tmp_path)
         text = (run_dir / "출제품질리포트.md").read_text(encoding="utf-8")
         has_indicator = "✅" in text or "⚠️" in text
-        assert has_indicator, (
-            "Quality report should use ✅/⚠️ to flag conformance (got neither)"
-        )
+        assert has_indicator, "Quality report should use ✅/⚠️ to flag conformance (got neither)"
 
     def test_quality_report_reproducible(self, tmp_path: Path) -> None:
         """Running build twice produces identical quality report content."""
@@ -642,9 +638,7 @@ class TestBalanceAnswerKeysUnit:
         balanced = balance_answer_keys(items)
         for i in range(len(balanced) - 2):
             a, b, c = balanced[i].answer_no, balanced[i + 1].answer_no, balanced[i + 2].answer_no
-            assert not (a == b == c), (
-                f"Run of 3 at {i},{i+1},{i+2}: {a},{b},{c}"
-            )
+            assert not (a == b == c), f"Run of 3 at {i},{i + 1},{i + 2}: {a},{b},{c}"
 
     def test_already_balanced_stays_same(self) -> None:
         """Items with perfectly balanced answer_nos → no churn."""
@@ -674,9 +668,7 @@ class TestBalanceAnswerKeysUnit:
                             "⑤ " + "마" * 28,
                         ],
                         answer_no=num,
-                        distractor_rationale=[
-                            "옳은 진술." for _ in range(5)
-                        ],
+                        distractor_rationale=["옳은 진술." for _ in range(5)],
                         wrong_explanation="오답." * 10,
                         leap_explanation="도약." * 10,
                         intent="출제의도 텍스트 테스트.",
@@ -703,9 +695,7 @@ class TestBalanceAnswerKeysUnit:
         result = balance_answer_keys(items)
         assert len(result) == 1
 
-    def _make_items_with_answer_sequence(
-        self, answer_seq: list[int]
-    ) -> list[ExamItemDraft]:
+    def _make_items_with_answer_sequence(self, answer_seq: list[int]) -> list[ExamItemDraft]:
         """Create items whose answer_no follows ``answer_seq`` exactly (in order)."""
         items = []
         for i, answer_no in enumerate(answer_seq):
@@ -759,9 +749,7 @@ class TestBalanceAnswerKeysUnit:
         # times (22.5%); 4 appears 8 times (20%). Max = 9 (22.5% ≤ 25%) so no
         # over-rep trigger fires under the old algorithm.
         # Build the exact multiset, then interleave to avoid any run-of-3.
-        multiset: list[int] = (
-            [1] * 5 + [2] * 9 + [3] * 9 + [4] * 8 + [5] * 9
-        )
+        multiset: list[int] = [1] * 5 + [2] * 9 + [3] * 9 + [4] * 8 + [5] * 9
         assert len(multiset) == 40
         # Interleave deterministically to avoid any run-of-3: sort by (rank within
         # its own number) so identical numbers are spread out.
@@ -810,13 +798,13 @@ class TestBalanceAnswerKeysUnit:
                 balanced[i + 2].answer_no,
             )
             assert not (a == b == c), f"run-of-3 at {i} after balance"
+
         # And correctness preserved (body unchanged; circled-number prefix is
         # positional and renumbered on swap).
         def _body(opt: str) -> str:
             return opt[1:] if opt and opt[0] in "①②③④⑤" else opt
 
         for orig, bal in zip(items, balanced, strict=True):
-            assert (
-                _body(bal.options[bal.answer_no - 1])
-                == _body(orig.options[orig.answer_no - 1])
+            assert _body(bal.options[bal.answer_no - 1]) == _body(
+                orig.options[orig.answer_no - 1]
             ), f"item {orig.item_no}: correct option content changed"

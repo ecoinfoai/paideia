@@ -21,9 +21,8 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.stats import tukey_hsd
-
 from immersio.combine.cluster_compare import compute_cluster_score_comparison
+from scipy.stats import tukey_hsd
 
 
 def _df_with_clusters(
@@ -112,18 +111,14 @@ def test_k3_homoscedastic_tukey_pairs_match_scipy_reference() -> None:
 
 def test_k3_heteroscedastic_uses_welch_anova_with_games_howell() -> None:
     """Strongly different SD per group → Welch ANOVA + Games-Howell branch."""
-    df = _df_with_clusters(
-        cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40
-    )
+    df = _df_with_clusters(cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40)
     _, header, _ = compute_cluster_score_comparison(df, _names(3))
     assert header.test_used == "Welch_ANOVA"
     assert header.posthoc_test == "Games_Howell"
 
 
 def test_games_howell_pair_p_in_unit_interval() -> None:
-    df = _df_with_clusters(
-        cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40
-    )
+    df = _df_with_clusters(cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40)
     _, _, pairwise = compute_cluster_score_comparison(df, _names(3))
     for p in pairwise:
         assert 0.0 <= p.raw_p <= 1.0
@@ -131,9 +126,7 @@ def test_games_howell_pair_p_in_unit_interval() -> None:
 
 def test_games_howell_sign_of_mean_diff() -> None:
     """Mean diff sign must match group means."""
-    df = _df_with_clusters(
-        cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40
-    )
+    df = _df_with_clusters(cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40)
     _, _, pairwise = compute_cluster_score_comparison(df, _names(3))
     by_pair = {p.cluster_pair: p for p in pairwise}
     # mean(cluster_0) ~ 60 < mean(cluster_1) ~ 75 → diff (0-1) negative.
@@ -244,9 +237,7 @@ def test_eta_squared_in_unit_interval_when_set() -> None:
 
 def test_games_howell_pair_order_ascending() -> None:
     """Games-Howell pairs must iterate in (i, j) ascending order — vector #8."""
-    df = _df_with_clusters(
-        cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40
-    )
+    df = _df_with_clusters(cluster_means=[60.0, 75.0, 85.0], sd=[1.0, 5.0, 15.0], n_per=40)
     _, _, pairwise = compute_cluster_score_comparison(df, _names(3))
     pairs = [p.cluster_pair for p in pairwise]
     assert pairs == sorted(pairs)
@@ -314,12 +305,10 @@ def test_toothaker_table4_games_howell_reference() -> None:
     # (0, 3) pair: largest gap → expect p<0.001.
     pair_03 = by_pair[(0, 3)]
     assert pair_03.raw_p < 0.001, (
-        f"Toothaker reference: pair(0,3) Games-Howell p must be < 0.001, "
-        f"got {pair_03.raw_p}"
+        f"Toothaker reference: pair(0,3) Games-Howell p must be < 0.001, got {pair_03.raw_p}"
     )
     # (0, 1) closest gap → expect non-significant or marginal.
     pair_01 = by_pair[(0, 1)]
     assert pair_01.raw_p > 0.001, (
-        f"Toothaker reference: pair(0,1) Games-Howell p > 0.001 expected, "
-        f"got {pair_01.raw_p}"
+        f"Toothaker reference: pair(0,1) Games-Howell p > 0.001 expected, got {pair_01.raw_p}"
     )

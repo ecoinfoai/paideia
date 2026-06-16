@@ -27,6 +27,7 @@ from paideia_shared.schemas import (
 # finalize_xlsx
 # ---------------------------------------------------------------------------
 
+
 def _make_minimal_xlsx(path: Path) -> None:
     """Create a minimal XLSX file with a docProps/core.xml containing dcterms:modified."""
     import openpyxl
@@ -117,8 +118,9 @@ class TestFinalizeXlsx:
             import io
 
             with zipfile.ZipFile(path, "r") as src:
-                members = [(i.filename, src.read(i.filename), i.compress_type)
-                           for i in src.infolist()]
+                members = [
+                    (i.filename, src.read(i.filename), i.compress_type) for i in src.infolist()
+                ]
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as dst:
                 for name, data, ct in members:
@@ -126,10 +128,14 @@ class TestFinalizeXlsx:
                         text = data.decode("utf-8")
                         text = re.sub(
                             r"(<dcterms:created[^>]*>)[^<]+(</dcterms:created>)",
-                            rf"\g<1>{ts}\g<2>", text)
+                            rf"\g<1>{ts}\g<2>",
+                            text,
+                        )
                         text = re.sub(
                             r"(<dcterms:modified[^>]*>)[^<]+(</dcterms:modified>)",
-                            rf"\g<1>{ts}\g<2>", text)
+                            rf"\g<1>{ts}\g<2>",
+                            text,
+                        )
                         data = text.encode("utf-8")
                     dst.writestr(name, data, compress_type=ct)
             path.write_bytes(buf.getvalue())
@@ -164,6 +170,7 @@ class TestFinalizeXlsx:
 # ---------------------------------------------------------------------------
 # dump_yaml
 # ---------------------------------------------------------------------------
+
 
 class TestDumpYaml:
     def test_byte_identical_across_two_calls(self) -> None:
@@ -218,6 +225,7 @@ class TestDumpYaml:
 # ---------------------------------------------------------------------------
 # parquet_write_options
 # ---------------------------------------------------------------------------
+
 
 class TestParquetWriteOptions:
     def test_returns_expected_flags(self) -> None:
@@ -310,7 +318,10 @@ def _det_blueprint() -> ExamenBlueprint:
 def _det_curriculum_map() -> CurriculumMap:
     entries = [
         CurriculumEntry(
-            week=w, chapter=c, chapter_no=n, subtopic=None,
+            week=w,
+            chapter=c,
+            chapter_no=n,
+            subtopic=None,
             sections=["1. 기본구조", "2. 기능"],
         )
         for w, c, n in zip(_DET_WEEKS, _DET_CHAPTERS, _DET_CHAPTER_NOS, strict=False)

@@ -6,11 +6,10 @@ import argparse
 import io
 
 import pytest
-
-from .conftest import write_student_metrics_parquet
 from immersio.cli.main import _build_parser
 from immersio.email.pipeline import run_email_dispatch
-from paideia_shared.schemas import DispatchStatus
+
+from .conftest import write_student_metrics_parquet
 
 
 def _args(*, cohort: str) -> argparse.Namespace:
@@ -83,9 +82,7 @@ def test_invalid_cohort_value_rejected() -> None:
 def test_cohort_low_score_filters_to_low(email_fixture, monkeypatch) -> None:
     """--cohort low_score: only low-score students reach the preview."""
     sids = [s[0] for s in email_fixture["students"]]
-    silver_dir = (
-        email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
-    )
+    silver_dir = email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
     write_student_metrics_parquet(
         silver_dir,
         [

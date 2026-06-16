@@ -7,11 +7,8 @@ neither-found, format violation, credentials precheck call.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
 
 import pytest
-import yaml
-
 from immersio.email.profile import ProfileError, ProfileLoader
 
 
@@ -89,9 +86,7 @@ def config_home(tmp_path: Path) -> Path:
 
 
 def test_load_operator_profile(config_home: Path) -> None:
-    (config_home / "profiles" / "alpha-prof.yaml").write_text(
-        _operator_yaml(), encoding="utf-8"
-    )
+    (config_home / "profiles" / "alpha-prof.yaml").write_text(_operator_yaml(), encoding="utf-8")
     loader = ProfileLoader(config_home=config_home)
     profile = loader.load("alpha-prof")
     assert profile.profile_kind == "operator"
@@ -108,9 +103,7 @@ def test_load_test_profile(config_home: Path, tmp_path: Path) -> None:
     assert len(profile.recipient_pool) == 2
 
 
-def test_both_directories_match_rejected(
-    config_home: Path, tmp_path: Path
-) -> None:
+def test_both_directories_match_rejected(config_home: Path, tmp_path: Path) -> None:
     """FR-G08: profile must exist in exactly one location."""
     (config_home / "profiles" / "duplicate.yaml").write_text(
         _operator_yaml("duplicate"), encoding="utf-8"
@@ -144,9 +137,7 @@ def test_invalid_yaml_format_rejected(config_home: Path) -> None:
 
 
 def test_credentials_precheck_called(config_home: Path) -> None:
-    (config_home / "profiles" / "alpha-prof.yaml").write_text(
-        _operator_yaml(), encoding="utf-8"
-    )
+    (config_home / "profiles" / "alpha-prof.yaml").write_text(_operator_yaml(), encoding="utf-8")
     called_with: list = []
 
     def precheck(profile) -> None:
@@ -162,9 +153,7 @@ def test_credentials_precheck_called(config_home: Path) -> None:
 
 
 def test_credentials_precheck_failure_propagates(config_home: Path) -> None:
-    (config_home / "profiles" / "alpha-prof.yaml").write_text(
-        _operator_yaml(), encoding="utf-8"
-    )
+    (config_home / "profiles" / "alpha-prof.yaml").write_text(_operator_yaml(), encoding="utf-8")
 
     def precheck(profile) -> None:
         raise ProfileError("FR-C07: env var unset")

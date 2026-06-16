@@ -116,7 +116,13 @@ def _make_item(
         top_distractor_no=None,
         top_distractor_rate=None,
         is_top_distractor_adjacent=False,
-        option_distribution={1: correct_rate, 2: wrong_share, 3: wrong_share, 4: wrong_share, 5: wrong_share},
+        option_distribution={
+            1: correct_rate,
+            2: wrong_share,
+            3: wrong_share,
+            4: wrong_share,
+            5: wrong_share,
+        },
         distractor_label="특이사항 없음",
     )
 

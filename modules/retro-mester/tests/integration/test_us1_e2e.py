@@ -212,9 +212,7 @@ def _build_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_A: 0.45, _CHAPTER_B: 0.25}),
         _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     item_rows = [
         _item_row(1, _CHAPTER_A),
@@ -273,9 +271,7 @@ class TestUS1E2E:
         assert (silver / "빈틈표.parquet").exists(), "Missing 빈틈표.parquet"
         assert (silver / "변경권고.parquet").exists(), "Missing 변경권고.parquet"
 
-    def test_md_contains_ranked_changes_and_uncovered_ratio(
-        self, tmp_path: Path
-    ) -> None:
+    def test_md_contains_ranked_changes_and_uncovered_ratio(self, tmp_path: Path) -> None:
         """The generated MD report has a ranked changes table and uncovered ratio."""
         from retro_mester.pipeline import run_retro
 
@@ -314,9 +310,7 @@ class TestUS1E2E:
         _build_fixture_tree(data_root)
         run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(data_root))
 
-        manifest_path = (
-            data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
-        )
+        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         required_keys = {
@@ -344,9 +338,7 @@ class TestUS1E2E:
         _build_fixture_tree(data_root)
 
         # Remove the combined parquet to trigger InputError
-        combined = (
-            data_root / "silver" / "immersio" / _KEY / "진단×시험결합.parquet"
-        )
+        combined = data_root / "silver" / "immersio" / _KEY / "진단×시험결합.parquet"
         combined.unlink()
 
         code = run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(data_root))
@@ -360,9 +352,7 @@ class TestUS1E2E:
         data_root = tmp_path / "data"
         _build_fixture_tree(data_root)
 
-        config_path = (
-            data_root / "bronze" / "retro-mester" / _KEY / "retro_config.yaml"
-        )
+        config_path = data_root / "bronze" / "retro-mester" / _KEY / "retro_config.yaml"
         config_path.unlink()
 
         code = run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(data_root))

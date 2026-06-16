@@ -101,9 +101,7 @@ from maieutica.verify.format_checks import (
 from maieutica.verify.groundedness import ground_formative, verify_groundedness
 
 # Frozen asset path (config_id provenance) — next to the quiz_xls writer's asset.
-_GUIDE_ASSET_PATH = (
-    Path(__file__).resolve().parent / "assets" / "lms_quiz_guide_sheet.yaml"
-)
+_GUIDE_ASSET_PATH = Path(__file__).resolve().parent / "assets" / "lms_quiz_guide_sheet.yaml"
 
 
 def _file_sha256(path: Path) -> str:
@@ -263,9 +261,7 @@ def build(
         # so the avoid-list — and thus the cache key — is reproducible.
         answer_idx = item.answer_no - 1
         focus = item.key_concept or (
-            item.option_evidence[answer_idx]
-            if 0 <= answer_idx < len(item.option_evidence)
-            else ""
+            item.option_evidence[answer_idx] if 0 <= answer_idx < len(item.option_evidence) else ""
         )
         if focus:
             avoid_by_subsection.setdefault(slot.subsection_chunk_id, []).append(focus)
@@ -299,10 +295,7 @@ def build(
     # the .xls rows require item_no to be unique, sorted, and 1-based. Only the
     # int item_no changes — options/answer/explanations are untouched, so the V4
     # fold stays intact.
-    items = [
-        item.model_copy(update={"item_no": i})
-        for i, item in enumerate(items, start=1)
-    ]
+    items = [item.model_copy(update={"item_no": i}) for i, item in enumerate(items, start=1)]
 
     # Shortfall accounting (US3): N − M decomposed into the three causes; the
     # invariant guarantees they sum to the shortfall so the report can state each
@@ -355,16 +348,12 @@ def build(
         ),
         chapter_txt_bytes=chapter_txt.read_bytes(),
     )
-    run_dir = run_gold_dir(
-        spec.semester, spec.course_slug, run_id=run_id, data_root=data_root
-    )
+    run_dir = run_gold_dir(spec.semester, spec.course_slug, run_id=run_id, data_root=data_root)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # 5a: LMS quiz upload .xls (답안설명 may be leap-first truncated at write time)
     xls_path = run_dir / f"QuestionUploadExcel_{spec.week}주차.xls"
-    write_quiz_xls(
-        xls_path, items, week=spec.week, answer_explanation_max=answer_explanation_max
-    )
+    write_quiz_xls(xls_path, items, week=spec.week, answer_explanation_max=answer_explanation_max)
 
     # 5b: LMS formative upload .xlsx (bhu_text_mining ExamPDFGenerator-compatible)
     formative_path = run_dir / formative_xlsx_filename(spec.chapter_no, spec.chapter)
@@ -374,9 +363,7 @@ def build(
     write_candidate_yaml(items, formative_items, run_dir / "출제후보_완전판.yaml")
 
     # 5d: quality report markdown
-    quality_report_text = build_quality_report(
-        items, formative_items, shortfall=shortfall
-    )
+    quality_report_text = build_quality_report(items, formative_items, shortfall=shortfall)
     write_quality_report(run_dir / "출제품질리포트.md", quality_report_text)
 
     # 5e: manifest
@@ -390,15 +377,12 @@ def build(
     groundedness = dict(
         sorted(
             Counter(
-                (i.textbook_evidence.status if i.textbook_evidence else "미확인")
-                for i in items
+                (i.textbook_evidence.status if i.textbook_evidence else "미확인") for i in items
             ).items()
         )
     )
     option_length_violations = sum(1 for i in items if not i.option_length_ok)
-    explanation_length_violations = sum(
-        1 for i in items if not i.explanation_length_ok
-    )
+    explanation_length_violations = sum(1 for i in items if not i.explanation_length_ok)
 
     manifest = build_manifest(
         semester=spec.semester,
@@ -410,9 +394,7 @@ def build(
         config_ids=config_ids,
         generated_at=generated_at,
         llm_backend=_backend_label(backend),
-        llm_model=getattr(backend, "_model", None)
-        if isinstance(backend, ApiBackend)
-        else None,
+        llm_model=getattr(backend, "_model", None) if isinstance(backend, ApiBackend) else None,
         cache_hit_rate=cache.cache_hit_rate(),
         quiz_count=len(items),
         formative_count=len(formative_items),
@@ -471,8 +453,7 @@ def _build_shortfall(
 
     # chunk_id → label in chunk order (deterministic); section label or chunk_id.
     label_by_chunk: dict[str, str] = {
-        c.chunk_id: (c.section if c.section is not None else c.chunk_id)
-        for c in chunks
+        c.chunk_id: (c.section if c.section is not None else c.chunk_id) for c in chunks
     }
     subsection_counts: dict[str, int] = {}
     for item in items:

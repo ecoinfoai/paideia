@@ -247,9 +247,7 @@ def _write_canned_responses(responses_dir: Path) -> None:
         evidence_line = body[idx % len(body)]
         body_cursor[slot.subsection_chunk_id] = idx + 1
         # Pathology: the correct option is always at position 3.
-        item_json = _quiz_item_json(
-            slot.ordinal, evidence_line, _PATHOLOGY_ANSWER_NO
-        )
+        item_json = _quiz_item_json(slot.ordinal, evidence_line, _PATHOLOGY_ANSWER_NO)
         _write_envelope(responses_dir, slot.slot_id, item_json)
 
     for slot in (s for s in slots if s.kind == "formative"):
@@ -312,9 +310,7 @@ def test_us2_balance_breaks_runs_and_is_deterministic(tmp_path: Path) -> None:
     )
 
     # SC-003 ①: no answer_no runs 3-in-a-row.
-    assert _max_consecutive_run(answer_seq) <= 2, (
-        f"max consecutive run > 2: {answer_seq}"
-    )
+    assert _max_consecutive_run(answer_seq) <= 2, f"max consecutive run > 2: {answer_seq}"
 
     # SC-003 ②: no single answer_no value exceeds 50% of the adopted set.
     from collections import Counter

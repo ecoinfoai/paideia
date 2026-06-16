@@ -23,7 +23,7 @@ class HistogramBin(BaseModel):
     cumulative_pct: float = Field(ge=0.0, le=100.0, description="누적 백분율")
 
     @model_validator(mode="after")
-    def bin_order(self) -> "HistogramBin":
+    def bin_order(self) -> HistogramBin:
         """V1: bin_start < bin_end."""
         if self.bin_start >= self.bin_end:
             raise ValueError("HistogramBin V1: bin_start ≥ bin_end")

@@ -14,13 +14,23 @@ import pytest
 # T017 — ingest_report writer
 # ---------------------------------------------------------------------------
 
+
 class TestWriteIngestReport:
     def test_writes_valid_json(self, tmp_path: Path) -> None:
         from examen.ingest.report import write_ingest_report
 
         report = {
-            "stt": {"expected": 48, "found": 47, "missing": ["1C_11주차_2차시"], "filename_violations": []},
-            "textbook": {"chapters_required": 6, "chapters_found": 6, "removed_span_counts": {"8장": 31}},
+            "stt": {
+                "expected": 48,
+                "found": 47,
+                "missing": ["1C_11주차_2차시"],
+                "filename_violations": [],
+            },
+            "textbook": {
+                "chapters_required": 6,
+                "chapters_found": 6,
+                "removed_span_counts": {"8장": 31},
+            },
             "formative": {"expected_total": 12, "found": 12},
             "quiz": {"weeks": [9, 10, 11, 12, 13], "rows": 60},
         }
@@ -53,9 +63,7 @@ class TestWriteIngestReport:
         raw = dest.read_text(encoding="utf-8")
         # Verify by parsing the raw text order
         keys_in_order = [
-            line.split('"')[1]
-            for line in raw.splitlines()
-            if '"' in line and ":" in line
+            line.split('"')[1] for line in raw.splitlines() if '"' in line and ":" in line
         ]
         assert keys_in_order == sorted(keys_in_order[:3])
 
@@ -93,6 +101,7 @@ class TestWriteIngestReport:
 # ---------------------------------------------------------------------------
 # T017 — build_manifest and write_manifest
 # ---------------------------------------------------------------------------
+
 
 def _make_valid_manifest_kwargs() -> dict:
     return {

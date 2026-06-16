@@ -123,18 +123,14 @@ class QuizItemCandidate(BaseModel):
     def _v1_options_len(self) -> Self:
         """V1: options must have exactly 5 elements."""
         if len(self.options) != 5:
-            raise ValueError(
-                f"V1: len(options) == {len(self.options)}, must be 5."
-            )
+            raise ValueError(f"V1: len(options) == {len(self.options)}, must be 5.")
         return self
 
     @model_validator(mode="after")
     def _v3_option_evidence_len(self) -> Self:
         """V3: option_evidence must have exactly 5 elements."""
         if len(self.option_evidence) != 5:
-            raise ValueError(
-                f"V3: len(option_evidence) == {len(self.option_evidence)}, must be 5."
-            )
+            raise ValueError(f"V3: len(option_evidence) == {len(self.option_evidence)}, must be 5.")
         return self
 
     @model_validator(mode="after")

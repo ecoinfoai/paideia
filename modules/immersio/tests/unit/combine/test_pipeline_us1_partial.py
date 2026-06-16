@@ -23,9 +23,7 @@ import pytest
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -79,13 +77,7 @@ def test_run_lands_manifest_phase3(silver_root: Path, tmp_path: Path) -> None:
         silver_dir=silver_root / "silver",
         gold_dir=tmp_path / "gold",
     )
-    manifest_path = (
-        silver_root
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "manifest_phase3.json"
-    )
+    manifest_path = silver_root / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
     assert manifest_path.exists()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     # n_students_combined must equal the fixture's 30 students.
@@ -163,17 +155,7 @@ def test_run_byte_identical_silver(
         gold_dir=gold2,
     )
     s1 = (
-        silver_root
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "진단×시험결합.parquet"
+        silver_root / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
     ).read_bytes()
-    s2 = (
-        root2
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "진단×시험결합.parquet"
-    ).read_bytes()
+    s2 = (root2 / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet").read_bytes()
     assert s1 == s2

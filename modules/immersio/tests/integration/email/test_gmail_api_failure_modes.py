@@ -4,10 +4,6 @@ from __future__ import annotations
 
 import argparse
 import io
-from unittest.mock import MagicMock
-
-import pytest
-from googleapiclient.errors import HttpError
 
 from immersio.email.pipeline import run_email_dispatch
 from immersio.email.sender import SendResult
@@ -68,9 +64,7 @@ class _SequencedDispatcher:
         )
 
 
-def test_mixed_responses_recorded_correctly(
-    email_fixture, monkeypatch
-) -> None:
+def test_mixed_responses_recorded_correctly(email_fixture, monkeypatch) -> None:
     """200, 429, 400, 200, 200 → 3 success + 1 temporary + 1 failed."""
     _SequencedDispatcher.sequence = [
         SendResult(DispatchStatus.SUCCESS, "", "", "id-1"),
@@ -89,9 +83,7 @@ def test_mixed_responses_recorded_correctly(
         SendResult(DispatchStatus.SUCCESS, "", "", "id-4"),
         SendResult(DispatchStatus.SUCCESS, "", "", "id-5"),
     ]
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _SequencedDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _SequencedDispatcher)
     rc = run_email_dispatch(_args())
     # 1 failed → exit 8 (partial failure)
     assert rc == 8
@@ -114,9 +106,7 @@ def test_401_invalid_grant_aborts_with_exit_5(email_fixture, monkeypatch) -> Non
             "",
         ),
     ]
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _SequencedDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _SequencedDispatcher)
     rc = run_email_dispatch(_args())
     assert rc == 5
     # Only 2 send_one calls (1 success + 1 auth-fail) — students #3-5 not sent.

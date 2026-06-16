@@ -8,10 +8,8 @@ Spec 004 contracts/xlsx_sheets.md §2 — `1_히스토그램` 시트:
 
 from __future__ import annotations
 
-import pytest
-
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
+import pytest
 from immersio.analysis.histogram import compute_score_histogram  # noqa: E402
 from paideia_shared.schemas import HistogramBin
 
@@ -66,6 +64,7 @@ def test_histogram_cumulative_and_pct_monotonic() -> None:
 def test_histogram_excludes_none_and_nan() -> None:
     """결시 학생은 score 가 None — 분모에서 제외 (research §R-04)."""
     import math
+
     scores = [10.0, 20.0, None, math.nan, 30.0]  # type: ignore[list-item]
     bins = compute_score_histogram(scores, bin_size=10.0, max_score=40.0)  # type: ignore[arg-type]
     total = sum(b.count for b in bins)

@@ -6,10 +6,8 @@ Covers SC-001 (correct mapping) + SC-003 (no external mail server call).
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 import responses
-
 from immersio.email.pipeline import run_email_dispatch
 
 

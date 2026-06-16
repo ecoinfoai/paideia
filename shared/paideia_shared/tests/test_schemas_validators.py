@@ -258,11 +258,15 @@ def test_exam_item_negative_negative_points() -> None:
 def _five_inputs() -> list[IngestInput]:
     sha = "0" * 64
     return [
-        IngestInput(role="diagnostic_csv", path="data/bronze/진단평가/d.csv", sha256=sha, encoding="utf-8"),
+        IngestInput(
+            role="diagnostic_csv", path="data/bronze/진단평가/d.csv", sha256=sha, encoding="utf-8"
+        ),
         IngestInput(role="exam_omr_xls", path="data/bronze/시험성적/A.xls", sha256=sha),
         IngestInput(role="attendance_xlsx", path="data/bronze/출석/a.xlsx", sha256=sha),
         IngestInput(role="exam_yaml", path="data/bronze/시험문제/q.yaml", sha256=sha),
-        IngestInput(role="diagnostic_mapping_yaml", path="config/anatomy.yaml", sha256=sha, encoding="utf-8"),
+        IngestInput(
+            role="diagnostic_mapping_yaml", path="config/anatomy.yaml", sha256=sha, encoding="utf-8"
+        ),
     ]
 
 
@@ -401,9 +405,7 @@ def test_mapping_v3_negative_required_axis_unmapped() -> None:
     keeps it in axes.required — V3 fires because no column maps to that axis.
     """
     kwargs = _base_mapping_kwargs()
-    kwargs["columns"] = [
-        c for c in kwargs["columns"] if c.axis != "study_strategy"
-    ]
+    kwargs["columns"] = [c for c in kwargs["columns"] if c.axis != "study_strategy"]
     # axes.required intentionally still names study_strategy — V3 violation.
     with pytest.raises(ValidationError, match="V3"):
         DiagnosticMappingConfig(**kwargs)

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from immersio.email.cohort_filter import write_cohort_md
 from paideia_shared.schemas import CohortLabel, CohortRow
 

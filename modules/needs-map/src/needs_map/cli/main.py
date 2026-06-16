@@ -74,10 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--k",
         type=int,
         default=None,
-        help=(
-            "군집 수 강제. 허용 [2, 6]. k=1은 표본부족 자동 폴백 전용 "
-            "(인자로 1을 주면 exit 1)."
-        ),
+        help=("군집 수 강제. 허용 [2, 6]. k=1은 표본부족 자동 폴백 전용 (인자로 1을 주면 exit 1)."),
     )
     run.add_argument(
         "--no-llm",
@@ -91,7 +88,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "RoBERTa 감성 분석 비활성. 자유서술은 키워드 사전 단독 폴백으로 처리하고 "
-            "manifest.sentiment.fallback_reason=\"cli-disabled\" 기록 (FR-026)."
+            'manifest.sentiment.fallback_reason="cli-disabled" 기록 (FR-026).'
         ),
     )
     run.add_argument(
@@ -168,9 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     if ns.k is not None and not (2 <= ns.k <= 6):
-        sys.stderr.write(
-            f"ERROR [needs-map] --k={ns.k} out of allowed range [2, 6].\n"
-        )
+        sys.stderr.write(f"ERROR [needs-map] --k={ns.k} out of allowed range [2, 6].\n")
         return 1
 
     # v0.1.1 US1 (T023) — pre-flight Korean font check. MUST run before any
@@ -201,9 +196,7 @@ def main(argv: list[str] | None = None) -> int:
             roberta_enabled=not ns.no_roberta,
         )
     except ValidationError as exc:
-        sys.stderr.write(
-            f"ERROR [needs-map] argument validation failed:\n{exc}\n"
-        )
+        sys.stderr.write(f"ERROR [needs-map] argument validation failed:\n{exc}\n")
         return 1
 
     sys.stdout.write(
@@ -252,22 +245,16 @@ def main(argv: list[str] | None = None) -> int:
         return 99
 
     for entry in manifest.rows_per_phase:
-        sys.stdout.write(
-            f"[needs-map] phase={entry.phase} rows_written={entry.rows_written}\n"
-        )
+        sys.stdout.write(f"[needs-map] phase={entry.phase} rows_written={entry.rows_written}\n")
     if manifest.cluster_k_used is not None:
         sil = (
             f"{manifest.cluster_silhouette_used:.3f}"
             if manifest.cluster_silhouette_used is not None
             else "n/a"
         )
-        sys.stdout.write(
-            f"[needs-map] cluster k_used={manifest.cluster_k_used} silhouette={sil}\n"
-        )
+        sys.stdout.write(f"[needs-map] cluster k_used={manifest.cluster_k_used} silhouette={sil}\n")
         if manifest.weak_structure_warning:
-            sys.stdout.write(
-                "[needs-map] WARNING: cluster structure weak (silhouette < 0.2)\n"
-            )
+            sys.stdout.write("[needs-map] WARNING: cluster structure weak (silhouette < 0.2)\n")
     if manifest.free_text_dictionary_match_rate is not None:
         sys.stdout.write(
             f"[needs-map] free_text dictionary_match_rate="

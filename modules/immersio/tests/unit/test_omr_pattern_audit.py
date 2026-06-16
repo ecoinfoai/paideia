@@ -10,11 +10,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 # Pre-populate ``immersio.ingest`` to break the io ↔ ingest circular import
 # during standalone test collection (see test_attendance_roster_only.py).
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
+import pytest
 
 
 def test_warn_emitted_on_override(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:

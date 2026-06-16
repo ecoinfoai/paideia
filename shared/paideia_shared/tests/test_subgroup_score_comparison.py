@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas.subgroup_score_comparison import (
     SubgroupRow,
     SubgroupScoreComparison,
 )
-
+from pydantic import ValidationError
 
 # SubgroupRow
 

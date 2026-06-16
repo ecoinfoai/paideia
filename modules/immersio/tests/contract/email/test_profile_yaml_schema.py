@@ -7,16 +7,15 @@ Validates the discriminated union behavior, YAML round-trip parity, and
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Union
+from typing import Annotated
 
 import pytest
 import yaml
+from paideia_shared.schemas import ProfessorProfile, TestProfile
 from pydantic import Discriminator, TypeAdapter, ValidationError
 
-from paideia_shared.schemas import ProfessorProfile, TestProfile
-
 ProfileUnion = Annotated[
-    Union[ProfessorProfile, TestProfile],
+    ProfessorProfile | TestProfile,
     Discriminator("profile_kind"),
 ]
 _ADAPTER: TypeAdapter[ProfessorProfile | TestProfile] = TypeAdapter(ProfileUnion)
@@ -153,7 +152,9 @@ def test_billion_laughs_yaml_rejected_by_pydantic() -> None:
         _ADAPTER.validate_python(parsed)
 
 
-def test_yaml_object_deserialization_blocked() -> None:  # ALLOW_HARDCODING: docstring meta-mention of unsafe yaml.load API
+def test_yaml_object_deserialization_blocked() -> (
+    None
+):  # ALLOW_HARDCODING: docstring meta-mention of unsafe yaml.load API
     """Reflag #3: safe_load refuses ``!!python/object:`` constructors.
 
     The unsafe yaml.load (without SafeLoader) would deserialize  # ALLOW_HARDCODING: meta-mention of unsafe API

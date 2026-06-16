@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import argparse
 import io
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import pytest
 
 from immersio.email.log import append_dispatch_log_rows
 from immersio.email.pipeline import run_email_dispatch
@@ -99,9 +97,7 @@ def _seed_log(log_path: Path, sids: list[str], status: DispatchStatus) -> None:
     append_dispatch_log_rows(log_path, rows)
 
 
-def test_idempotent_replay_skips_prior_success(
-    email_fixture, monkeypatch
-) -> None:
+def test_idempotent_replay_skips_prior_success(email_fixture, monkeypatch) -> None:
     """SC-006: students with prior success log row are skipped on re-run."""
     # Pre-populate log: 2 of the 5 fixture students already success
     log_path = email_fixture["gold_email_dir"] / "메일_발송로그.csv"
@@ -113,9 +109,7 @@ def test_idempotent_replay_skips_prior_success(
     _seed_log(log_path, prior_success, DispatchStatus.SUCCESS)
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args())
     assert rc == 0
 

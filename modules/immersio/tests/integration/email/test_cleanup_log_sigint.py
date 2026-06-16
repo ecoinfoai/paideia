@@ -151,9 +151,7 @@ def _seed_multi_status_csv(log: Path) -> str:
 
 def _assert_original_csv_intact(log: Path, sha_before: str) -> None:
     """Assert the original csv is byte-identical to the pre-cleanup snapshot."""
-    assert log.exists(), (
-        "원본 csv 가 사라짐 — atomic replace 가 부분적으로 진행됨 (invariant 위반)"
-    )
+    assert log.exists(), "원본 csv 가 사라짐 — atomic replace 가 부분적으로 진행됨 (invariant 위반)"
     assert _sha256_of(log) == sha_before, (
         "원본 csv 가 변경됨 — atomic replace 도달 전 실패였으므로 무변경이어야 함 "
         "(FR-C05c · research.md R3)"

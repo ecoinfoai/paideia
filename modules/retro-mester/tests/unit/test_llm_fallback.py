@@ -72,9 +72,7 @@ class TestTemplateInsight:
 
         facts = _make_facts()
         result = template_insight(facts)
-        assert "형성평가 추가" in result, (
-            "template_insight must mention top prescription"
-        )
+        assert "형성평가 추가" in result, "template_insight must mention top prescription"
 
     def test_returns_non_empty_string(self) -> None:
         """Output is a non-empty string."""
@@ -107,9 +105,7 @@ class TestBuildInsightOffMode:
         from retro_mester.llm.insight import build_insight
 
         facts = _make_facts()
-        text, llm_used = build_insight(
-            facts, llm_mode="off", require_llm=False, cache=None
-        )
+        text, llm_used = build_insight(facts, llm_mode="off", require_llm=False, cache=None)
         expected = template_insight(facts)
         assert text == expected, "off mode must return template_insight output"
         assert llm_used is False, "off mode must return llm_used=False"
@@ -123,9 +119,7 @@ class TestBuildInsightOffMode:
         from retro_mester.llm.insight import build_insight
 
         facts = _make_facts()
-        _text, _llm_used = build_insight(
-            facts, llm_mode="off", require_llm=False, cache=None
-        )
+        _text, _llm_used = build_insight(facts, llm_mode="off", require_llm=False, cache=None)
         # If we reach here without ImportError the lazy guard is working.
         # (anthropic may or may not be installed; the off path must not require it.)
         assert True  # no ImportError raised on off path
@@ -139,8 +133,6 @@ class TestBuildInsightOffMode:
         from retro_mester.llm.insight import build_insight
 
         facts = _make_facts()
-        text, llm_used = build_insight(
-            facts, llm_mode="off", require_llm=True, cache=None
-        )
+        text, llm_used = build_insight(facts, llm_mode="off", require_llm=True, cache=None)
         assert isinstance(text, str) and len(text) > 0
         assert llm_used is False

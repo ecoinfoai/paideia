@@ -50,9 +50,7 @@ def _args(self_test: int | None = None) -> argparse.Namespace:
     return args
 
 
-def test_self_test_unattempted_rows_marked_skipped(
-    email_fixture, monkeypatch
-) -> None:
+def test_self_test_unattempted_rows_marked_skipped(email_fixture, monkeypatch) -> None:
     """Self-test N=2 of 5 → 2 test_dummy + 3 SKIPPED (NOT 3 fake success).
 
     Before the fix, the 3 drafts not in the [:N=2] slice retained
@@ -81,9 +79,7 @@ def test_self_test_unattempted_rows_marked_skipped(
                 gmail_server_message_id=f"id-{draft.student_id}",
             )
 
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _FakeDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _FakeDispatcher)
 
     rc = run_email_dispatch(_args(self_test=2))
     assert rc == 0
@@ -144,9 +140,7 @@ def test_production_early_exit_unattempted_rows_marked_temporary_failure(
         def sleep_between_sends(self):
             pass
 
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _FakeDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _FakeDispatcher)
 
     # confirm gate: type "yes" via injected stdin
     import io as _io

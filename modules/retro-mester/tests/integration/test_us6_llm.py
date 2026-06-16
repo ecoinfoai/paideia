@@ -67,9 +67,7 @@ def _combined_row(
         "chapter_correct_rates": json.dumps(chapter_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -133,9 +131,7 @@ def _build_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_A: 0.45, _CHAPTER_B: 0.25}),
         _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
     item_rows = [_item_row(1, _CHAPTER_A), _item_row(2, _CHAPTER_B)]
     pd.DataFrame(item_rows).to_parquet(silver_dir / "문항통계.parquet", index=False)
 
@@ -258,9 +254,7 @@ class TestUS6LLM:
             llm_mode="off",
         )
 
-        manifest_path = (
-            data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
-        )
+        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is False
 
@@ -288,9 +282,7 @@ class TestUS6LLM:
             )
         assert code == 0, f"Expected exit 0 on failing backend with require_llm=False, got {code}"
 
-    def test_failing_backend_no_require_llm_uses_fallback(
-        self, tmp_path: Path
-    ) -> None:
+    def test_failing_backend_no_require_llm_uses_fallback(self, tmp_path: Path) -> None:
         """Stubbed FAILING backend + require_llm=False → fallback text, llm_used=false."""
         from retro_mester.pipeline import run_retro
 
@@ -309,9 +301,7 @@ class TestUS6LLM:
                 require_llm=False,
             )
 
-        manifest_path = (
-            data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
-        )
+        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is False, "llm_used must be false on fallback"
 
@@ -388,9 +378,7 @@ class TestUS6LLM:
                 require_llm=False,
             )
 
-        manifest_path = (
-            data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
-        )
+        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is True
 

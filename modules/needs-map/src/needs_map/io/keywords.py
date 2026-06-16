@@ -28,9 +28,7 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", text).casefold().strip()
 
 
-def compute_match_rate(
-    dictionary: KeywordDictionary, sample_responses: Iterable[str]
-) -> float:
+def compute_match_rate(dictionary: KeywordDictionary, sample_responses: Iterable[str]) -> float:
     """Fraction of ``sample_responses`` that match at least one dictionary entry.
 
     Empty / whitespace-only responses are excluded from the denominator so the

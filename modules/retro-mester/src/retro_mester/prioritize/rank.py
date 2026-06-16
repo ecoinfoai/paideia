@@ -34,9 +34,7 @@ from paideia_shared.schemas import ChangeRecommendation, RetroMesterConfig, Unit
 from paideia_shared.schemas.retro_common import EffortLevel, PriorityQuadrant
 
 
-def _resolve_effort(
-    chapter: str, segment: str, config: RetroMesterConfig
-) -> EffortLevel:
+def _resolve_effort(chapter: str, segment: str, config: RetroMesterConfig) -> EffortLevel:
     """Look up effort level for a chapter/segment pair with fallback to '중'.
 
     Checks ``config.effort_ratings`` for an exact chapter key first, then
@@ -52,11 +50,7 @@ def _resolve_effort(
         Resolved ``EffortLevel`` value.
     """
     composite_key = f"{chapter}|{segment}"
-    effort = (
-        config.effort_ratings.get(chapter)
-        or config.effort_ratings.get(composite_key)
-        or "중"
-    )
+    effort = config.effort_ratings.get(chapter) or config.effort_ratings.get(composite_key) or "중"
     return effort  # type: ignore[return-value]
 
 

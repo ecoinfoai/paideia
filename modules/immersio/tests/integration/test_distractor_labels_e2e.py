@@ -17,16 +17,15 @@ operator-facing surfaces (T058/T059).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from pathlib import Path as _Path
 
 import pytest
-from openpyxl import load_workbook
-from paideia_shared.schemas import HistogramBin, MetadataAggregate
-
 from immersio.report.md_writer import render_quality_report_md
 from immersio.report.xlsx_writer import write_analysis_xlsx
-import sys
-from pathlib import Path as _Path
+from openpyxl import load_workbook
+from paideia_shared.schemas import HistogramBin, MetadataAggregate
 
 sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "fixtures"))
 from build_synthetic_44 import build_label_showcase_items  # noqa: E402
@@ -62,7 +61,9 @@ def _stub_overall(n_responders: int = 100) -> list[dict[str, object]]:
 def _stub_histogram() -> list[HistogramBin]:
     return [
         HistogramBin(bin_start=0.0, bin_end=10.0, count=0, cumulative=0, cumulative_pct=0.0),
-        HistogramBin(bin_start=90.0, bin_end=100.0, count=100, cumulative=100, cumulative_pct=100.0),
+        HistogramBin(
+            bin_start=90.0, bin_end=100.0, count=100, cumulative=100, cumulative_pct=100.0
+        ),
     ]
 
 
@@ -116,8 +117,7 @@ def test_six_labels_all_present_in_5_오답분석_sheet(items, tmp_path: Path) -
     }
     for expected in EXPECTED_LABELS:
         assert expected in labels_in_sheet, (
-            f"label {expected!r} missing from 5_오답분석 sheet; "
-            f"found: {labels_in_sheet}"
+            f"label {expected!r} missing from 5_오답분석 sheet; found: {labels_in_sheet}"
         )
 
 
@@ -144,9 +144,7 @@ def test_negative_discrimination_row_is_bold(items, tmp_path: Path) -> None:
     assert target_row is not None, "item_no=1 row not found"
     for c in range(1, 9):
         font = ws.cell(target_row, c).font
-        assert font.bold is True, (
-            f"5_오답분석 row {target_row} col {c} not bold (item_no=1, D<0)"
-        )
+        assert font.bold is True, f"5_오답분석 row {target_row} col {c} not bold (item_no=1, D<0)"
 
 
 def test_md_writer_quotes_negative_discrimination_items(items) -> None:
@@ -162,9 +160,7 @@ def test_md_writer_quotes_negative_discrimination_items(items) -> None:
     section3 = md.split("## (3)")[1].split("## (4)")[0]
     assert "1" in section3, "negative-D item_no=1 not cited in §(3)"
     # Per FR-021 + dispatch: explicit (해당 문항: ...) format
-    assert "해당 문항" in section3, (
-        "FR-021 template requires '(해당 문항: ...)' phrasing in §(3)"
-    )
+    assert "해당 문항" in section3, "FR-021 template requires '(해당 문항: ...)' phrasing in §(3)"
 
 
 def test_md_writer_label_buckets_list_each_label(items) -> None:

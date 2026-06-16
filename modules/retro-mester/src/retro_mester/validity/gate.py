@@ -78,12 +78,8 @@ def validity_signals(
     n = len(items)
 
     mean_disc = sum(it.discrimination_index for it in items) / n
-    low_disc_count = sum(
-        1 for it in items if it.discrimination_index < threshold
-    )
-    bad_dist_count = sum(
-        1 for it in items if it.distractor_label in _BAD_DISTRACTOR_LABELS
-    )
+    low_disc_count = sum(1 for it in items if it.discrimination_index < threshold)
+    bad_dist_count = sum(1 for it in items if it.distractor_label in _BAD_DISTRACTOR_LABELS)
 
     return {
         "mean_discrimination": mean_disc,
@@ -129,10 +125,7 @@ def chapter_validity(
             continue
 
         sigs = validity_signals(chapter_items, config)
-        if (
-            sigs["low_disc_share"] >= _MAJORITY
-            or sigs["bad_distractor_share"] >= _MAJORITY
-        ):
+        if sigs["low_disc_share"] >= _MAJORITY or sigs["bad_distractor_share"] >= _MAJORITY:
             result[chapter] = "문항수선"
         else:
             result[chapter] = "건전"

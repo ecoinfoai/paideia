@@ -22,13 +22,12 @@ import hashlib
 from pathlib import Path
 
 import pytest
-from paideia_shared.schemas import HistogramBin, MetadataAggregate
-
 from immersio import fonts as _fonts
 from immersio.report.figures import (
     render_fig1_score_histogram,
     render_fig2_metadata_correct_rates,
 )
+from paideia_shared.schemas import HistogramBin, MetadataAggregate
 
 
 @pytest.fixture(autouse=True)
@@ -41,15 +40,14 @@ def _resolve_font(monkeypatch: pytest.MonkeyPatch) -> None:
     CI host. The monkey-patch is reverted automatically.
     """
     import matplotlib
+
     matplotlib.use("Agg")
     from matplotlib import font_manager
 
     # DejaVu Sans is bundled with matplotlib's built-in fonts.
     deja_vu = font_manager.findfont("DejaVu Sans", fallback_to_default=True)
     deja_vu_path = Path(deja_vu)
-    monkeypatch.setattr(
-        _fonts, "resolve_korean_font_paths", lambda: (deja_vu_path, deja_vu_path)
-    )
+    monkeypatch.setattr(_fonts, "resolve_korean_font_paths", lambda: (deja_vu_path, deja_vu_path))
 
 
 def _stub_bins() -> list[HistogramBin]:

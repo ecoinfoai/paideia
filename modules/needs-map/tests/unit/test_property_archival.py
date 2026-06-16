@@ -12,9 +12,9 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-_FILENAME_STRAT = st.text(
-    alphabet="abcdefghijklmnop0123456789_-", min_size=1, max_size=12
-).map(lambda s: f"{s}.bin")
+_FILENAME_STRAT = st.text(alphabet="abcdefghijklmnop0123456789_-", min_size=1, max_size=12).map(
+    lambda s: f"{s}.bin"
+)
 
 
 @given(
@@ -26,7 +26,9 @@ _FILENAME_STRAT = st.text(
     )
 )
 @settings(max_examples=15, deadline=None)
-def test_archive_round_trip_preserves_files(tmp_path_factory, files: list[tuple[str, bytes]]) -> None:  # type: ignore[no-untyped-def]
+def test_archive_round_trip_preserves_files(
+    tmp_path_factory, files: list[tuple[str, bytes]]
+) -> None:  # type: ignore[no-untyped-def]
     """Whatever files exist in direct_path land verbatim in _archive/{TS}/."""
     from needs_map.archive.mover import archive_previous_run
 

@@ -61,9 +61,7 @@ def _load_asset() -> ManualTextAsset:
     mode.
     """
     package = "paideia_shared.assets"
-    with resources.files(package).joinpath("manual_text.ko.yaml").open(
-        "rb"
-    ) as f:
+    with resources.files(package).joinpath("manual_text.ko.yaml").open("rb") as f:
         data = yaml.safe_load(f.read().decode("utf-8"))
     return ManualTextAsset(**data)
 
@@ -238,9 +236,7 @@ def render_manual_pdf(
 
         figure_name = _FIGURE_BY_SECTION_ID.get(section.id)
         if figure_name is not None:
-            story.append(
-                Image(str(_figure_path(figure_name)), width=140 * mm, height=88 * mm)
-            )
+            story.append(Image(str(_figure_path(figure_name)), width=140 * mm, height=88 * mm))
             story.append(Spacer(1, 4 * mm))
 
         # Force a page break after each section so page count is predictable.
@@ -269,9 +265,7 @@ def render_manual_pdf(
         canvas.setTitle("needs-map 운영자 매뉴얼")
         canvas.setSubject(f"{semester} {course_name_kr}")
         # ISO8601 → reportlab D:YYYYMMDDHHmmSSZ
-        pdf_date = (
-            "D:" + created_at_utc.replace("-", "").replace(":", "").rstrip("Z") + "Z"
-        )
+        pdf_date = "D:" + created_at_utc.replace("-", "").replace(":", "").rstrip("Z") + "Z"
         canvas._doc.info.creationDate = pdf_date  # type: ignore[attr-defined]
         canvas._doc.info.modDate = pdf_date  # type: ignore[attr-defined]
 

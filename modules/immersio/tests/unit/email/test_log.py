@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import csv
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from immersio.email.log import (
+    STATUS_KR,
     DispatchLockError,
     RetryMode,
-    STATUS_KR,
     append_dispatch_log_row,
     append_dispatch_log_rows,
     idempotent_skip_filter,
@@ -118,9 +116,7 @@ def test_flock_blocks_concurrent_writer(tmp_path: Path) -> None:
     fcntl.flock(fd_a, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
         with pytest.raises(DispatchLockError, match="FR-D02"):
-            append_dispatch_log_row(
-                log, _row("1234567001", DispatchStatus.SUCCESS)
-            )
+            append_dispatch_log_row(log, _row("1234567001", DispatchStatus.SUCCESS))
     finally:
         fcntl.flock(fd_a, fcntl.LOCK_UN)
         os.close(fd_a)
@@ -212,7 +208,9 @@ def test_mask_rsa_private_key_block() -> None:
 
 
 def test_mask_json_private_key_field() -> None:
-    text = '{"private_key": "fake-bytes"}'  # ALLOW_HARDCODING: intentional fixture for json mask test
+    text = (
+        '{"private_key": "fake-bytes"}'  # ALLOW_HARDCODING: intentional fixture for json mask test
+    )
     masked = mask_secrets_in_error_detail(text)
     assert "fake-bytes" not in masked
     assert '"private_key": "<redacted>"' in masked

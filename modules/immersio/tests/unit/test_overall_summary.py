@@ -9,13 +9,11 @@ Spec 004 contracts/xlsx_sheets.md §1 — 전체요약 시트 13행:
 
 from __future__ import annotations
 
-import pandas as pd
-import pytest
-
 # Pre-populate ``immersio.ingest`` to break the io ↔ ingest circular import
 # during standalone test collection (see test_attendance_roster_only.py).
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
+import pandas as pd
+import pytest
 from immersio.analysis.overall_summary import (  # noqa: E402
     OVERALL_SUMMARY_LABELS,
     compute_overall_summary,
@@ -31,13 +29,13 @@ def _build_fixture() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     student_master = pd.DataFrame(
         {
-            "student_id": [f"202600000{i+1}" for i in range(10)],
+            "student_id": [f"202600000{i + 1}" for i in range(10)],
             "exam_taken": [True] * 7 + [False] * 3,
         }
     )
     exam_result = pd.DataFrame(
         {
-            "student_id": [f"202600000{i+1}" for i in range(7)],
+            "student_id": [f"202600000{i + 1}" for i in range(7)],
             "exam_total_score": [20.0, 18.0, 15.0, 14.0, 13.0, 11.0, 9.0],
             "exam_max_score": [20.0] * 7,
             "n_omit_responses": [0, 0, 0, 1, 0, 0, 0],

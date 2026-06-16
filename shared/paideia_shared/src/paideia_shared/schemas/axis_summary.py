@@ -112,7 +112,9 @@ class AxisSummaryRow(BaseModel):
                     f"AxisSummaryRow: row_kind='quantitative' requires fields "
                     f"{list(quant_required)}; missing: {missing}."
                 )
-            forbidden = [f for f in aux_required + freetext_required if getattr(self, f) is not None]
+            forbidden = [
+                f for f in aux_required + freetext_required if getattr(self, f) is not None
+            ]
             # ``top_emotion_distribution`` is freetext-only too
             if self.top_emotion_distribution is not None:
                 forbidden.append("top_emotion_distribution")
@@ -128,7 +130,9 @@ class AxisSummaryRow(BaseModel):
                     f"AxisSummaryRow: row_kind='auxiliary_distribution' requires "
                     f"fields {list(aux_required)}; missing: {missing}."
                 )
-            forbidden = [f for f in quant_required + freetext_required if getattr(self, f) is not None]
+            forbidden = [
+                f for f in quant_required + freetext_required if getattr(self, f) is not None
+            ]
             if self.top_emotion_distribution is not None:
                 forbidden.append("top_emotion_distribution")
             if forbidden:
@@ -138,15 +142,15 @@ class AxisSummaryRow(BaseModel):
                 )
             # percentage [0, 100], counts ≥ 0 (allow zero options for stable headers)
             if self.percentage is not None and not (0.0 <= self.percentage <= 100.0):
+                raise ValueError(f"AxisSummaryRow: percentage={self.percentage} out of [0, 100].")
+            if (
+                self.n_responded is not None
+                and self.n_cohort is not None
+                and self.n_responded > self.n_cohort
+            ):
                 raise ValueError(
-                    f"AxisSummaryRow: percentage={self.percentage} out of [0, 100]."
+                    f"AxisSummaryRow: n_responded={self.n_responded} > n_cohort={self.n_cohort}."
                 )
-            if self.n_responded is not None and self.n_cohort is not None:
-                if self.n_responded > self.n_cohort:
-                    raise ValueError(
-                        f"AxisSummaryRow: n_responded={self.n_responded} > "
-                        f"n_cohort={self.n_cohort}."
-                    )
         elif kind == "freetext_summary":
             missing = [f for f in freetext_required if getattr(self, f) is None]
             if missing:

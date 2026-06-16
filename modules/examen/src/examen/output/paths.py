@@ -43,6 +43,7 @@ _DEFAULT_DATA_ROOT = Path("data")
 # Tier path helpers
 # ---------------------------------------------------------------------------
 
+
 def bronze_dir(
     semester: str,
     course_slug: str,
@@ -107,6 +108,7 @@ def gold_dir(
 # Atomic write
 # ---------------------------------------------------------------------------
 
+
 def atomic_write(path: Path, write_fn: Callable[[Path], None]) -> None:
     """Write a file atomically using a temp-file then ``os.replace``.
 
@@ -145,6 +147,7 @@ def atomic_write(path: Path, write_fn: Callable[[Path], None]) -> None:
 # ---------------------------------------------------------------------------
 # Output separation — run-versioned Gold path
 # ---------------------------------------------------------------------------
+
 
 def run_gold_dir(
     semester: str,

@@ -53,9 +53,7 @@ def template_insight(facts: dict) -> str:
 
         # Additional changes
         if len(top_changes) > 1:
-            lines.append(
-                f"총 {len(top_changes)}개 변경 권고 중 상위 우선순위 단원:"
-            )
+            lines.append(f"총 {len(top_changes)}개 변경 권고 중 상위 우선순위 단원:")
             for rec in top_changes[:3]:
                 ch = rec.get("chapter", "")
                 seg = rec.get("segment", "")
@@ -74,9 +72,7 @@ def template_insight(facts: dict) -> str:
             "추가적인 교수·평가 자원 투입을 검토하시기 바랍니다."
         )
     else:
-        lines.append(
-            f"미처리 빈틈 비율은 {uncovered_pct:.1f}%로 양호한 수준입니다."
-        )
+        lines.append(f"미처리 빈틈 비율은 {uncovered_pct:.1f}%로 양호한 수준입니다.")
     lines.append("")
 
     # --- Alignment flags ---
@@ -93,9 +89,7 @@ def template_insight(facts: dict) -> str:
         lines.append(f"차년도 방향: {forward_summary}")
         lines.append("")
 
-    lines.append(
-        "*본 분석은 규칙 기반 템플릿으로 생성되었습니다 (LLM 미사용).*"
-    )
+    lines.append("*본 분석은 규칙 기반 템플릿으로 생성되었습니다 (LLM 미사용).*")
 
     return "\n".join(lines)
 

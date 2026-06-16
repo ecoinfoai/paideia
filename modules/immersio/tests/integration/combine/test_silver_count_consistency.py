@@ -19,7 +19,6 @@ from types import ModuleType
 
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.combine.joiner import join_silver_phase3
 from immersio.combine.manifest import (
     compute_input_sha256,
@@ -34,9 +33,7 @@ from paideia_shared.schemas.combined_analysis_manifest import (
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -47,22 +44,16 @@ def _load_builder() -> ModuleType:
 def _run_pipe(fixture_root: Path, silver_out: Path) -> tuple:
     nm = fixture_root / "silver" / "needs-map" / "2026-1-anatomy"
     im = fixture_root / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
 
     df, counts = join_silver_phase3(
         student_master=pq.read_table(im / "student_master.parquet").to_pandas(),
         factor_scores=pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        cluster_assignment=pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        cluster_assignment=pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         cluster_names=cluster_names,
         student_metrics=pq.read_table(im / "학생지표.parquet").to_pandas(),
-        diagnostic_response=pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        diagnostic_response=pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     )
     write_combined_silver(df, silver_out)
     return df, counts, nm, im
@@ -86,15 +77,11 @@ def _build_manifest(
         course_slug="anatomy",
         generated_at_utc="2026-04-30T00:00:00Z",
         factor_scores_sha256=compute_input_sha256(nm_dir / "factor_scores.parquet"),
-        cluster_assignment_sha256=compute_input_sha256(
-            nm_dir / "cluster_assignment.parquet"
-        ),
+        cluster_assignment_sha256=compute_input_sha256(nm_dir / "cluster_assignment.parquet"),
         cluster_names_sha256=compute_input_sha256(nm_dir / "cluster_names.json"),
         student_metrics_sha256=compute_input_sha256(im_dir / "학생지표.parquet"),
         student_master_sha256=compute_input_sha256(im_dir / "student_master.parquet"),
-        diagnostic_response_sha256=compute_input_sha256(
-            im_dir / "diagnostic_response.parquet"
-        ),
+        diagnostic_response_sha256=compute_input_sha256(im_dir / "diagnostic_response.parquet"),
         n_students_combined=len(df),
         n_diagnostic_only=n_dx,
         n_exam_only=n_ex,
@@ -141,12 +128,7 @@ def test_manifest_partition_sums_to_total(
     df, counts, nm, im = _run_pipe(root, silver)
     manifest = _build_manifest(df, counts, nm_dir=nm, im_dir=im)
 
-    s = (
-        manifest.n_diagnostic_only
-        + manifest.n_exam_only
-        + manifest.n_both
-        + manifest.n_neither
-    )
+    s = manifest.n_diagnostic_only + manifest.n_exam_only + manifest.n_both + manifest.n_neither
     assert s == manifest.n_students_combined
 
 
@@ -179,13 +161,8 @@ def test_unmatched_audit_fields_propagate(
     manifest = _build_manifest(df, counts, nm_dir=nm, im_dir=im)
 
     assert manifest.n_unmatched_factor_scores == counts.unmatched_factor_scores
-    assert (
-        manifest.n_unmatched_cluster_assignment
-        == counts.unmatched_cluster_assignment
-    )
-    assert (
-        manifest.n_unmatched_student_metrics == counts.unmatched_student_metrics
-    )
+    assert manifest.n_unmatched_cluster_assignment == counts.unmatched_cluster_assignment
+    assert manifest.n_unmatched_student_metrics == counts.unmatched_student_metrics
     assert manifest.n_off_roster_respondents == counts.off_roster_respondents
     # Minimal fixture has 0 unmatched across the board.
     assert manifest.n_unmatched_factor_scores == 0

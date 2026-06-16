@@ -19,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from immersio.report.xlsx_writer import write_analysis_xlsx
 from openpyxl import load_workbook
 from paideia_shared.schemas import (
     HistogramBin,
@@ -26,8 +27,6 @@ from paideia_shared.schemas import (
     MetadataAggregate,
     StudentExamMetrics,
 )
-
-from immersio.report.xlsx_writer import write_analysis_xlsx
 
 
 def _stub_overall() -> list[dict[str, object]]:
@@ -165,8 +164,15 @@ def test_학생성적_fixed_columns_present(written_xlsx: Path) -> None:
     ws = wb["학생성적"]
     headers = [ws.cell(1, c).value for c in range(1, 10)]
     assert headers[:9] == [
-        "학번", "이름", "분반", "응시여부", "총점",
-        "100점환산", "분반_백분위", "전체_백분위", "z_score",
+        "학번",
+        "이름",
+        "분반",
+        "응시여부",
+        "총점",
+        "100점환산",
+        "분반_백분위",
+        "전체_백분위",
+        "z_score",
     ]
 
 

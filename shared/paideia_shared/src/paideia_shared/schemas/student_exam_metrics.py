@@ -24,12 +24,8 @@ class StudentExamMetrics(BaseModel):
 
     exam_taken: bool = Field(description="True=응시, False=결시")
 
-    total_score: float | None = Field(
-        default=None, description="원점수 (만점=문항수×문항당점수)"
-    )
-    score_percent: float | None = Field(
-        default=None, ge=0.0, le=100.0, description="100점 환산"
-    )
+    total_score: float | None = Field(default=None, description="원점수 (만점=문항수×문항당점수)")
+    score_percent: float | None = Field(default=None, ge=0.0, le=100.0, description="100점 환산")
 
     section_percentile: float | None = Field(
         default=None, ge=0.0, le=100.0, description="분반 내 Hazen 백분위"
@@ -61,7 +57,7 @@ class StudentExamMetrics(BaseModel):
     )
 
     @model_validator(mode="after")
-    def absent_implies_no_scores(self) -> "StudentExamMetrics":
+    def absent_implies_no_scores(self) -> StudentExamMetrics:
         """V1: exam_taken=False ⇒ total_score/score_percent/percentile/z_score 모두 None."""
         if not self.exam_taken:
             scoreful = [
@@ -78,10 +74,8 @@ class StudentExamMetrics(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def percentile_consistency(self) -> "StudentExamMetrics":
+    def percentile_consistency(self) -> StudentExamMetrics:
         """V2: total_score is not None ⇔ section_percentile is not None."""
         if (self.total_score is None) != (self.section_percentile is None):
-            raise ValueError(
-                "StudentExamMetrics V2: total_score / section_percentile mismatch"
-            )
+            raise ValueError("StudentExamMetrics V2: total_score / section_percentile mismatch")
         return self

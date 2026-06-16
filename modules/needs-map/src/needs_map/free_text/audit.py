@@ -21,9 +21,7 @@ import pandas as pd
 from paideia_shared.schemas import FreetextAuditRow
 
 
-def write_freetext_audit(
-    rows: Iterable[FreetextAuditRow], silver_dir: Path
-) -> Path:
+def write_freetext_audit(rows: Iterable[FreetextAuditRow], silver_dir: Path) -> Path:
     """Write per-token audit rows to ``silver_dir/freetext_audit.parquet``.
 
     Args:
@@ -35,13 +33,9 @@ def write_freetext_audit(
         Absolute path to the written parquet file.
     """
     if not isinstance(silver_dir, Path):
-        raise TypeError(
-            f"write_freetext_audit: expected Path, got {type(silver_dir).__name__}."
-        )
+        raise TypeError(f"write_freetext_audit: expected Path, got {type(silver_dir).__name__}.")
     silver_dir.mkdir(parents=True, exist_ok=True)
-    materialised = sorted(
-        rows, key=lambda r: (r.student_id, r.freetext_source, r.token_index)
-    )
+    materialised = sorted(rows, key=lambda r: (r.student_id, r.freetext_source, r.token_index))
     df = pd.DataFrame([r.model_dump() for r in materialised])
     target = silver_dir / "freetext_audit.parquet"
     if df.empty:

@@ -110,10 +110,7 @@ class TestRankChanges:
 
     def test_top_five_covered(self) -> None:
         """With exactly 5 gaps, all 5 are covered (ranks 1-5)."""
-        gaps = [
-            _make_gap(chapter=f"{i}장", n_below=10 - i)
-            for i in range(1, 6)
-        ]
+        gaps = [_make_gap(chapter=f"{i}장", n_below=10 - i) for i in range(1, 6)]
         config = _make_config()
         recs, ratio = rank_changes(gaps, config)
 
@@ -125,10 +122,7 @@ class TestRankChanges:
 
     def test_more_than_five_caps_at_five(self) -> None:
         """With 7 gaps, only top 5 (by impact_score) are covered."""
-        gaps = [
-            _make_gap(chapter=f"{i}장", n_below=i)
-            for i in range(1, 8)
-        ]
+        gaps = [_make_gap(chapter=f"{i}장", n_below=i) for i in range(1, 8)]
         config = _make_config()
         recs, ratio = rank_changes(gaps, config)
 
@@ -150,10 +144,7 @@ class TestRankChanges:
     def test_uncovered_ratio_correct(self) -> None:
         """uncovered_ratio = uncovered_count / total_gaps."""
         # 7 gaps → 5 covered, 2 uncovered → ratio = 2/7
-        gaps = [
-            _make_gap(chapter=f"{i}장", n_below=i)
-            for i in range(1, 8)
-        ]
+        gaps = [_make_gap(chapter=f"{i}장", n_below=i) for i in range(1, 8)]
         config = _make_config()
         _, ratio = rank_changes(gaps, config)
 
@@ -188,7 +179,7 @@ class TestRankChanges:
         # Make 2 gaps so we have a median to work with
         gaps = [
             _make_gap(chapter="8장", n_below=10, weight=3.0),  # impact=30 (high)
-            _make_gap(chapter="9장", n_below=1, weight=1.0),   # impact=1 (low)
+            _make_gap(chapter="9장", n_below=1, weight=1.0),  # impact=1 (low)
         ]
         # 중 effort = not 상 → low effort
         config = _make_config(effort_ratings={"8장": "중"})
@@ -201,7 +192,7 @@ class TestRankChanges:
         """High impact + high effort (상) → 큰베팅."""
         gaps = [
             _make_gap(chapter="8장", n_below=10, weight=3.0),  # impact=30 (high)
-            _make_gap(chapter="9장", n_below=1, weight=1.0),   # impact=1 (low)
+            _make_gap(chapter="9장", n_below=1, weight=1.0),  # impact=1 (low)
         ]
         config = _make_config(effort_ratings={"8장": "상"})
         recs, _ = rank_changes(gaps, config)
@@ -213,7 +204,7 @@ class TestRankChanges:
         """Low impact + low effort → 낮은우선."""
         gaps = [
             _make_gap(chapter="8장", n_below=10, weight=3.0),  # impact=30 (high)
-            _make_gap(chapter="9장", n_below=1, weight=1.0),   # impact=1 (low)
+            _make_gap(chapter="9장", n_below=1, weight=1.0),  # impact=1 (low)
         ]
         config = _make_config(effort_ratings={"9장": "하"})
         recs, _ = rank_changes(gaps, config)
@@ -225,7 +216,7 @@ class TestRankChanges:
         """Low impact + high effort → 보류."""
         gaps = [
             _make_gap(chapter="8장", n_below=10, weight=3.0),  # impact=30 (high)
-            _make_gap(chapter="9장", n_below=1, weight=1.0),   # impact=1 (low)
+            _make_gap(chapter="9장", n_below=1, weight=1.0),  # impact=1 (low)
         ]
         config = _make_config(effort_ratings={"9장": "상"})
         recs, _ = rank_changes(gaps, config)

@@ -42,11 +42,10 @@ from __future__ import annotations
 
 import hashlib
 import io
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-
 from immersio.email.log import append_dispatch_log_rows
 from paideia_shared.schemas import (
     CohortLabel,
@@ -127,14 +126,12 @@ def _no_lock_or_backup_artifacts(csv_path: Path) -> None:
     # No backup files
     bak_files = list(parent.glob(f"{csv_path.name}.bak-*"))
     assert not bak_files, (
-        f"FR-C05a-1 violation: backup file(s) created during validation "
-        f"failure: {bak_files}"
+        f"FR-C05a-1 violation: backup file(s) created during validation failure: {bak_files}"
     )
     # No temp files
     tmp_files = list(parent.glob(f"{csv_path.name}.tmp-*"))
     assert not tmp_files, (
-        f"FR-C05a-1 violation: temp file(s) leaked during validation "
-        f"failure: {tmp_files}"
+        f"FR-C05a-1 violation: temp file(s) leaked during validation failure: {tmp_files}"
     )
 
 
@@ -143,9 +140,7 @@ def _no_lock_or_backup_artifacts(csv_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_status_typo_raises_validation_error(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_unknown_status_typo_raises_validation_error(tmp_path: Path, cleanup_log_fn) -> None:
     """typo `succes` 가 섞이면 ValueError (exit 3 매핑) — FR-C05a-1 / §5.1."""
     log = tmp_path / "메일_발송로그.csv"
     append_dispatch_log_rows(
@@ -168,13 +163,11 @@ def test_unknown_status_typo_raises_validation_error(
 
     # stderr 또는 예외 메시지에 한글 안내가 포함되어야 함 (§5.1).
     combined = stderr.getvalue() + str(exc_info.value)
-    assert "succes" in combined, (
-        "에러 메시지에 invalid 토큰 `succes` 가 명시되어야 함 (§5.1)"
-    )
+    assert "succes" in combined, "에러 메시지에 invalid 토큰 `succes` 가 명시되어야 함 (§5.1)"
     # "지원되지 않는 status" 또는 "유효한 값" 한글 안내가 어딘가에 포함
-    assert ("지원되지 않는 status" in combined) or (
-        "유효한 값" in combined
-    ), f"Korean status validation message expected in stderr/exc, got: {combined!r}"
+    assert ("지원되지 않는 status" in combined) or ("유효한 값" in combined), (
+        f"Korean status validation message expected in stderr/exc, got: {combined!r}"
+    )
 
     # 부수 효과 없음
     _no_lock_or_backup_artifacts(log)
@@ -186,9 +179,7 @@ def test_unknown_status_typo_raises_validation_error(
 # ---------------------------------------------------------------------------
 
 
-def test_empty_token_raises_validation_error(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_empty_token_raises_validation_error(tmp_path: Path, cleanup_log_fn) -> None:
     """빈 토큰 (`,,`) 이 섞이면 ValueError (exit 3 매핑) — FR-C05a-1 / §2."""
     log = tmp_path / "메일_발송로그.csv"
     append_dispatch_log_rows(
@@ -219,9 +210,7 @@ def test_empty_token_raises_validation_error(
 # ---------------------------------------------------------------------------
 
 
-def test_empty_result_abort_in_real_mode(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_empty_result_abort_in_real_mode(tmp_path: Path, cleanup_log_fn) -> None:
     """csv 에 dry_run 만 + `--keep success` 실 모드 → ValueError (exit 4) — §5.2.
 
     백업·임시 파일 미생성, 원본 csv sha256 무변경.
@@ -261,9 +250,7 @@ def test_empty_result_abort_in_real_mode(
 # ---------------------------------------------------------------------------
 
 
-def test_empty_result_dry_run_is_normal(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_empty_result_dry_run_is_normal(tmp_path: Path, cleanup_log_fn) -> None:
     """csv 에 dry_run 만 + `--keep success` + dry-run → 정상 (FR-C05a-2 후단).
 
     빈 미리보기 + 0-건 분포 보고를 stdout 으로 출력하고 return 0.
@@ -293,12 +280,8 @@ def test_empty_result_dry_run_is_normal(
     assert result in (0, None), f"dry-run 정상 종료 시 return 0 (또는 None) 기대, got {result!r}"
     out = stdout.getvalue()
     # §4.2 — dry-run 미리보기 헤더 + 0 데이터행 보고
-    assert "dry-run" in out or "미리보기" in out, (
-        f"stdout 에 dry-run/미리보기 안내 없음: {out!r}"
-    )
-    assert "0 데이터행" in out or "(총 0" in out, (
-        f"stdout 에 0 데이터행 미리보기 없음: {out!r}"
-    )
+    assert "dry-run" in out or "미리보기" in out, f"stdout 에 dry-run/미리보기 안내 없음: {out!r}"
+    assert "0 데이터행" in out or "(총 0" in out, f"stdout 에 0 데이터행 미리보기 없음: {out!r}"
     # 분포 보고가 0 건이라도 출력
     assert "성공(success)" in out or "정리 결과 분포" in out, (
         f"stdout 에 status 분포 보고 없음: {out!r}"
@@ -314,9 +297,7 @@ def test_empty_result_dry_run_is_normal(
 # ---------------------------------------------------------------------------
 
 
-def test_valid_keep_with_matching_rows_succeeds(
-    tmp_path: Path, cleanup_log_fn
-) -> None:
+def test_valid_keep_with_matching_rows_succeeds(tmp_path: Path, cleanup_log_fn) -> None:
     """유효 `--keep` + ≥1 매칭 행 → 정상 진행 (실 모드).
 
     백업 파일 생성 (.bak-<unix_ts>), atomic replace 적용 (csv 새 내용).
@@ -346,9 +327,7 @@ def test_valid_keep_with_matching_rows_succeeds(
 
     # 백업 파일이 csv 옆에 생성됨 (`*.bak-<unix_ts>` 패턴)
     bak_files = list(log.parent.glob(f"{log.name}.bak-*"))
-    assert len(bak_files) == 1, (
-        f"백업 파일 1개 기대 (*.bak-<unix_ts>), got: {bak_files}"
-    )
+    assert len(bak_files) == 1, f"백업 파일 1개 기대 (*.bak-<unix_ts>), got: {bak_files}"
     # 백업의 sha256 == 정리 직전 원본 sha256
     assert _sha256_of(bak_files[0]) == sha_before, (
         "백업 파일의 sha256 가 정리 직전 원본과 일치해야 함 (FR-C05b)"
@@ -362,6 +341,4 @@ def test_valid_keep_with_matching_rows_succeeds(
     # stdout 에 한글 분포 보고
     out = stdout.getvalue()
     assert "성공(success)" in out, f"stdout 에 한글 분포 보고 없음: {out!r}"
-    assert "제거(removed)" in out, (
-        f"stdout 에 '제거(removed)' 분리 라벨 없음: {out!r}"
-    )
+    assert "제거(removed)" in out, f"stdout 에 '제거(removed)' 분리 라벨 없음: {out!r}"

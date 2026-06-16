@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-
 _FR023_SECTION_TITLES = (
     "모듈 소개",
     "8 정량 축 해석 가이드",
@@ -100,9 +99,7 @@ def test_manual_pdf_embeds_at_least_three_images(tmp_path: Path) -> None:
             obj = xobjects[obj_name]  # type: ignore[index]
             if obj.get("/Subtype") == "/Image":
                 image_count += 1
-    assert image_count >= 3, (
-        f"expected ≥3 embedded images, got {image_count}"
-    )
+    assert image_count >= 3, f"expected ≥3 embedded images, got {image_count}"
 
 
 def test_manual_pdf_byte_identical_two_renders(tmp_path: Path) -> None:

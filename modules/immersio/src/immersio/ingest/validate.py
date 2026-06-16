@@ -71,17 +71,14 @@ def validate_outputs(
     orphans = sorted({e.item_no for e in exam if e.item_no not in valid_item_nos})
     if orphans:
         raise ValueError(
-            f"validate_outputs: ExamResult references item_no not present in "
-            f"ExamItem: {orphans}."
+            f"validate_outputs: ExamResult references item_no not present in ExamItem: {orphans}."
         )
 
     # 4. ExamResult.student_id ⊆ StudentMaster.student_id (data-integrity)
     master_id_set = set(master_ids)
     exam_student_ids = {e.student_id for e in exam}
     diag_student_ids = {d.student_id for d in diag}
-    missing_from_master = sorted(
-        (exam_student_ids | diag_student_ids) - master_id_set
-    )
+    missing_from_master = sorted((exam_student_ids | diag_student_ids) - master_id_set)
     if missing_from_master:
         integrity_violations.append(
             _integrity_violation(

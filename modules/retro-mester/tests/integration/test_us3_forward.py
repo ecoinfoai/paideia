@@ -28,8 +28,8 @@ _SEMESTER = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEMESTER}-{_COURSE}"
 
-_CHAPTER_A = "1장. 해부학 서론"    # structural: both segments below threshold
-_CHAPTER_B = "2장. 세포와 조직"    # non-structural: only 학령기 below
+_CHAPTER_A = "1장. 해부학 서론"  # structural: both segments below threshold
+_CHAPTER_B = "2장. 세포와 조직"  # non-structural: only 학령기 below
 
 _STUDENT_IDS = {
     "2026000001": "학령기",
@@ -153,9 +153,7 @@ def _build_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_A: 0.30, _CHAPTER_B: 0.70}, cluster_label="습관중심"),
         _combined_row("2026000004", {_CHAPTER_A: 0.25, _CHAPTER_B: 0.75}, cluster_label="습관중심"),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     item_rows = [
         _item_row(1, _CHAPTER_A, expected_difficulty="어려움", correct_rate=0.3),
@@ -192,14 +190,32 @@ def _build_fixture_tree(data_root: Path) -> None:
         "semester": _SEMESTER,
         "course_slug": _COURSE,
         "entries": [
-            {"week": 1, "chapter": _CHAPTER_A, "chapter_no": 1, "subtopic": None, "sections": ["1.1 인체의 조직"]},
-            {"week": 2, "chapter": _CHAPTER_B, "chapter_no": 2, "subtopic": None, "sections": ["2.1 세포의 구조"]},
+            {
+                "week": 1,
+                "chapter": _CHAPTER_A,
+                "chapter_no": 1,
+                "subtopic": None,
+                "sections": ["1.1 인체의 조직"],
+            },
+            {
+                "week": 2,
+                "chapter": _CHAPTER_B,
+                "chapter_no": 2,
+                "subtopic": None,
+                "sections": ["2.1 세포의 구조"],
+            },
         ],
     }
 
-    (bronze / "retro_config.yaml").write_text(yaml.dump(retro_cfg, allow_unicode=True), encoding="utf-8")
-    (bronze / "blueprint.yaml").write_text(yaml.dump(blueprint, allow_unicode=True), encoding="utf-8")
-    (bronze / "curriculum_map.yaml").write_text(yaml.dump(curriculum, allow_unicode=True), encoding="utf-8")
+    (bronze / "retro_config.yaml").write_text(
+        yaml.dump(retro_cfg, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze / "blueprint.yaml").write_text(
+        yaml.dump(blueprint, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze / "curriculum_map.yaml").write_text(
+        yaml.dump(curriculum, allow_unicode=True), encoding="utf-8"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +361,7 @@ class TestUS3AuditRoundtrip:
 
         # Copy prior yaml to a stable path before run2 archives gold dir
         import shutil
+
         prior_copy = tmp_path / "prior_차년도방향.yaml"
         shutil.copy(prior_yaml, prior_copy)
 

@@ -10,8 +10,6 @@ import argparse
 import io
 import json
 
-import pytest
-
 
 def _args(*, created_at_utc: str | None = None) -> argparse.Namespace:
     args = argparse.Namespace(

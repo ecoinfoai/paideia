@@ -29,8 +29,8 @@ paths exist when the runtime caller renders them (reportlab opens lazily).
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -165,8 +165,10 @@ def parse_markdown_to_flowables(
             continue
 
         # Table — header row, separator row, then 0+ body rows
-        if _TABLE_ROW_PATTERN.match(line) and i + 1 < len(lines) and _TABLE_SEP_PATTERN.match(
-            lines[i + 1]
+        if (
+            _TABLE_ROW_PATTERN.match(line)
+            and i + 1 < len(lines)
+            and _TABLE_SEP_PATTERN.match(lines[i + 1])
         ):
             header = _split_table_row(line)
             i += 2  # consume header + separator
@@ -189,8 +191,10 @@ def parse_markdown_to_flowables(
                 break
             if _IMAGE_PATTERN.match(nxt_stripped):
                 break
-            if _TABLE_ROW_PATTERN.match(nxt) and i + 1 < len(lines) and _TABLE_SEP_PATTERN.match(
-                lines[i + 1]
+            if (
+                _TABLE_ROW_PATTERN.match(nxt)
+                and i + 1 < len(lines)
+                and _TABLE_SEP_PATTERN.match(lines[i + 1])
             ):
                 break
             para_lines.append(nxt_stripped)

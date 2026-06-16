@@ -39,13 +39,9 @@ def cronbach_alpha(item_matrix: np.ndarray) -> float | None:
         — total variance == 0 makes α undefined).
     """
     if not isinstance(item_matrix, np.ndarray):
-        raise TypeError(
-            f"cronbach_alpha: expected np.ndarray, got {type(item_matrix).__name__}."
-        )
+        raise TypeError(f"cronbach_alpha: expected np.ndarray, got {type(item_matrix).__name__}.")
     if item_matrix.ndim != 2:
-        raise ValueError(
-            f"cronbach_alpha: expected 2-D matrix, got ndim={item_matrix.ndim}."
-        )
+        raise ValueError(f"cronbach_alpha: expected 2-D matrix, got ndim={item_matrix.ndim}.")
     n_rows, k_items = item_matrix.shape
     if k_items < 3:
         return None
@@ -62,9 +58,7 @@ def cronbach_alpha(item_matrix: np.ndarray) -> float | None:
     return float(alpha)
 
 
-def _likert_columns_for_axis(
-    mapping: DiagnosticMappingConfig, axis_key: str
-) -> list[str]:
+def _likert_columns_for_axis(mapping: DiagnosticMappingConfig, axis_key: str) -> list[str]:
     return [c.source for c in mapping.columns if c.kind == "likert" and c.axis == axis_key]
 
 

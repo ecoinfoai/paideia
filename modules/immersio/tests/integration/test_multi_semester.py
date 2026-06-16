@@ -78,7 +78,10 @@ def test_repeated_archival_within_single_key_accumulates_archives(tmp_path: Path
     assert len(gold_archives) == 2
 
     # The two archive subdirs must have distinct names (no collision).
-    assert {p.name for p in silver_archives} == {first["silver"].split("/")[-1], second["silver"].split("/")[-1]}
+    assert {p.name for p in silver_archives} == {
+        first["silver"].split("/")[-1],
+        second["silver"].split("/")[-1],
+    }
 
 
 def test_archival_only_silver_present(tmp_path: Path) -> None:

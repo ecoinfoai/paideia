@@ -4,10 +4,6 @@ from __future__ import annotations
 
 import argparse
 import io
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus

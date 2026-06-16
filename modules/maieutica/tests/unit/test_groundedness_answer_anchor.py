@@ -74,9 +74,7 @@ def _make_index() -> EvidenceIndex:
             removed_spans=[],
         ),
     ]
-    return EvidenceIndex.from_chapter(
-        lines=_LINES, chunks=chunks, source_file="8장 호흡계통.txt"
-    )
+    return EvidenceIndex.from_chapter(lines=_LINES, chunks=chunks, source_file="8장 호흡계통.txt")
 
 
 def _make_candidate(
@@ -142,9 +140,7 @@ class TestAnswerAnchorScoped:
                 "교재: 다섯 번째.",
             ],
         )
-        out = verify_groundedness(
-            item, _make_index(), subsection_chunk_id=_CHUNK_A
-        )
+        out = verify_groundedness(item, _make_index(), subsection_chunk_id=_CHUNK_A)
         ev = out.textbook_evidence
         assert ev is not None
         assert ev.status == "확인"  # G1
@@ -167,9 +163,7 @@ class TestAnswerAnchorScoped:
                 "교재: 다섯.",
             ],
         )
-        out = verify_groundedness(
-            item, _make_index(), subsection_chunk_id=_CHUNK_A
-        )
+        out = verify_groundedness(item, _make_index(), subsection_chunk_id=_CHUNK_A)
         ev = out.textbook_evidence
         assert ev is not None
         assert ev.status == "확인"
@@ -205,9 +199,7 @@ class TestAnswerAnchorScoped:
             answer_no=1,
             option_evidence=[_LINES[5], "x", "y", "z", "w"],  # line 6, in B
         )
-        out = verify_groundedness(
-            item, _make_index(), subsection_chunk_id=_CHUNK_A
-        )
+        out = verify_groundedness(item, _make_index(), subsection_chunk_id=_CHUNK_A)
         ev = out.textbook_evidence
         assert ev is not None
         assert ev.status == "미확인"  # not inside the assigned subsection A
@@ -232,9 +224,7 @@ class TestAnswerAnchorUnconfirmed:
                 "w",
             ],
         )
-        out = verify_groundedness(
-            item, _make_index(), subsection_chunk_id=_CHUNK_A
-        )
+        out = verify_groundedness(item, _make_index(), subsection_chunk_id=_CHUNK_A)
         ev = out.textbook_evidence
         assert ev is not None
         assert ev.status == "미확인"
@@ -252,9 +242,7 @@ class TestAnswerAnchorUnconfirmed:
                 "w",
             ],
         )
-        out = verify_groundedness(
-            item, _make_index(), subsection_chunk_id=_CHUNK_A
-        )
+        out = verify_groundedness(item, _make_index(), subsection_chunk_id=_CHUNK_A)
         ev = out.textbook_evidence
         assert ev is not None
         assert ev.status == "미확인"

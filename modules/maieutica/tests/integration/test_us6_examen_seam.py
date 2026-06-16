@@ -269,13 +269,9 @@ def test_us6_examen_seam_identifiers(tmp_path: Path) -> None:
 
         # --- source traceability: textbook_evidence present ---
         te = q.get("textbook_evidence")
-        assert te is not None, (
-            f"{label}: textbook_evidence is None — source traceability missing"
-        )
+        assert te is not None, f"{label}: textbook_evidence is None — source traceability missing"
         # source_file is always required (even when status is '미확인')
-        assert te.get("source_file"), (
-            f"{label}: textbook_evidence.source_file is empty"
-        )
+        assert te.get("source_file"), f"{label}: textbook_evidence.source_file is empty"
         # status must be a known value
         assert te.get("status") in {"확인", "미확인"}, (
             f"{label}: textbook_evidence.status {te.get('status')!r} invalid"

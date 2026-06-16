@@ -160,9 +160,7 @@ def _make_bronze_missing_week(tmp_path: Path) -> tuple[Path, Path]:
 # ---------------------------------------------------------------------------
 
 
-def test_missing_chapter_txt_exits_2_no_gold(
-    tmp_path: Path, monkeypatch: object
-) -> None:
+def test_missing_chapter_txt_exits_2_no_gold(tmp_path: Path, monkeypatch: object) -> None:
     """Missing chapter .txt → CLI exits 2 and creates NO Gold directory (SC-010).
 
     Specifically verifies:
@@ -299,9 +297,7 @@ def test_answer_cell_is_text_even_for_single_digit(tmp_path: Path) -> None:
 
     # Verify the column map declares 답안 as text, not numeric.
     # Load directly from the template YAML (private helpers are an impl detail).
-    _template_root = (
-        Path(__file__).resolve().parents[2] / "templates"
-    )
+    _template_root = Path(__file__).resolve().parents[2] / "templates"
     col_map_path = _template_root / "quiz_column_map.yaml"
     assert col_map_path.is_file(), f"column map not found: {col_map_path}"
 
@@ -330,9 +326,7 @@ def test_answer_cell_is_text_even_for_single_digit(tmp_path: Path) -> None:
 #   parents[1] = tests/
 #   parents[2] = maieutica/     ← module root
 #   parents[3] = modules/
-_MAIEUTICA_SRC = (
-    Path(__file__).resolve().parents[2] / "src" / "maieutica"
-)
+_MAIEUTICA_SRC = Path(__file__).resolve().parents[2] / "src" / "maieutica"
 
 # Forbidden patterns: any top-level import of these modules indicates a
 # student-dispatch / network-send path that maieutica must not contain.
@@ -401,8 +395,7 @@ def _check_file_for_forbidden_imports(path: Path) -> list[str]:
             for forbidden in _FORBIDDEN_IMPORTS:
                 if module.startswith(forbidden + "."):
                     violations.append(
-                        f"{rel}:{node.lineno}: "
-                        f"'from {module} import ...' (forbidden send import)"
+                        f"{rel}:{node.lineno}: 'from {module} import ...' (forbidden send import)"
                     )
         elif (
             isinstance(node, ast.Call)
@@ -412,10 +405,7 @@ def _check_file_for_forbidden_imports(path: Path) -> list[str]:
             # Check for forbidden dotted call patterns e.g. requests.post(...)
             dotted = f"{node.func.value.id}.{node.func.attr}"
             if dotted in _FORBIDDEN_CALL_ATTRS:
-                violations.append(
-                    f"{rel}:{node.lineno}: call to '{dotted}' "
-                    "(forbidden send call)"
-                )
+                violations.append(f"{rel}:{node.lineno}: call to '{dotted}' (forbidden send call)")
 
     return violations
 

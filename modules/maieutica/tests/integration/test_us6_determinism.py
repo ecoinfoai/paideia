@@ -211,9 +211,7 @@ def test_us6_determinism_gold_outputs_byte_identical(tmp_path: Path) -> None:
     _, run_dir1 = build(**kwargs)
 
     xls1 = (run_dir1 / f"QuestionUploadExcel_{_WEEK}주차.xls").read_bytes()
-    xlsx1 = (
-        run_dir1 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx"
-    ).read_bytes()
+    xlsx1 = (run_dir1 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx").read_bytes()
     yaml1 = (run_dir1 / "출제후보_완전판.yaml").read_bytes()
     report1 = (run_dir1 / "출제품질리포트.md").read_bytes()
 
@@ -222,16 +220,12 @@ def test_us6_determinism_gold_outputs_byte_identical(tmp_path: Path) -> None:
     assert run_dir1 == run_dir2, "run_id is non-deterministic (unexpected)"
 
     xls2 = (run_dir2 / f"QuestionUploadExcel_{_WEEK}주차.xls").read_bytes()
-    xlsx2 = (
-        run_dir2 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx"
-    ).read_bytes()
+    xlsx2 = (run_dir2 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx").read_bytes()
     yaml2 = (run_dir2 / "출제후보_완전판.yaml").read_bytes()
     report2 = (run_dir2 / "출제품질리포트.md").read_bytes()
 
     assert xls1 == xls2, "quiz .xls is not byte-identical across runs (SC-009 violation)"
-    assert xlsx1 == xlsx2, (
-        "formative .xlsx is not byte-identical across runs (SC-009 violation)"
-    )
+    assert xlsx1 == xlsx2, "formative .xlsx is not byte-identical across runs (SC-009 violation)"
     assert yaml1 == yaml2, (
         "출제후보_완전판.yaml is not byte-identical across runs (SC-009 violation)"
     )

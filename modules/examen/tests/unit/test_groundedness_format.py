@@ -18,7 +18,7 @@ from paideia_shared.schemas import ExamItemDraft, TextbookEvidence
 # ---------------------------------------------------------------------------
 
 _BASE_OPTIONS_30 = [
-    "① " + "가" * 28,   # 2 + 28 = 30
+    "① " + "가" * 28,  # 2 + 28 = 30
     "② " + "나" * 28,
     "③ " + "다" * 28,
     "④ " + "라" * 28,
@@ -26,7 +26,7 @@ _BASE_OPTIONS_30 = [
 ]
 
 _BASE_OPTIONS_40 = [
-    "① " + "가" * 38,   # 2 + 38 = 40
+    "① " + "가" * 38,  # 2 + 38 = 40
     "② " + "나" * 38,
     "③ " + "다" * 38,
     "④ " + "라" * 38,
@@ -34,7 +34,7 @@ _BASE_OPTIONS_40 = [
 ]
 
 _BASE_OPTIONS_OK = [
-    "① 뇌하수체는 터키안장에 위치한다.",          # 18 chars — under 30 → for violation test
+    "① 뇌하수체는 터키안장에 위치한다.",  # 18 chars — under 30 → for violation test
     "② 전엽과 후엽으로 구성된다.",
     "③ 뇌하수체 전엽에서는 GH가 분비된다.",
     "④ 후엽은 신경 조직으로 이루어진다.",
@@ -129,6 +129,7 @@ class TestVerifyGroundedness:
         evidence_index: EvidenceIndex | None = None,
     ) -> ExamItemDraft:
         from examen.verify.groundedness import verify_groundedness
+
         if item is None:
             item = _make_item()
         if evidence_index is None:
@@ -265,6 +266,7 @@ class TestVerifyGroundedness:
     def test_formative_item_without_evidence_handled(self) -> None:
         """verify_groundedness on a formative item with textbook_evidence=None."""
         from examen.verify.groundedness import verify_groundedness
+
         # Build a formative item (textbook_evidence=None allowed for formative)
         item = ExamItemDraft(
             semester="2026-1",
@@ -316,6 +318,7 @@ class TestCheckFormat:
         item: ExamItemDraft | None = None,
     ) -> ExamItemDraft:
         from examen.verify.format_checks import check_format
+
         if item is None:
             item = _make_item(options=_BASE_OPTIONS_30)
         return check_format(item)
@@ -331,14 +334,14 @@ class TestCheckFormat:
 
     def test_all_options_30_chars_ok(self) -> None:
         """All options of exactly 30 codepoints → option_length_ok=True."""
-        opts = ["① " + "가" * 28] * 5   # 2+28=30 chars
+        opts = ["① " + "가" * 28] * 5  # 2+28=30 chars
         item = _make_item(options=opts)
         result = self._check(item=item)
         assert result.option_length_ok is True
 
     def test_all_options_40_chars_ok(self) -> None:
         """All options of exactly 40 codepoints → option_length_ok=True."""
-        opts = ["① " + "가" * 38] * 5   # 2+38=40 chars
+        opts = ["① " + "가" * 38] * 5  # 2+38=40 chars
         item = _make_item(options=opts)
         result = self._check(item=item)
         assert result.option_length_ok is True
@@ -346,7 +349,7 @@ class TestCheckFormat:
     def test_option_29_chars_violation(self) -> None:
         """One option of 29 codepoints → option_length_ok=False (violation)."""
         # 4 options of 30, one of 29
-        ok4 = ["① " + "가" * 28] * 4    # 30 chars each
+        ok4 = ["① " + "가" * 28] * 4  # 30 chars each
         short_one = ["② " + "나" * 27]  # 2+27=29 chars
         opts = ok4[:1] + short_one + ok4[1:]
         assert len(opts) == 5
@@ -356,8 +359,8 @@ class TestCheckFormat:
 
     def test_option_41_chars_violation(self) -> None:
         """One option of 41 codepoints → option_length_ok=False (violation)."""
-        ok4 = ["① " + "가" * 38] * 4    # 40 chars each
-        long_one = ["② " + "나" * 39]   # 2+39=41 chars
+        ok4 = ["① " + "가" * 38] * 4  # 40 chars each
+        long_one = ["② " + "나" * 39]  # 2+39=41 chars
         opts = ok4[:1] + long_one + ok4[1:]
         assert len(opts) == 5
         item = _make_item(options=opts)
@@ -366,7 +369,7 @@ class TestCheckFormat:
 
     def test_option_35_chars_ok(self) -> None:
         """Options of 35 codepoints (middle of range) → option_length_ok=True."""
-        opts = ["① " + "가" * 33] * 5   # 2+33=35 chars
+        opts = ["① " + "가" * 33] * 5  # 2+33=35 chars
         item = _make_item(options=opts)
         result = self._check(item=item)
         assert result.option_length_ok is True
@@ -381,8 +384,8 @@ class TestCheckFormat:
 
     def test_mixed_valid_invalid_options_violation(self) -> None:
         """If any option is out of range, option_length_ok=False."""
-        good = "① " + "가" * 28   # 30 chars
-        bad = "② " + "나" * 39    # 41 chars
+        good = "① " + "가" * 28  # 30 chars
+        bad = "② " + "나" * 39  # 41 chars
         opts = [good, bad, good, good, good]
         item = _make_item(options=opts)
         result = self._check(item=item)
@@ -494,11 +497,13 @@ class TestCheckFormative:
 
     def _check(self, item: ExamItemDraft) -> ExamItemDraft:
         from examen.verify.format_checks import check_formative
+
         return check_formative(item)
 
     def test_non_formative_passthrough(self) -> None:
         """check_formative returns non-formative items unchanged."""
         from examen.verify.format_checks import check_formative
+
         textbook_item = _make_item()  # source="textbook"
         result = check_formative(textbook_item)
         assert result is textbook_item, "non-formative items must pass through unchanged"
@@ -525,7 +530,7 @@ class TestCheckFormative:
     def test_marker_on_non_answer_records_violation(self) -> None:
         """If a non-answer rationale carries '틀린', flag a possible answer mis-index."""
         rationales = [
-            "틀린 진술: 잘못된 설명1.",   # idx0 carries marker but is NOT the answer
+            "틀린 진술: 잘못된 설명1.",  # idx0 carries marker but is NOT the answer
             "옳은 진술2.",
             "옳은 진술3.",
             "옳은 진술4.",

@@ -11,16 +11,13 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-
 from immersio.combine import cli
 
 
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -133,13 +130,9 @@ def test_exit_3_missing_factor_scores(
     assert "factor_scores.parquet" in err
 
 
-def test_exit_3_missing_silver_dir(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_exit_3_missing_silver_dir(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Silver dir 자체가 없으면 첫 입력 file 미존재로 exit 3."""
-    rc = cli.main(
-        _argv(silver_dir=tmp_path / "no-silver", gold_dir=tmp_path / "gold")
-    )
+    rc = cli.main(_argv(silver_dir=tmp_path / "no-silver", gold_dir=tmp_path / "gold"))
     assert rc == cli.EXIT_INPUT_FILE_MISSING
 
 
@@ -176,13 +169,7 @@ def test_no_silver_parquet_on_exit_3(
     tmp = tmp_path_factory.mktemp("cli_no_partial")
     builder.build_silver_phase3_missing_factor_scores(tmp)
     cli.main(_argv(silver_dir=tmp / "silver", gold_dir=tmp / "gold"))
-    silver_target = (
-        tmp
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "진단×시험결합.parquet"
-    )
+    silver_target = tmp / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
     assert not silver_target.exists()
 
 
@@ -216,12 +203,5 @@ def test_include_cluster_flag_propagates(
         )
     )
     assert rc == cli.EXIT_OK
-    fig5 = (
-        tmp
-        / "gold"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "figs"
-        / "fig5_cluster_boxplot.png"
-    )
+    fig5 = tmp / "gold" / "immersio" / "2026-1-anatomy" / "figs" / "fig5_cluster_boxplot.png"
     assert fig5.exists()

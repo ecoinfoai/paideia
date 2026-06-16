@@ -14,12 +14,7 @@ from types import ModuleType
 
 import pytest
 
-_COMBINE_ROOT = (
-    Path(__file__).resolve().parents[3]
-    / "src"
-    / "immersio"
-    / "combine"
-)
+_COMBINE_ROOT = Path(__file__).resolve().parents[3] / "src" / "immersio" / "combine"
 
 _FORBIDDEN_IMPORT_PATTERNS = (
     re.compile(r"^\s*import\s+anthropic\b", re.MULTILINE),
@@ -50,9 +45,7 @@ def test_no_network_imports_in_combine_static() -> None:
             for match in pat.finditer(text):
                 line = text[: match.start()].count("\n") + 1
                 offenders.append((path.relative_to(_COMBINE_ROOT), match.group()))
-    assert not offenders, (
-        f"network/LLM imports found in combine/: {offenders}"
-    )
+    assert not offenders, f"network/LLM imports found in combine/: {offenders}"
 
 
 def test_no_network_clock_random_in_combine_static() -> None:
@@ -72,20 +65,14 @@ def test_no_network_clock_random_in_combine_static() -> None:
         text = path.read_text(encoding="utf-8")
         for pat in forbidden:
             for match in pat.finditer(text):
-                offenders.append(
-                    (path.relative_to(_COMBINE_ROOT), match.group())
-                )
-    assert not offenders, (
-        f"non-deterministic clock/random calls in combine/: {offenders}"
-    )
+                offenders.append((path.relative_to(_COMBINE_ROOT), match.group()))
+    assert not offenders, f"non-deterministic clock/random calls in combine/: {offenders}"
 
 
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)

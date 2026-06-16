@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-
-import pytest
 
 from immersio.email.report import (
     COHORT_KR,
@@ -77,8 +75,12 @@ def _manifest(*, mode: DispatchMode = DispatchMode.PRODUCTION) -> EmailManifest:
             report_md_path="/abs/report",
         ),
         counts=EmailManifestCounts(
-            success=3, skipped=1, failed=1,
-            temporary_failure=0, dry_run=0, test_dummy=0,
+            success=3,
+            skipped=1,
+            failed=1,
+            temporary_failure=0,
+            dry_run=0,
+            test_dummy=0,
         ),
         tool_version="0.1.0",
         started_at_kst=datetime(2026, 5, 1, 12, 0, 0, tzinfo=KST),
@@ -104,7 +106,7 @@ def test_production_report_renders_summary_table(tmp_path: Path) -> None:
             error_detail="Invalid To",
         ),
     ]
-    summary = {s: 0 for s in DispatchStatus}
+    summary = dict.fromkeys(DispatchStatus, 0)
     for r in rows:
         summary[r.status] += 1
     data = DispatchReportData(
@@ -130,7 +132,7 @@ def test_production_report_renders_summary_table(tmp_path: Path) -> None:
 
 def test_dry_run_report_only_shows_dry_run(tmp_path: Path) -> None:
     rows = [_row(f"123456700{i}", DispatchStatus.DRY_RUN) for i in range(5)]
-    summary = {s: 0 for s in DispatchStatus}
+    summary = dict.fromkeys(DispatchStatus, 0)
     summary[DispatchStatus.DRY_RUN] = 5
     data = DispatchReportData(
         manifest=_manifest(),
@@ -153,7 +155,7 @@ def test_summary_counts_sum_to_student_count(tmp_path: Path) -> None:
         _row("1234567002", DispatchStatus.SUCCESS),
         _row("1234567003", DispatchStatus.SKIPPED, error_kind="invalid_email"),
     ]
-    summary = {s: 0 for s in DispatchStatus}
+    summary = dict.fromkeys(DispatchStatus, 0)
     for r in rows:
         summary[r.status] += 1
     assert sum(summary.values()) == 3

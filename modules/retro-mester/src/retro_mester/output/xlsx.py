@@ -289,9 +289,7 @@ def write_xlsx(
     """
     xlsx_path = Path(xlsx_path)
     if not xlsx_path.parent.is_dir():
-        raise FileNotFoundError(
-            f"write_xlsx: parent directory missing: {xlsx_path.parent}"
-        )
+        raise FileNotFoundError(f"write_xlsx: parent directory missing: {xlsx_path.parent}")
 
     wb = Workbook()
     # Drop the default active sheet so tab order matches spec exactly.

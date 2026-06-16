@@ -29,8 +29,8 @@ _SEMESTER = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEMESTER}-{_COURSE}"
 
-_CHAPTER_A = "1장. 해부학 서론"    # will have cognitive cliff
-_CHAPTER_B = "2장. 세포와 조직"    # balanced, no cliff
+_CHAPTER_A = "1장. 해부학 서론"  # will have cognitive cliff
+_CHAPTER_B = "2장. 세포와 조직"  # balanced, no cliff
 
 _STUDENT_IDS = {
     "2026000001": "학령기",
@@ -164,18 +164,24 @@ def _build_fixture_tree(data_root: Path) -> None:
 
     combined_rows = [
         # All students below gap threshold to guarantee gaps exist
-        _combined_row("2026000001", {_CHAPTER_A: 0.35, _CHAPTER_B: 0.40},
-                      cluster_label="전략적", interest_rate=0.70, aversion_rate=0.45),
-        _combined_row("2026000002", {_CHAPTER_A: 0.40, _CHAPTER_B: 0.45},
-                      cluster_label="전략적", interest_rate=0.65, aversion_rate=0.40),
-        _combined_row("2026000003", {_CHAPTER_A: 0.30, _CHAPTER_B: 0.70},
-                      cluster_label="습관중심"),
-        _combined_row("2026000004", {_CHAPTER_A: 0.25, _CHAPTER_B: 0.75},
-                      cluster_label="습관중심"),
+        _combined_row(
+            "2026000001",
+            {_CHAPTER_A: 0.35, _CHAPTER_B: 0.40},
+            cluster_label="전략적",
+            interest_rate=0.70,
+            aversion_rate=0.45,
+        ),
+        _combined_row(
+            "2026000002",
+            {_CHAPTER_A: 0.40, _CHAPTER_B: 0.45},
+            cluster_label="전략적",
+            interest_rate=0.65,
+            aversion_rate=0.40,
+        ),
+        _combined_row("2026000003", {_CHAPTER_A: 0.30, _CHAPTER_B: 0.70}, cluster_label="습관중심"),
+        _combined_row("2026000004", {_CHAPTER_A: 0.25, _CHAPTER_B: 0.75}, cluster_label="습관중심"),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     # Items: CHAPTER_A has cliff (지식축적 high, 이해 low)
     #        CHAPTER_B is balanced
@@ -217,14 +223,32 @@ def _build_fixture_tree(data_root: Path) -> None:
         "semester": _SEMESTER,
         "course_slug": _COURSE,
         "entries": [
-            {"week": 1, "chapter": _CHAPTER_A, "chapter_no": 1, "subtopic": None, "sections": ["1.1"]},
-            {"week": 2, "chapter": _CHAPTER_B, "chapter_no": 2, "subtopic": None, "sections": ["2.1"]},
+            {
+                "week": 1,
+                "chapter": _CHAPTER_A,
+                "chapter_no": 1,
+                "subtopic": None,
+                "sections": ["1.1"],
+            },
+            {
+                "week": 2,
+                "chapter": _CHAPTER_B,
+                "chapter_no": 2,
+                "subtopic": None,
+                "sections": ["2.1"],
+            },
         ],
     }
 
-    (bronze / "retro_config.yaml").write_text(yaml.dump(retro_cfg, allow_unicode=True), encoding="utf-8")
-    (bronze / "blueprint.yaml").write_text(yaml.dump(blueprint, allow_unicode=True), encoding="utf-8")
-    (bronze / "curriculum_map.yaml").write_text(yaml.dump(curriculum, allow_unicode=True), encoding="utf-8")
+    (bronze / "retro_config.yaml").write_text(
+        yaml.dump(retro_cfg, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze / "blueprint.yaml").write_text(
+        yaml.dump(blueprint, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze / "curriculum_map.yaml").write_text(
+        yaml.dump(curriculum, allow_unicode=True), encoding="utf-8"
+    )
 
 
 def _run(tmp_path: Path) -> Path:

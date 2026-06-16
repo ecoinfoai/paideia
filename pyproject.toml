@@ -14,10 +14,16 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "ANN", "S", "C4", "SIM"]
 
+# Tests and operational scripts get a lenient profile: assertions, untyped
+# helpers, long fixture literals, controlled zips, and scratch variables are
+# expected there and not worth gating CI on.
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "ANN", "S108", "B007", "E501", "N802", "N806", "N818", "B017", "C408", "S603", "S607"]
-"**/scripts/**" = ["ANN", "S101"]
-"**/tests/fixtures/**" = ["ANN", "S101", "S108", "E501"]
+"**/tests/**" = ["S101", "ANN", "S106", "S108", "B007", "B905", "E402", "E501", "E731", "F841", "N802", "N806", "N818", "B017", "C408", "S603", "S607", "SIM108"]
+"**/scripts/**" = ["ANN", "S101", "S110", "S607", "B007", "B905", "E501", "N806", "SIM108"]
+"**/tests/fixtures/**" = ["ANN", "S101", "S108", "E501", "SIM108"]
+# legacy_diff bridges the untyped openpyxl boundary (cell values, worksheets
+# and workbooks are genuinely `Any`); annotating them as `Any` is the honest type.
+"**/report/legacy_diff.py" = ["ANN401"]
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"

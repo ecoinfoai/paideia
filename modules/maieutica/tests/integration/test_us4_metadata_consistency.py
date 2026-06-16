@@ -281,8 +281,7 @@ def test_us4_full_nested_yaml_and_quality_report(tmp_path: Path) -> None:
     # xls column layout: col0=문제번호 (numeric), col8=답안 (text str of answer_no)
     xls_item_nos = sorted(int(sheet1.cell(r, 0).value) for r in range(1, sheet1.nrows))
     xls_answers = {
-        int(sheet1.cell(r, 0).value): sheet1.cell(r, 8).value
-        for r in range(1, sheet1.nrows)
+        int(sheet1.cell(r, 0).value): sheet1.cell(r, 8).value for r in range(1, sheet1.nrows)
     }
     yaml_quiz_item_nos = sorted(q["item_no"] for q in doc["quiz"])
     assert xls_item_nos == yaml_quiz_item_nos, (
@@ -292,8 +291,7 @@ def test_us4_full_nested_yaml_and_quality_report(tmp_path: Path) -> None:
         ino = q["item_no"]
         expected_ans = str(q["answer_no"])
         assert xls_answers[ino] == expected_ans, (
-            f"answer mismatch at item_no={ino}: xls={xls_answers[ino]!r}, "
-            f"yaml={expected_ans!r}"
+            f"answer mismatch at item_no={ino}: xls={xls_answers[ino]!r}, yaml={expected_ans!r}"
         )
 
     # formative: no must match between flat xlsx and nested yaml
@@ -316,13 +314,9 @@ def test_us4_full_nested_yaml_and_quality_report(tmp_path: Path) -> None:
 
     # --- (d) adoption_status present (default 생성) in both sections ---
     for q in doc["quiz"]:
-        assert q["adoption_status"] == "생성", (
-            f"quiz item {q['item_no']} adoption_status != '생성'"
-        )
+        assert q["adoption_status"] == "생성", f"quiz item {q['item_no']} adoption_status != '생성'"
     for f in doc["formative"]:
-        assert f["adoption_status"] == "생성", (
-            f"formative item {f['no']} adoption_status != '생성'"
-        )
+        assert f["adoption_status"] == "생성", f"formative item {f['no']} adoption_status != '생성'"
 
     # No real data/ dir touched.
     assert str(run_dir).startswith(str(tmp_path))
@@ -361,9 +355,7 @@ def test_us4_flat_files_byte_identical_after_yaml_addition(tmp_path: Path) -> No
 
     _, run_dir1 = build(**kwargs)  # type: ignore[arg-type]
     xls1 = (run_dir1 / f"QuestionUploadExcel_{_WEEK}주차.xls").read_bytes()
-    xlsx1 = (
-        run_dir1 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx"
-    ).read_bytes()
+    xlsx1 = (run_dir1 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx").read_bytes()
     yaml1 = (run_dir1 / "출제후보_완전판.yaml").read_bytes()
     report1 = (run_dir1 / "출제품질리포트.md").read_bytes()
 
@@ -372,9 +364,7 @@ def test_us4_flat_files_byte_identical_after_yaml_addition(tmp_path: Path) -> No
     assert run_dir1 == run_dir2
 
     xls2 = (run_dir2 / f"QuestionUploadExcel_{_WEEK}주차.xls").read_bytes()
-    xlsx2 = (
-        run_dir2 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx"
-    ).read_bytes()
+    xlsx2 = (run_dir2 / f"Ch{_CHAPTER_NO:02d}_{_CHAPTER}_FormativeTest.xlsx").read_bytes()
     yaml2 = (run_dir2 / "출제후보_완전판.yaml").read_bytes()
     report2 = (run_dir2 / "출제품질리포트.md").read_bytes()
 

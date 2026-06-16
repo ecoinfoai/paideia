@@ -23,8 +23,7 @@ def write_email_manifest(manifest: EmailManifest, gold_dir: Path) -> Path:
     """
     if not isinstance(gold_dir, Path):
         raise TypeError(
-            f"write_email_manifest: gold_dir must be Path, got "
-            f"{type(gold_dir).__name__}"
+            f"write_email_manifest: gold_dir must be Path, got {type(gold_dir).__name__}"
         )
     gold_dir.mkdir(parents=True, exist_ok=True)
     payload = manifest.model_dump(mode="json")

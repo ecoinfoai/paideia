@@ -61,9 +61,7 @@ _V1_YAML = dedent(
 )
 
 
-def test_v1_mapping_routes_to_exit_one(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_v1_mapping_routes_to_exit_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A v0.1.0 mapping YAML must surface the v0.1.1 upgrade hint and exit 1."""
     from needs_map.cli.main import main
 
@@ -73,12 +71,17 @@ def test_v1_mapping_routes_to_exit_one(
     rc = main(
         [
             "run",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--phases", "A-B",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--phases",
+            "A-B",
             "--no-llm",
-            "--input-root", str(input_root),
-            "--output-root", str(tmp_path / "out"),
+            "--input-root",
+            str(input_root),
+            "--output-root",
+            str(tmp_path / "out"),
         ]
     )
     assert rc == 1, f"expected exit 1 (input validation failed), got {rc}"

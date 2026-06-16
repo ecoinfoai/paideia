@@ -461,12 +461,9 @@ def _run_dry_run(args: argparse.Namespace) -> int:
     assigned_quiz_slots = assign_subsections(quiz_slots, chunks)
 
     quiz_requests = [
-        build_bundle(slot, spec, chunks, avoid_list=[])
-        for slot in assigned_quiz_slots
+        build_bundle(slot, spec, chunks, avoid_list=[]) for slot in assigned_quiz_slots
     ]
-    formative_requests = [
-        build_formative_bundle(slot, spec, chunks) for slot in formative_slots
-    ]
+    formative_requests = [build_formative_bundle(slot, spec, chunks) for slot in formative_slots]
 
     staging = silver / "staging"
     dry_run_bundles(quiz_requests + formative_requests, staging)
@@ -580,9 +577,7 @@ def _run_verify(args: argparse.Namespace, backend: LLMBackend | None = None) -> 
         curriculum_map_bytes=cmap_path.read_bytes(),
         chapter_txt_bytes=chapter_txt.read_bytes(),
     )
-    run_dir = run_gold_dir(
-        args.semester, args.course, run_id=run_id, data_root=_DATA_ROOT
-    )
+    run_dir = run_gold_dir(args.semester, args.course, run_id=run_id, data_root=_DATA_ROOT)
     yaml_path = run_dir / "출제후보_완전판.yaml"
 
     try:

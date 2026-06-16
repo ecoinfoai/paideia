@@ -23,9 +23,15 @@ def _curriculum() -> CurriculumMap:
         semester=_SEMESTER,
         course_slug=_COURSE,
         entries=[
-            CurriculumEntry(week=9, chapter="9장 호흡계통", chapter_no=9, subtopic=None, sections=[]),
-            CurriculumEntry(week=10, chapter="10장 근육계통", chapter_no=10, subtopic=None, sections=[]),
-            CurriculumEntry(week=11, chapter="11장 소화계통", chapter_no=11, subtopic=None, sections=[]),
+            CurriculumEntry(
+                week=9, chapter="9장 호흡계통", chapter_no=9, subtopic=None, sections=[]
+            ),
+            CurriculumEntry(
+                week=10, chapter="10장 근육계통", chapter_no=10, subtopic=None, sections=[]
+            ),
+            CurriculumEntry(
+                week=11, chapter="11장 소화계통", chapter_no=11, subtopic=None, sections=[]
+            ),
         ],
     )
 
@@ -74,7 +80,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row()]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert len(entries) == 1
         e = entries[0]
         assert isinstance(e, SourceInventoryEntry)
@@ -88,7 +96,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row(문제내용="특수 발문 텍스트")]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].stem == "특수 발문 텍스트"
 
     def test_options_populated_from_보기(self) -> None:  # noqa: N802
@@ -97,7 +107,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row(보기1="A", 보기2="B", 보기3="C", 보기4="D", 보기5="E")]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         e = entries[0]
         assert e.options == ["A", "B", "C", "D", "E"]
 
@@ -107,7 +119,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row(답안="4")]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].answer == "4"
 
     def test_chapter_no_resolved_via_curriculum_map(self) -> None:
@@ -116,7 +130,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row()]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].chapter_no == 9  # week 9 → chapter 9
 
     def test_week_set_correctly(self) -> None:
@@ -125,7 +141,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row()]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=10, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=10, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].week == 10
 
     def test_source_ref_format(self) -> None:
@@ -134,7 +152,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row(번호=1.0), _quiz_row(번호=2.0)]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].source_ref == "퀴즈:9주#1"
         assert entries[1].source_ref == "퀴즈:9주#2"
 
@@ -148,7 +168,9 @@ class TestRowsToEntries:
             {**_quiz_row(번호=2.0), "_sheet_row": 5},
         ]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert entries[0].source_ref == "퀴즈:9주#2"
         assert entries[1].source_ref == "퀴즈:9주#5"
 
@@ -166,10 +188,10 @@ class TestRowsToEntries:
         # Simulate xlrd reading sheet rows 1..5 (row 0 = header, skipped upstream).
         # row 4 (physical) is blank → skipped; physical row counter still advances.
         sheet_rows = [
-            ("Q1 발문", "2"),   # physical row 2
-            ("Q2 발문", "3"),   # physical row 3
-            ("", ""),          # physical row 4 — blank, skipped
-            ("Q3 발문", "5"),   # physical row 5
+            ("Q1 발문", "2"),  # physical row 2
+            ("Q2 발문", "3"),  # physical row 3
+            ("", ""),  # physical row 4 — blank, skipped
+            ("Q3 발문", "5"),  # physical row 5
         ]
         rows: list[dict[str, object]] = []
         for offset, (stem, _physical) in enumerate(sheet_rows):
@@ -181,7 +203,9 @@ class TestRowsToEntries:
             rows.append(row)
 
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert len(entries) == 3
         refs = [e.source_ref for e in entries]
         # The third surviving item must be anchored to physical row 5 (not #3)
@@ -195,7 +219,9 @@ class TestRowsToEntries:
 
         rows = [_quiz_row(번호=float(i)) for i in range(1, 6)]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         assert len(entries) == 5
 
     def test_unknown_week_raises(self) -> None:
@@ -205,7 +231,9 @@ class TestRowsToEntries:
         rows = [_quiz_row()]
         cm = _curriculum()
         with pytest.raises(ValueError, match="curriculum_map"):
-            rows_to_entries(rows, week=99, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+            rows_to_entries(
+                rows, week=99, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+            )
 
     def test_numeric_답안_coerced_to_str(self) -> None:  # noqa: N802
         """Numeric 답안 value (3.0 float from xlrd) is coerced to exact str '3'."""
@@ -214,7 +242,9 @@ class TestRowsToEntries:
         # xlrd returns numeric cells as float (e.g. 3.0); exercise the float→str path
         rows = [_quiz_row(답안=3.0)]  # type: ignore[arg-type]
         cm = _curriculum()
-        entries = rows_to_entries(rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE)
+        entries = rows_to_entries(
+            rows, week=9, curriculum_map=cm, semester=_SEMESTER, course_slug=_COURSE
+        )
         # float 3.0 must coerce to the exact string "3" (not "3.0")
         assert isinstance(entries[0].answer, str)
         assert entries[0].answer == "3"

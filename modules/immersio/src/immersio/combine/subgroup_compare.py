@@ -17,19 +17,16 @@ Branching per meta:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import numpy as np
 import pandas as pd
-from scipy.stats import f_oneway, levene
-
-from immersio.analysis.stat_tests import welch_anova_manual, welch_t_test
-
 from paideia_shared.schemas.subgroup_score_comparison import (
     SubgroupMetaKind,
     SubgroupRow,
     SubgroupScoreComparison,
 )
+from scipy.stats import f_oneway, levene
+
+from immersio.analysis.stat_tests import welch_anova_manual, welch_t_test
 
 from .effect_sizes import cohen_d, eta_squared
 from .fdr import bh_fdr_adjust
@@ -54,9 +51,7 @@ _META_COLUMN_CANDIDATES: dict[SubgroupMetaKind, tuple[str, ...]] = {
 }
 
 
-def _resolve_meta_column(
-    df: pd.DataFrame, meta_kind: SubgroupMetaKind
-) -> pd.Series | None:
+def _resolve_meta_column(df: pd.DataFrame, meta_kind: SubgroupMetaKind) -> pd.Series | None:
     """Return the first candidate column with at least one non-null value."""
     for col in _META_COLUMN_CANDIDATES[meta_kind]:
         if col in df.columns and df[col].notna().any():
@@ -178,9 +173,7 @@ def _compare_eligible(
 
     all_vals = np.concatenate(arrays)
     ss_total = float(((all_vals - all_vals.mean()) ** 2).sum())
-    ss_between = float(
-        sum(arr.size * (arr.mean() - all_vals.mean()) ** 2 for arr in arrays)
-    )
+    ss_between = float(sum(arr.size * (arr.mean() - all_vals.mean()) ** 2 for arr in arrays))
     ssw = ss_total - ss_between
     eta = None
     if (ss_between + ssw) > 0:
@@ -228,15 +221,11 @@ def compute_subgroup_score_comparison(
     if df.empty:
         raise ValueError("compute_subgroup_score_comparison: empty DataFrame")
 
-    if "exam_taken" in df.columns:
-        work = df[df["exam_taken"].astype(bool)].copy()
-    else:
-        work = df.copy()
+    work = df[df["exam_taken"].astype(bool)].copy() if "exam_taken" in df.columns else df.copy()
     work = work[work["total_score"].notna()].copy()
     if work.empty:
         raise ValueError(
-            "compute_subgroup_score_comparison: no exam-taking respondents "
-            "with total_score"
+            "compute_subgroup_score_comparison: no exam-taking respondents with total_score"
         )
     work["total_score"] = work["total_score"].astype(float)
 
@@ -260,9 +249,7 @@ def compute_subgroup_score_comparison(
 
         score_by_cat: dict[str, np.ndarray] = {}
         for category, group in meta_df.groupby("_meta"):
-            score_by_cat[str(category)] = group["total_score"].to_numpy(
-                dtype=float
-            )
+            score_by_cat[str(category)] = group["total_score"].to_numpy(dtype=float)
 
         cat_rows, eligible = _build_category_rows(meta_kind, score_by_cat)
         rows.extend(cat_rows)
@@ -275,7 +262,7 @@ def compute_subgroup_score_comparison(
         qs = bh_fdr_adjust(ps)
         # Headers are frozen Pydantic — rebuild with fdr_q populated.
         adjusted: list[SubgroupScoreComparison] = []
-        q_lookup = {idx: q for idx, q in zip(defined_idx, qs)}
+        q_lookup = dict(zip(defined_idx, qs, strict=False))
         for i, h in enumerate(headers):
             q = q_lookup.get(i)
             adjusted.append(h.model_copy(update={"fdr_q": q}))

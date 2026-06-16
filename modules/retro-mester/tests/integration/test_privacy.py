@@ -27,8 +27,14 @@ _CHAPTER_B = "2장. 세포와 조직"
 _STUDENT_IDS = ["2026000001", "2026000002", "2026000003", "2026000004"]
 
 _AXES = [
-    "digital_efficacy", "motivation", "time_availability", "material_preference",
-    "study_strategy", "study_environment", "social_learning", "feedback_seeking",
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 ]
 
 # Pattern that looks like a secret/token (long hex or base64-like string)
@@ -65,9 +71,7 @@ def _combined_row(
         "chapter_correct_rates": json.dumps(chapter_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -95,12 +99,25 @@ def _combined_row(
 
 def _item_row(item_no: int, chapter: str = _CHAPTER_A) -> dict:
     return {
-        "item_no": item_no, "semester": _SEMESTER, "course_slug": _COURSE,
-        "chapter": chapter, "week": None, "item_type": "지식축적",
-        "difficulty_level": 2, "expected_difficulty": "보통", "source": "형성평가",
-        "correct_answer": 3, "n_responders": 20, "n_correct": 10, "n_omit": 0,
-        "correct_rate": 0.50, "omit_rate": 0.00, "discrimination_index": 0.25,
-        "point_biserial": 0.35, "top_distractor_no": 2, "top_distractor_rate": 0.20,
+        "item_no": item_no,
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "chapter": chapter,
+        "week": None,
+        "item_type": "지식축적",
+        "difficulty_level": 2,
+        "expected_difficulty": "보통",
+        "source": "형성평가",
+        "correct_answer": 3,
+        "n_responders": 20,
+        "n_correct": 10,
+        "n_omit": 0,
+        "correct_rate": 0.50,
+        "omit_rate": 0.00,
+        "discrimination_index": 0.25,
+        "point_biserial": 0.35,
+        "top_distractor_no": 2,
+        "top_distractor_rate": 0.20,
         "is_top_distractor_adjacent": True,
         "option_distribution": json.dumps({1: 0.1, 2: 0.2, 3: 0.5, 4: 0.1, 5: 0.1}),
         "distractor_label": "특이사항 없음",
@@ -109,36 +126,56 @@ def _item_row(item_no: int, chapter: str = _CHAPTER_A) -> dict:
 
 def _blueprint() -> dict:
     return {
-        "semester": _SEMESTER, "course_slug": _COURSE, "exam_name": "기말고사",
-        "total_items": 40, "chapters": [_CHAPTER_A, _CHAPTER_B],
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "exam_name": "기말고사",
+        "total_items": 40,
+        "chapters": [_CHAPTER_A, _CHAPTER_B],
         "difficulty_targets": {"easy": 0.45, "medium": 0.35, "hard": 0.20},
         "source_mix": {"formative": 18, "quiz": 12, "textbook": 10},
-        "quiz_target": 12, "answer_key_balance": True,
+        "quiz_target": 12,
+        "answer_key_balance": True,
     }
 
 
 def _curriculum() -> dict:
     return {
-        "semester": _SEMESTER, "course_slug": _COURSE,
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
         "entries": [
-            {"week": 1, "chapter": _CHAPTER_A, "chapter_no": 1,
-             "subtopic": None, "sections": ["1.1 인체의 조직"]},
-            {"week": 2, "chapter": _CHAPTER_B, "chapter_no": 2,
-             "subtopic": None, "sections": ["2.1 세포의 구조"]},
+            {
+                "week": 1,
+                "chapter": _CHAPTER_A,
+                "chapter_no": 1,
+                "subtopic": None,
+                "sections": ["1.1 인체의 조직"],
+            },
+            {
+                "week": 2,
+                "chapter": _CHAPTER_B,
+                "chapter_no": 2,
+                "subtopic": None,
+                "sections": ["2.1 세포의 구조"],
+            },
         ],
     }
 
 
 def _retro_config() -> dict:
     return {
-        "semester": _SEMESTER, "course_slug": _COURSE,
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
         "group_roster": {
-            "2026000001": "학령기", "2026000002": "학령기",
-            "2026000003": "만학도", "2026000004": "만학도",
+            "2026000001": "학령기",
+            "2026000002": "학령기",
+            "2026000003": "만학도",
+            "2026000004": "만학도",
         },
         "unit_importance": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
-        "gap_threshold": 0.6, "baseline_segment": "만학도",
-        "low_discrimination_threshold": 0.2, "cognitive_cliff_drop": 0.15,
+        "gap_threshold": 0.6,
+        "baseline_segment": "만학도",
+        "low_discrimination_threshold": 0.2,
+        "cognitive_cliff_drop": 0.15,
         "effort_ratings": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
     }
 
@@ -171,6 +208,7 @@ def _build_fixture_and_run(data_root: Path) -> None:
     )
 
     from retro_mester.pipeline import run_retro
+
     code = run_retro(
         semester=_SEMESTER,
         course=_COURSE,
@@ -194,13 +232,16 @@ class TestOutputUnderDataDir:
         _build_fixture_and_run(data_root)
 
         gold = data_root / "gold" / "retro-mester" / _KEY
-        for artefact in ["CQI회고보고서.md", "CQI회고보고서.pdf", "회고분석.xlsx",
-                         "manifest_retro.json", "차년도방향.yaml"]:
+        for artefact in [
+            "CQI회고보고서.md",
+            "CQI회고보고서.pdf",
+            "회고분석.xlsx",
+            "manifest_retro.json",
+            "차년도방향.yaml",
+        ]:
             p = gold / artefact
             assert p.exists(), f"Missing gold artefact: {artefact}"
-            assert str(p).startswith(str(data_root)), (
-                f"{artefact} is outside data_root: {p}"
-            )
+            assert str(p).startswith(str(data_root)), f"{artefact} is outside data_root: {p}"
 
     def test_silver_outputs_under_data(self, tmp_path: Path) -> None:
         """Silver parquet files reside strictly within data_root/silver/."""
@@ -211,9 +252,7 @@ class TestOutputUnderDataDir:
         for artefact in ["빈틈표.parquet", "변경권고.parquet"]:
             p = silver / artefact
             assert p.exists(), f"Missing silver artefact: {artefact}"
-            assert str(p).startswith(str(data_root)), (
-                f"{artefact} is outside data_root: {p}"
-            )
+            assert str(p).startswith(str(data_root)), f"{artefact} is outside data_root: {p}"
 
 
 # ---------------------------------------------------------------------------
@@ -257,23 +296,19 @@ class TestNoStudentIdsInGoldOutputs:
         data_root = tmp_path / "data"
         _build_fixture_and_run(data_root)
 
-        md_text = (
-            data_root / "gold" / "retro-mester" / _KEY / "CQI회고보고서.md"
-        ).read_text(encoding="utf-8")
+        md_text = (data_root / "gold" / "retro-mester" / _KEY / "CQI회고보고서.md").read_text(
+            encoding="utf-8"
+        )
 
         for sid in _STUDENT_IDS:
-            assert sid not in md_text, (
-                f"Student ID {sid} must NOT appear in CQI회고보고서.md"
-            )
+            assert sid not in md_text, f"Student ID {sid} must NOT appear in CQI회고보고서.md"
 
     def test_no_student_id_in_xlsx(self, tmp_path: Path) -> None:
         """회고분석.xlsx must not contain any student ID in any cell."""
         data_root = tmp_path / "data"
         _build_fixture_and_run(data_root)
 
-        xlsx_path = (
-            data_root / "gold" / "retro-mester" / _KEY / "회고분석.xlsx"
-        )
+        xlsx_path = data_root / "gold" / "retro-mester" / _KEY / "회고분석.xlsx"
         wb = openpyxl.load_workbook(xlsx_path, read_only=True)
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
@@ -293,14 +328,12 @@ class TestNoStudentIdsInGoldOutputs:
         data_root = tmp_path / "data"
         _build_fixture_and_run(data_root)
 
-        yaml_text = (
-            data_root / "gold" / "retro-mester" / _KEY / "차년도방향.yaml"
-        ).read_text(encoding="utf-8")
+        yaml_text = (data_root / "gold" / "retro-mester" / _KEY / "차년도방향.yaml").read_text(
+            encoding="utf-8"
+        )
 
         for sid in _STUDENT_IDS:
-            assert sid not in yaml_text, (
-                f"Student ID {sid} must NOT appear in 차년도방향.yaml"
-            )
+            assert sid not in yaml_text, f"Student ID {sid} must NOT appear in 차년도방향.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +349,9 @@ class TestNoSecretsInGoldOutputs:
         data_root = tmp_path / "data"
         _build_fixture_and_run(data_root)
 
-        md_text = (
-            data_root / "gold" / "retro-mester" / _KEY / "CQI회고보고서.md"
-        ).read_text(encoding="utf-8")
+        md_text = (data_root / "gold" / "retro-mester" / _KEY / "CQI회고보고서.md").read_text(
+            encoding="utf-8"
+        )
 
         # Look for long opaque tokens (exclude Korean content and common base words)
         suspicious = [
@@ -337,15 +370,11 @@ class TestNoSecretsInGoldOutputs:
         data_root = tmp_path / "data"
         _build_fixture_and_run(data_root)
 
-        yaml_text = (
-            data_root / "gold" / "retro-mester" / _KEY / "차년도방향.yaml"
-        ).read_text(encoding="utf-8")
+        yaml_text = (data_root / "gold" / "retro-mester" / _KEY / "차년도방향.yaml").read_text(
+            encoding="utf-8"
+        )
 
-        suspicious = [
-            m.group()
-            for m in _SECRET_PATTERN.finditer(yaml_text)
-            if len(m.group()) > 40
-        ]
+        suspicious = [m.group() for m in _SECRET_PATTERN.finditer(yaml_text) if len(m.group()) > 40]
         assert len(suspicious) == 0, (
             f"Secret-like tokens found in 차년도방향.yaml: {suspicious[:3]}"
         )

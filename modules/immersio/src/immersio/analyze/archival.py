@@ -26,10 +26,9 @@ maps the exception to CLI exit 4 (FR-033).
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +97,7 @@ def _archive_one(
     if not direct_path.exists():
         return None
     if not direct_path.is_dir():
-        raise ArchivalError(
-            f"archive_previous_run: direct_path is not a directory: {direct_path}"
-        )
+        raise ArchivalError(f"archive_previous_run: direct_path is not a directory: {direct_path}")
 
     candidates = [p for p in direct_path.iterdir() if p.name != _ARCHIVE_NAME]
     if only_names is not None:
@@ -199,8 +196,7 @@ def archive_previous_run(
         )
     if not isinstance(gold_dir, Path):
         raise TypeError(
-            f"archive_previous_run: gold_dir must be pathlib.Path, got "
-            f"{type(gold_dir).__name__}."
+            f"archive_previous_run: gold_dir must be pathlib.Path, got {type(gold_dir).__name__}."
         )
 
     if schema_version is None:

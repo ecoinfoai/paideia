@@ -22,9 +22,8 @@ import pytest
 
 pytest.importorskip("reportlab")
 
-from reportlab.platypus import Image, Paragraph, Spacer, Table  # noqa: E402
-
 from immersio.report.md_parser import parse_markdown_to_flowables  # noqa: E402
+from reportlab.platypus import Image, Paragraph, Spacer, Table  # noqa: E402
 
 
 def test_h1_h2_h3_become_heading_paragraphs() -> None:
@@ -56,12 +55,7 @@ def test_italic_inline_renders_as_i_tag() -> None:
 
 
 def test_pipe_table_becomes_table_flowable() -> None:
-    md = (
-        "| 지표 | 값 |\n"
-        "| --- | --- |\n"
-        "| 평균 | 125.35 |\n"
-        "| 표준편차 | 39.55 |\n"
-    )
+    md = "| 지표 | 값 |\n| --- | --- |\n| 평균 | 125.35 |\n| 표준편차 | 39.55 |\n"
     flowables = parse_markdown_to_flowables(md)
     tables = [f for f in flowables if isinstance(f, Table)]
     assert len(tables) == 1

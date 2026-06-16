@@ -23,11 +23,7 @@ _COURSE = "anatomy"
 _CHAPTER_NO = 8
 _CHAPTER = "8장 호흡계통"
 
-_FIXTURE = (
-    Path(__file__).resolve().parents[1]
-    / "fixtures"
-    / "multi_level_chapter.txt"
-)
+_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "multi_level_chapter.txt"
 
 
 def _fixture_lines() -> list[str]:
@@ -141,9 +137,7 @@ class TestC3LineRanges:
         chunks = _chunk()
         # Line 16 ("인두는 공기와 음식이 함께 지나가는 통로이다.") body of 2) 인두.
         lineno = 16
-        covering = [
-            c for c in chunks if c.line_start <= lineno <= c.line_end
-        ]
+        covering = [c for c in chunks if c.line_start <= lineno <= c.line_end]
         assert len(covering) == 1
         assert covering[0].section == "2) 인두"
 
@@ -203,9 +197,7 @@ class TestC6TocDedup:
     def test_no_duplicate_top_level_subsection(self) -> None:
         chunks = _chunk()
         l1_sections = [
-            c.section
-            for c in chunks
-            if c.section in ("1. 호흡계통의 구조", "2. 호흡의 조절")
+            c.section for c in chunks if c.section in ("1. 호흡계통의 구조", "2. 호흡의 조절")
         ]
         assert l1_sections.count("1. 호흡계통의 구조") == 1
         assert l1_sections.count("2. 호흡의 조절") == 1

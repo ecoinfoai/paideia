@@ -19,7 +19,6 @@ import io
 from unittest.mock import patch
 
 import pytest
-
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
 
@@ -87,9 +86,7 @@ class _FastDispatcher:
 
 def test_rate_per_min_30_emits_2s_sleeps(email_fixture, monkeypatch) -> None:
     """5 sends at rate=30 → 4 sleeps of 2.0s each (no sleep after last)."""
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _FastDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _FastDispatcher)
     sleep_durations: list[float] = []
     real_sleep = lambda d: sleep_durations.append(d)
     with patch("time.sleep", real_sleep):
@@ -103,9 +100,7 @@ def test_rate_per_min_30_emits_2s_sleeps(email_fixture, monkeypatch) -> None:
 
 def test_rate_per_min_10_emits_6s_sleeps(email_fixture, monkeypatch) -> None:
     """5 sends at rate=10 → 4 sleeps of 6.0s each (sum 24s)."""
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _FastDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _FastDispatcher)
     sleep_durations: list[float] = []
     real_sleep = lambda d: sleep_durations.append(d)
     with patch("time.sleep", real_sleep):
@@ -116,14 +111,10 @@ def test_rate_per_min_10_emits_6s_sleeps(email_fixture, monkeypatch) -> None:
     assert sum(sleep_durations) == pytest.approx(24.0)
 
 
-def test_rate_per_min_propagated_to_dispatcher(
-    email_fixture, monkeypatch
-) -> None:
+def test_rate_per_min_propagated_to_dispatcher(email_fixture, monkeypatch) -> None:
     """CLI --rate-per-min plumbed into GmailAPIDispatcher kwarg."""
     _FastDispatcher.captured_rate = None
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _FastDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _FastDispatcher)
     with patch("time.sleep"):
         rc = run_email_dispatch(_args(rate_per_min=15))
     assert rc == 0
@@ -132,9 +123,8 @@ def test_rate_per_min_propagated_to_dispatcher(
 
 def test_rate_out_of_range_rejected_at_dispatcher() -> None:
     """1 ≤ N ≤ 30 enforced inside GmailAPIDispatcher.__init__."""
-    from immersio.email.sender import GmailAPIDispatcher
-
     import yaml
+    from immersio.email.sender import GmailAPIDispatcher
     from paideia_shared.schemas import ProfessorProfile
 
     profile = ProfessorProfile.model_validate(

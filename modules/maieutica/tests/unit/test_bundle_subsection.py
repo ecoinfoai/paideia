@@ -133,9 +133,7 @@ class TestAvoidListInjection:
         chunks = _make_chunks()
         slot = _assigned_slot_for_chunk(spec, chunks, "chunk0801")
 
-        req = build_bundle(
-            slot, spec, chunks, avoid_list=["폐포의 가스교환 기능"]
-        )
+        req = build_bundle(slot, spec, chunks, avoid_list=["폐포의 가스교환 기능"])
 
         assert "폐포의 가스교환 기능" in req.prompt
         assert req.metadata["avoid_list"] == ["폐포의 가스교환 기능"]

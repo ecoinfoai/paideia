@@ -344,9 +344,7 @@ class TestApiBackend:
         assert captured_kwargs[0].get("temperature") == 0
         assert resp.raw_text == "api response"
 
-    def test_api_backend_raises_on_connection_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_api_backend_raises_on_connection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """ApiBackend raises BackendUnreachableError on connection failure (exit-4)."""
 
         class _BrokenMessages:

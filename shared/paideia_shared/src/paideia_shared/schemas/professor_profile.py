@@ -63,8 +63,7 @@ class _Booking(BaseModel):
         allowed_hosts = ("calendar.google.com", "calendar.app.google")
         if host not in allowed_hosts:
             raise ValueError(
-                f"booking.google_calendar_url host must be one of "
-                f"{allowed_hosts} (got {host!r})"
+                f"booking.google_calendar_url host must be one of {allowed_hosts} (got {host!r})"
             )
         return self
 
@@ -83,8 +82,7 @@ class _GmailApi(BaseModel):
     def _v_scopes(self) -> Self:
         if list(self.scopes) != [_GMAIL_SEND_SCOPE]:
             raise ValueError(
-                f"gmail_api.scopes must be exactly [{_GMAIL_SEND_SCOPE!r}] "
-                f"(got {self.scopes!r})"
+                f"gmail_api.scopes must be exactly [{_GMAIL_SEND_SCOPE!r}] (got {self.scopes!r})"
             )
         return self
 
@@ -122,9 +120,7 @@ class ProfessorProfile(BaseModel):
        (clarification 2026-05-01).
     """
 
-    model_config = ConfigDict(
-        extra="forbid", frozen=True, str_strip_whitespace=True
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     profile_kind: Literal["operator"]
     profile_name: str
@@ -140,8 +136,7 @@ class ProfessorProfile(BaseModel):
     def _v_profile_name(self) -> Self:
         if not _PROFILE_NAME_RE.fullmatch(self.profile_name):
             raise ValueError(
-                f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ "
-                f"(got {self.profile_name!r})"
+                f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ (got {self.profile_name!r})"
             )
         return self
 

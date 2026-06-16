@@ -224,9 +224,7 @@ def build_quality_report(
         diff_val = act - tgt
         ok = abs(diff_val) <= _DIFFICULTY_TOLERANCE
         icon = "✅" if ok else "⚠️"
-        lines.append(
-            f"| {label} | {tgt:.1%} | {act:.1%} | {diff_val:+.1%} | {icon} |"
-        )
+        lines.append(f"| {label} | {tgt:.1%} | {act:.1%} | {diff_val:+.1%} | {icon} |")
     lines.append("")
 
     # ----------------------------------------------------------------
@@ -267,9 +265,7 @@ def build_quality_report(
         icon = "✅" if in_range else "⚠️"
         lines.append(f"| {num}번 | {cnt} | {ratio:.1%} | {icon} |")
     lines.append("")
-    lines.append(
-        f"{run_icon} 최장 연속 동일 정답번호: **{max_run}** (목표 ≤2)"
-    )
+    lines.append(f"{run_icon} 최장 연속 동일 정답번호: **{max_run}** (목표 ≤2)")
     overall_bal = "✅" if ans_bal["in_range"] and run_ok else "⚠️"
     balance_status = "적합" if ans_bal["in_range"] and run_ok else "이탈"
     lines.append(f"{overall_bal} 정답 번호 균형 전체: {balance_status}")
@@ -281,8 +277,7 @@ def build_quality_report(
     lines.append("## 교재 근거 확인 (Groundedness)")
     lines.append("")
     confirmed = sum(
-        1 for i in items
-        if i.textbook_evidence and i.textbook_evidence.status == "확인"
+        1 for i in items if i.textbook_evidence and i.textbook_evidence.status == "확인"
     )
     unconfirmed = total - confirmed
     conf_ratio = confirmed / total if total > 0 else 0.0

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # ImprovementLedgerEntry helpers
 # ---------------------------------------------------------------------------
 
+
 def _ledger_kwargs() -> dict:
     return {
         "entry_id": "retro-2026-1-anatomy-ch8-이해",
@@ -35,6 +36,7 @@ def _ledger_kwargs() -> dict:
 # ImprovementLedgerEntry — valid construction
 # ---------------------------------------------------------------------------
 
+
 def test_ledger_valid_construction() -> None:
     """A fully specified ImprovementLedgerEntry is accepted."""
     entry = ImprovementLedgerEntry(**_ledger_kwargs())
@@ -55,6 +57,7 @@ def test_ledger_with_cluster_vocab() -> None:
 # ImprovementLedgerEntry — extra / frozen
 # ---------------------------------------------------------------------------
 
+
 def test_ledger_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields on ImprovementLedgerEntry."""
     with pytest.raises(ValidationError):
@@ -72,6 +75,7 @@ def test_ledger_frozen_prevents_mutation() -> None:
 # BaselineSnapshotRow helpers
 # ---------------------------------------------------------------------------
 
+
 def _snapshot_kwargs() -> dict:
     return {
         "semester": "2026-1",
@@ -87,6 +91,7 @@ def _snapshot_kwargs() -> dict:
 # ---------------------------------------------------------------------------
 # BaselineSnapshotRow — valid construction
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_valid_construction() -> None:
     """A fully specified BaselineSnapshotRow is accepted."""
@@ -107,6 +112,7 @@ def test_snapshot_n_zero_accepted() -> None:
 # BaselineSnapshotRow — constraints
 # ---------------------------------------------------------------------------
 
+
 def test_snapshot_negative_n_rejected() -> None:
     """n < 0 raises ValidationError."""
     kw = _snapshot_kwargs()
@@ -118,6 +124,7 @@ def test_snapshot_negative_n_rejected() -> None:
 # ---------------------------------------------------------------------------
 # BaselineSnapshotRow — extra / frozen
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_extra_field_rejected() -> None:
     """extra='forbid' rejects unknown fields on BaselineSnapshotRow."""

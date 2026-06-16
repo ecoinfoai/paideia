@@ -5,13 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from reportlab.pdfgen import canvas
-
 from immersio.email.pdf_scan import (
     PDFScanError,
     parse_filename_pattern,
     scan_pdf_directory,
 )
+from reportlab.pdfgen import canvas
 
 
 def _make_pdf(path: Path, text: str = "Sample PDF body") -> Path:

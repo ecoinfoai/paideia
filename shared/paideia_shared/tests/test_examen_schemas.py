@@ -517,9 +517,7 @@ class TestExamItemDraft:
     def test_negative_options_len_6(self) -> None:
         """len(options) == 6 → ValidationError."""
         with pytest.raises(ValidationError):
-            ExamItemDraft(
-                **_base_exam_item_draft(options=["a", "b", "c", "d", "e", "f"])
-            )
+            ExamItemDraft(**_base_exam_item_draft(options=["a", "b", "c", "d", "e", "f"]))
 
     def test_negative_answer_no_zero(self) -> None:
         """answer_no=0 < 1 → ValidationError."""
@@ -534,9 +532,7 @@ class TestExamItemDraft:
     def test_negative_distractor_rationale_len_not_5(self) -> None:
         """len(distractor_rationale) != 5 → ValidationError."""
         with pytest.raises(ValidationError):
-            ExamItemDraft(
-                **_base_exam_item_draft(distractor_rationale=["a", "b", "c"])
-            )
+            ExamItemDraft(**_base_exam_item_draft(distractor_rationale=["a", "b", "c"]))
 
     def test_negative_invalid_difficulty(self) -> None:
         """difficulty must be one of the three literal values."""

@@ -282,7 +282,5 @@ def test_us3_unconfirmed_excluded_and_reported(tmp_path: Path) -> None:
     assert "⚠️" in report
 
     # Manifest quiz_count == adopted count.
-    manifest = json.loads(
-        (run_dir / "manifest_maieutica.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((run_dir / "manifest_maieutica.json").read_text(encoding="utf-8"))
     assert manifest["quiz_count"] == len(items)

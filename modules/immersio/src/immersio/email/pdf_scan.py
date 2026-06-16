@@ -40,25 +40,19 @@ def parse_filename_pattern(name: str) -> tuple[str, str]:
             path-traversal segments / NUL / control bytes.
     """
     if "\x00" in name:
-        raise PDFScanError(
-            f"FR-A04: PDF filename {name!r} contains NUL byte"
-        )
+        raise PDFScanError(f"FR-A04: PDF filename {name!r} contains NUL byte")
     if any(ord(c) < 32 for c in name):
-        raise PDFScanError(
-            f"FR-A04: PDF filename {name!r} contains control characters"
-        )
+        raise PDFScanError(f"FR-A04: PDF filename {name!r} contains control characters")
     m = _FILENAME_RE.fullmatch(name)
     if m is None:
         raise PDFScanError(
-            f"FR-A04: PDF filename {name!r} violates pattern "
-            f"^(\\d{{10}})_(.+)\\.pdf$"
+            f"FR-A04: PDF filename {name!r} violates pattern ^(\\d{{10}})_(.+)\\.pdf$"
         )
     sid, name_kr = m.group(1), m.group(2)
     # Path-traversal defence (AV-S2): reject ``..``, path separators.
     if ".." in name_kr or "/" in name_kr or "\\" in name_kr:
         raise PDFScanError(
-            f"FR-A04: PDF filename {name!r} contains path-traversal "
-            f"segment in name_kr={name_kr!r}"
+            f"FR-A04: PDF filename {name!r} contains path-traversal segment in name_kr={name_kr!r}"
         )
     return sid, name_kr
 
@@ -99,13 +93,10 @@ def scan_pdf_directory(gold_pdf_dir: Path) -> list[StudentPDFBundle]:
     """
     if not isinstance(gold_pdf_dir, Path):
         raise PDFScanError(
-            f"scan_pdf_directory: gold_pdf_dir must be Path, got "
-            f"{type(gold_pdf_dir).__name__}"
+            f"scan_pdf_directory: gold_pdf_dir must be Path, got {type(gold_pdf_dir).__name__}"
         )
     if not gold_pdf_dir.is_dir():
-        raise PDFScanError(
-            f"scan_pdf_directory: directory not found at {gold_pdf_dir}"
-        )
+        raise PDFScanError(f"scan_pdf_directory: directory not found at {gold_pdf_dir}")
 
     by_sid: dict[str, StudentPDFBundle] = {}
     for path in sorted(gold_pdf_dir.glob("*.pdf")):

@@ -11,9 +11,10 @@ writes:
     one row partially written; the next read still sees the durable
     prefix.
 
-Secret masking: ``mask_secrets_in_error_detail`` strips App Password
+Secret masking (ALLOW_HARDCODING: docstring meta-mention of masking
+patterns): ``mask_secrets_in_error_detail`` strips App Password
 quadruplets, RSA private key blobs, JSON ``"private_key"`` fields, and
-the GCP Service Account ``.iam.gserviceaccount.com`` domain pattern  # ALLOW_HARDCODING: docstring meta-mention of masking pattern
+the GCP Service Account ``.iam.gserviceaccount.com`` domain pattern  # ALLOW_HARDCODING
 from any error_detail string before it lands on disk (FR-G02 / ADR-014).
 """
 
@@ -25,7 +26,7 @@ import fcntl
 import os
 import re
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from enum import StrEnum
 from pathlib import Path
 
@@ -63,12 +64,8 @@ _RSA_PRIVATE_KEY_RE = re.compile(
     re.DOTALL,
 )
 _JSON_PRIVATE_KEY_RE = re.compile(r'"private_key"\s*:\s*"[^"]+"')
-_JSON_PRIVATE_KEY_ID_RE = re.compile(
-    r'"private_key_id"\s*:\s*"[a-f0-9]{40}"'
-)
-_SA_DOMAIN_RE = re.compile(
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com"
-)
+_JSON_PRIVATE_KEY_ID_RE = re.compile(r'"private_key_id"\s*:\s*"[a-f0-9]{40}"')
+_SA_DOMAIN_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com")
 _RAW_PEM_BYTES_RE = re.compile(r"BEGIN (?:RSA )?PRIVATE KEY")
 
 
@@ -91,9 +88,7 @@ def mask_secrets_in_error_detail(text: str) -> str:
     out = _APP_PASSWORD_RE.sub("<redacted-app-password>", out)
     out = _RSA_PRIVATE_KEY_RE.sub("<redacted-rsa-private-key>", out)
     out = _JSON_PRIVATE_KEY_RE.sub('"private_key": "<redacted>"', out)
-    out = _JSON_PRIVATE_KEY_ID_RE.sub(
-        '"private_key_id": "<redacted>"', out
-    )
+    out = _JSON_PRIVATE_KEY_ID_RE.sub('"private_key_id": "<redacted>"', out)
     out = _SA_DOMAIN_RE.sub("<redacted-sa-email>", out)
     # Belt-and-braces: scrub any leftover PEM markers.
     out = _RAW_PEM_BYTES_RE.sub("<redacted-pem>", out)
@@ -125,33 +120,26 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
             # Close fd before raising — the contextmanager finally
             # block will skip unlock/close since ``locked`` is False
             # and ``fd`` already closed here.
-            try:
+            # intentional-skip: idempotent fd cleanup, OS reclaims on process exit (M6)
+            with suppress(OSError):
                 os.close(fd)
-            except OSError:
-                # intentional-skip: idempotent fd cleanup, OS reclaims on process exit (M6)
-                pass
             if isinstance(exc, OSError) and exc.errno not in (
                 errno.EWOULDBLOCK,
                 errno.EAGAIN,
             ):
                 raise
             raise DispatchLockError(
-                f"FR-D02: dispatch log {path} is locked by another run "
-                f"(LOCK_EX|LOCK_NB). exit 7."
+                f"FR-D02: dispatch log {path} is locked by another run (LOCK_EX|LOCK_NB). exit 7."
             ) from exc
         yield fd
     finally:
         if locked:
-            try:
+            # intentional-skip: idempotent flock release, OS reclaims (M6)
+            with suppress(OSError):
                 fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError:
-                # intentional-skip: idempotent flock release, OS reclaims (M6)
-                pass
-            try:
+            # intentional-skip: idempotent fd close, OS reclaims (M6)
+            with suppress(OSError):
                 os.close(fd)
-            except OSError:
-                # intentional-skip: idempotent fd close, OS reclaims (M6)
-                pass
 
 
 def append_dispatch_log_row(log_path: Path, row: DispatchLogRow) -> None:
@@ -192,9 +180,7 @@ def append_dispatch_log_row(log_path: Path, row: DispatchLogRow) -> None:
             os.fsync(text_fh.fileno())
 
 
-def append_dispatch_log_rows(
-    log_path: Path, rows: list[DispatchLogRow]
-) -> None:
+def append_dispatch_log_rows(log_path: Path, rows: list[DispatchLogRow]) -> None:
     """Bulk-append variant — single flock acquisition for many rows."""
     if not rows:
         return
@@ -212,9 +198,7 @@ def append_dispatch_log_rows(
                 writer.writeheader()
             for row in rows:
                 dump = row.model_dump(mode="json")
-                writer.writerow(
-                    {c: dump[c] for c in DispatchLogRow.COLUMN_ORDER}
-                )
+                writer.writerow({c: dump[c] for c in DispatchLogRow.COLUMN_ORDER})
             text_fh.flush()
             os.fsync(text_fh.fileno())
 
@@ -304,20 +288,24 @@ def idempotent_skip_filter(
     latest = _latest_status_by_sid(log)
 
     if mode == RetryMode.RETRY_FAILED:
-        skip_statuses: frozenset[DispatchStatus] = frozenset({
-            DispatchStatus.SUCCESS,
-            DispatchStatus.SKIPPED,
-            DispatchStatus.DRY_RUN,
-            DispatchStatus.TEST_DUMMY,
-        })
+        skip_statuses: frozenset[DispatchStatus] = frozenset(
+            {
+                DispatchStatus.SUCCESS,
+                DispatchStatus.SKIPPED,
+                DispatchStatus.DRY_RUN,
+                DispatchStatus.TEST_DUMMY,
+            }
+        )
     elif mode == RetryMode.RETRY_SKIPPED:
-        skip_statuses = frozenset({
-            DispatchStatus.SUCCESS,
-            DispatchStatus.FAILED,
-            DispatchStatus.TEMPORARY_FAILURE,
-            DispatchStatus.DRY_RUN,
-            DispatchStatus.TEST_DUMMY,
-        })
+        skip_statuses = frozenset(
+            {
+                DispatchStatus.SUCCESS,
+                DispatchStatus.FAILED,
+                DispatchStatus.TEMPORARY_FAILURE,
+                DispatchStatus.DRY_RUN,
+                DispatchStatus.TEST_DUMMY,
+            }
+        )
     else:
         skip_statuses = frozenset({DispatchStatus.SUCCESS})
 
@@ -357,12 +345,12 @@ STATUS_KR_GATE: dict[DispatchStatus, str] = {
 # status reported for an sid is the row with the minimum value across
 # all attempts. success=0 (가장 강함) … dry_run=5 (가장 약함).
 _STATUS_PRIORITY: dict[DispatchStatus, int] = {
-    DispatchStatus.SUCCESS: 0,            # 가장 강함
+    DispatchStatus.SUCCESS: 0,  # 가장 강함
     DispatchStatus.TEST_DUMMY: 1,
     DispatchStatus.FAILED: 2,
     DispatchStatus.TEMPORARY_FAILURE: 3,
     DispatchStatus.SKIPPED: 4,
-    DispatchStatus.DRY_RUN: 5,            # 가장 약함
+    DispatchStatus.DRY_RUN: 5,  # 가장 약함
 }
 
 

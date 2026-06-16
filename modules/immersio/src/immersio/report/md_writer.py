@@ -20,7 +20,7 @@ output (FR-023). No LLM call paths exist (FR-005, SC-006).
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from paideia_shared.schemas import (
     HistogramBin,
@@ -125,15 +125,11 @@ def _render_metadata(metadata_rows: Sequence[MetadataAggregate]) -> str:
         rows = by_kind[kind]
         # Find the test kind / p-value (first non-N/A entry per group)
         test_kind = next((r.test_kind for r in rows if r.test_kind != "N/A"), "N/A")
-        p_value = next(
-            (r.test_p_value for r in rows if r.test_p_value is not None), None
-        )
+        p_value = next((r.test_p_value for r in rows if r.test_p_value is not None), None)
         verdict = "유의함" if (p_value is not None and p_value < 0.05) else "유의하지 않음"
         lines.append(f"### {kind}")
         lines.append("")
-        lines.append(
-            f"그룹간 차이 검정: **{test_kind}** (p={_fmt_p(p_value)}) — {verdict}."
-        )
+        lines.append(f"그룹간 차이 검정: **{test_kind}** (p={_fmt_p(p_value)}) — {verdict}.")
         lines.append("")
         lines.append("| 그룹 | n | 평균 | SD | 비고 |")
         lines.append("| --- | --- | --- | --- | --- |")
@@ -161,13 +157,9 @@ def _render_discrimination(items: Sequence[ItemStatistics]) -> str:
         f"변별력 0.00–0.20 (약함) {len(weak)}개, 변별력 ≥ 0.40 (우수) {len(strong)}개."
     )
     if negatives:
-        nos = ", ".join(
-            str(it.item_no) for it in sorted(negatives, key=lambda x: x.item_no)
-        )
+        nos = ", ".join(str(it.item_no) for it in sorted(negatives, key=lambda x: x.item_no))
         # Spec FR-021 template: 변별력 < 0 문항 ... (해당 문항: ...)
-        lines.append(
-            f"역변별 의심 문항 **(해당 문항: {nos})** — 출제 의도·정답 키 재검토 권장."
-        )
+        lines.append(f"역변별 의심 문항 **(해당 문항: {nos})** — 출제 의도·정답 키 재검토 권장.")
     lines.append("")
     return "\n".join(lines)
 
@@ -265,17 +257,13 @@ def _render_calibration(items: Sequence[ItemStatistics]) -> str:
             note = "예상보다 쉬움"
         else:
             note = "정합"
-        lines.append(
-            f"| {level} | {len(bucket)} | {_fmt_float(avg * 100, decimals=1)}% | {note} |"
-        )
+        lines.append(f"| {level} | {len(bucket)} | {_fmt_float(avg * 100, decimals=1)}% | {note} |")
     # Expected-difficulty levels not in the canonical set still surface
     for level, bucket in by_expected.items():
         if level in seen:
             continue
         avg = sum(it.correct_rate for it in bucket) / len(bucket)
-        lines.append(
-            f"| {level} | {len(bucket)} | {_fmt_float(avg * 100, decimals=1)}% | — |"
-        )
+        lines.append(f"| {level} | {len(bucket)} | {_fmt_float(avg * 100, decimals=1)}% | — |")
     lines.append("")
     return "\n".join(lines)
 
@@ -297,13 +285,9 @@ def _render_recommendations(items: Sequence[ItemStatistics]) -> str:
             f"정답률 > 95% 문항 {n_too_easy}개 — 기본 개념 확인용으로는 유지하되 변별 기여는 낮음."
         )
     if n_replace > 0:
-        bullets.append(
-            f"변별 기여 적음 문항 {n_replace}개 — 차년도 교체 후보로 분류."
-        )
+        bullets.append(f"변별 기여 적음 문항 {n_replace}개 — 차년도 교체 후보로 분류.")
     if n_time > 0:
-        bullets.append(
-            f"무응답률 높은 문항 {n_time}개 — 시험 시간·문항 길이 조정 검토."
-        )
+        bullets.append(f"무응답률 높은 문항 {n_time}개 — 시험 시간·문항 길이 조정 검토.")
     if not bullets:
         bullets.append("심각한 출제 이상 신호 없음 — 차학기 동일 출제 안 으로 안정 운영 가능.")
 
@@ -351,9 +335,7 @@ def render_quality_report_md(
     if not isinstance(semester, str) or not semester:
         raise ValueError("render_quality_report_md: semester must be a non-empty string")
     if not isinstance(course_name_kr, str) or not course_name_kr:
-        raise ValueError(
-            "render_quality_report_md: course_name_kr must be a non-empty string"
-        )
+        raise ValueError("render_quality_report_md: course_name_kr must be a non-empty string")
     if not isinstance(generated_at_utc, str) or not generated_at_utc:
         raise ValueError(
             "render_quality_report_md: generated_at_utc must be a non-empty ISO8601 string"

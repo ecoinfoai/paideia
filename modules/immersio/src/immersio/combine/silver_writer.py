@@ -62,8 +62,7 @@ def _encode_dict_column(value: object) -> str:
             return "{}"
         return json.dumps(json.loads(value), ensure_ascii=False, sort_keys=True)
     raise TypeError(
-        f"silver_writer: unexpected dict column value type "
-        f"{type(value).__name__}: {value!r}"
+        f"silver_writer: unexpected dict column value type {type(value).__name__}: {value!r}"
     )
 
 
@@ -97,23 +96,26 @@ def write_combined_silver(df: pd.DataFrame, path: Path) -> None:
     # builds them via fillna/직접 산출, but a manual mutation upstream could
     # break this contract; explicit Fail-Fast surfaces the anomaly before
     # parquet land.
-    _BOOL_COLUMNS = (
+    bool_columns = (
         "on_roster",
         "exam_taken",
         "진단응답",
         "시험응시",
-        *(f"{axis}_missing" for axis in (
-            "digital_efficacy",
-            "motivation",
-            "time_availability",
-            "material_preference",
-            "study_strategy",
-            "study_environment",
-            "social_learning",
-            "feedback_seeking",
-        )),
+        *(
+            f"{axis}_missing"
+            for axis in (
+                "digital_efficacy",
+                "motivation",
+                "time_availability",
+                "material_preference",
+                "study_strategy",
+                "study_environment",
+                "social_learning",
+                "feedback_seeking",
+            )
+        ),
     )
-    for col in _BOOL_COLUMNS:
+    for col in bool_columns:
         if df[col].isna().any():
             raise ValueError(
                 f"silver_writer: bool column {col!r} carries NaN — pipeline "
@@ -124,9 +126,7 @@ def write_combined_silver(df: pd.DataFrame, path: Path) -> None:
     for col in _DICT_COLUMNS:
         out[col] = out[col].map(_encode_dict_column)
 
-    out = out.sort_values("student_id", ascending=True, kind="stable").reset_index(
-        drop=True
-    )
+    out = out.sort_values("student_id", ascending=True, kind="stable").reset_index(drop=True)
     out = out[list(_COMBINED_COLUMN_ORDER)]
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,9 +150,7 @@ def read_combined_silver(path: Path) -> pd.DataFrame:
     """
     df = pq.read_table(path).to_pandas()
     for col in _DICT_COLUMNS:
-        df[col] = df[col].map(
-            lambda v: json.loads(v) if isinstance(v, str) and v else {}
-        )
+        df[col] = df[col].map(lambda v: json.loads(v) if isinstance(v, str) and v else {})
     # NaN → None for the remaining (non-dict) columns so downstream Pydantic
     # validation accepts them. Mirrors the joiner's post-merge cleanup.
     non_dict_cols = [c for c in df.columns if c not in _DICT_COLUMNS]

@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from immersio.combine.report_md import build_us1_report
 from paideia_shared.schemas import (
     CombinedAnalysisManifest,
@@ -195,9 +194,7 @@ def test_required_figs_referenced(report_text: str) -> None:
 def test_section_1_has_six_sha256(report_text: str) -> None:
     """All 6 input SHA256 (cluster_names_sha256 GAP-10 포함) must appear in §1."""
     occurrences = report_text.count(_SHA)
-    assert occurrences >= 6, (
-        f"expected ≥6 SHA256 occurrences in §1, got {occurrences}"
-    )
+    assert occurrences >= 6, f"expected ≥6 SHA256 occurrences in §1, got {occurrences}"
 
 
 def test_section_1_has_r10_audit_counts(report_text: str) -> None:

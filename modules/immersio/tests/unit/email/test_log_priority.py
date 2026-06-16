@@ -35,10 +35,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from immersio.email.log import (
-    RetryMode,
     _STATUS_PRIORITY,
+    RetryMode,
     _latest_status_by_sid,
     idempotent_skip_filter,
 )
@@ -119,8 +118,7 @@ def test_status_priority_monotonic_order() -> None:
     ]
     values = [_STATUS_PRIORITY[s] for s in order]
     assert values == sorted(values), (
-        f"_STATUS_PRIORITY must be strictly increasing in the documented "
-        f"order; got {values}"
+        f"_STATUS_PRIORITY must be strictly increasing in the documented order; got {values}"
     )
     assert len(set(values)) == 6, "priority values must all be distinct"
 
@@ -159,7 +157,7 @@ CASE_B_ROWS = [
 CASE_B_WINNER = DispatchStatus.FAILED
 CASE_B_KEEP = {
     RetryMode.DEFAULT: True,
-    RetryMode.RETRY_SKIPPED: False,   # FR-C02c bugfix
+    RetryMode.RETRY_SKIPPED: False,  # FR-C02c bugfix
     RetryMode.RETRY_FAILED: True,
 }
 

@@ -41,9 +41,7 @@ _DEFAULT_QUESTION_TYPE = "지식축적"
 
 # templates/ lives at modules/maieutica/templates, i.e. two parents above the
 # src/maieutica package root (src/maieutica/generate/bundle.py → .../maieutica).
-_TEMPLATE_PATH = (
-    Path(__file__).resolve().parents[3] / "templates" / "prompt_quiz.txt"
-)
+_TEMPLATE_PATH = Path(__file__).resolve().parents[3] / "templates" / "prompt_quiz.txt"
 
 
 @lru_cache(maxsize=1)
@@ -192,9 +190,7 @@ def build_bundle(
     )
     selected = _select_chunks(slot, chunks)
 
-    textbook_context = (
-        "\n\n".join(c.text for c in selected) if selected else "(교재 본문 없음)"
-    )
+    textbook_context = "\n\n".join(c.text for c in selected) if selected else "(교재 본문 없음)"
     section = _derive_section(selected)
 
     if assigned:

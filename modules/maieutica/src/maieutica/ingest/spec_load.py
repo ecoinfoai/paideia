@@ -71,26 +71,20 @@ def load_generation_spec(path: Path) -> MaieuticaGenerationSpec:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(
-            f"Failed to parse generation_spec.yaml at {path}: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to parse generation_spec.yaml at {path}: {exc}") from exc
 
     if not isinstance(raw, dict):
         raise ValueError(
-            f"generation_spec.yaml must be a YAML mapping, "
-            f"got {type(raw).__name__}: {path}"
+            f"generation_spec.yaml must be a YAML mapping, got {type(raw).__name__}: {path}"
         )
 
     try:
         return MaieuticaGenerationSpec.model_validate(raw)
     except ValidationError as exc:
         errors = "; ".join(
-            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-            for e in exc.errors()
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
-        raise ValueError(
-            f"generation_spec.yaml validation failed at {path}: {errors}"
-        ) from exc
+        raise ValueError(f"generation_spec.yaml validation failed at {path}: {errors}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -118,26 +112,20 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(
-            f"Failed to parse curriculum_map.yaml at {path}: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to parse curriculum_map.yaml at {path}: {exc}") from exc
 
     if not isinstance(raw, dict):
         raise ValueError(
-            f"curriculum_map.yaml must be a YAML mapping, "
-            f"got {type(raw).__name__}: {path}"
+            f"curriculum_map.yaml must be a YAML mapping, got {type(raw).__name__}: {path}"
         )
 
     try:
         return CurriculumMap.model_validate(raw)
     except ValidationError as exc:
         errors = "; ".join(
-            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-            for e in exc.errors()
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
-        raise ValueError(
-            f"curriculum_map.yaml validation failed at {path}: {errors}"
-        ) from exc
+        raise ValueError(f"curriculum_map.yaml validation failed at {path}: {errors}") from exc
 
 
 # ---------------------------------------------------------------------------

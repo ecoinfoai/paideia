@@ -41,6 +41,7 @@ class LegacyLoadError(RuntimeError):
     leaking implementation-detail traces to operators.
     """
 
+
 _TOLERANCE = 0.001
 
 _SHEETS_OF_INTEREST: tuple[str, ...] = (
@@ -130,26 +131,17 @@ def _estimate_reason(
 
     # 검정 종류 차이 (ANOVA → Welch ANOVA 자동 폴백)
     if sheet == "2_메타데이터통계" and ("p값" in header or "p_value" in header.lower()):
-        return (
-            "검정 종류 차이 (legacy: ANOVA / immersio: Welch ANOVA 자동 폴백 — Levene p < 0.05)"
-        )
+        return "검정 종류 차이 (legacy: ANOVA / immersio: Welch ANOVA 자동 폴백 — Levene p < 0.05)"
 
     # 결시·무응답 정의 차이
-    if sheet == "전체요약" and header in ("평균", "표준편차", "값"):
-        if abs_diff > 1.0:
-            return (
-                "결시·무응답 처리 정의 차이 의심 "
-                "(legacy 측이 결시를 분모에 포함했을 가능성)"
-            )
+    if sheet == "전체요약" and header in ("평균", "표준편차", "값") and abs_diff > 1.0:
+        return "결시·무응답 처리 정의 차이 의심 (legacy 측이 결시를 분모에 포함했을 가능성)"
 
     if sheet == "3_변별력" and "변별력" in header:
         return "27% 분위 동점자 처리 차이 의심"
 
     if sheet == "4_정답률" and "정답률" in header:
-        return (
-            "무응답 처리 차이 의심 "
-            "(legacy 측이 무응답을 분모에서 제외 가능성)"
-        )
+        return "무응답 처리 차이 의심 (legacy 측이 무응답을 분모에서 제외 가능성)"
 
     if abs_diff < 0.01:
         return "반올림 차이 (자릿수 정의)"
@@ -344,9 +336,17 @@ def _render_md(
     lines.append("")
     lines.append("## 9. 사유 추정 룰 (FR-031)")
     lines.append("")
-    lines.append("- 검정 종류 차이: `2_메타데이터통계` 의 p값 컬럼 — legacy ANOVA / immersio Welch ANOVA 자동 폴백.")
-    lines.append("- 결시·무응답 처리: `전체요약` 의 평균/표준편차 차이 > 1.0 → legacy 가 결시를 분모에 포함했을 가능성.")
-    lines.append("- 27% 분위 동점자: `3_변별력` 의 변별력지수 — boundary 동점자 포함/제외 처리 차이.")
+    lines.append(
+        "- 검정 종류 차이: `2_메타데이터통계` 의 p값 컬럼 — "
+        "legacy ANOVA / immersio Welch ANOVA 자동 폴백."
+    )
+    lines.append(
+        "- 결시·무응답 처리: `전체요약` 의 평균/표준편차 차이 > 1.0 → "
+        "legacy 가 결시를 분모에 포함했을 가능성."
+    )
+    lines.append(
+        "- 27% 분위 동점자: `3_변별력` 의 변별력지수 — boundary 동점자 포함/제외 처리 차이."
+    )
     lines.append("- 무응답 처리: `4_정답률` — legacy 가 무응답을 분모에서 제외 가능성.")
     lines.append("- 반올림: 그 외 |diff| < 0.01 — 자릿수 정의 차이.")
     lines.append("- 그 외: 운영자 검토 필요 (수치 정의 차이 미상).")
@@ -399,9 +399,7 @@ def _load_xlsx_or_raise(path: Path, *, role: str) -> Any:
         ) from exc
 
 
-def _structure_check(
-    legacy_wb: Any, immersio_wb: Any
-) -> tuple[list[str], list[str]]:
+def _structure_check(legacy_wb: Any, immersio_wb: Any) -> tuple[list[str], list[str]]:
     """Return (markdown rows, list of sheet names common to both)."""
     legacy_sheets = list(legacy_wb.sheetnames)
     immersio_sheets = list(immersio_wb.sheetnames)
@@ -450,13 +448,9 @@ def generate_legacy_diff(
     immersio_xlsx = Path(immersio_xlsx)
     output_path = Path(output_path)
     if not legacy_xlsx.is_file():
-        raise FileNotFoundError(
-            f"generate_legacy_diff: legacy xlsx not found: {legacy_xlsx}"
-        )
+        raise FileNotFoundError(f"generate_legacy_diff: legacy xlsx not found: {legacy_xlsx}")
     if not immersio_xlsx.is_file():
-        raise FileNotFoundError(
-            f"generate_legacy_diff: immersio xlsx not found: {immersio_xlsx}"
-        )
+        raise FileNotFoundError(f"generate_legacy_diff: immersio xlsx not found: {immersio_xlsx}")
     if not output_path.parent.is_dir():
         raise FileNotFoundError(
             f"generate_legacy_diff: parent directory missing: {output_path.parent}"

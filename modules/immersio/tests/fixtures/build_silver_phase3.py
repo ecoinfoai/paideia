@@ -271,9 +271,7 @@ def _build_factor_scores_df(roster: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("student_id").reset_index(drop=True)
 
 
-def _build_cluster_assignment_df(
-    roster: list[dict[str, Any]], *, k: int
-) -> pd.DataFrame:
+def _build_cluster_assignment_df(roster: list[dict[str, Any]], *, k: int) -> pd.DataFrame:
     """Build cluster_assignment.parquet (ClusterAssignmentRow rows).
 
     Only respondents with cluster_id present. k=1 fallback: every respondent
@@ -342,7 +340,7 @@ def _build_needs_map_manifest(
             "student_master_sha256": sha_zero,
             "diagnostic_mapping_path": "fixture://diagnostic_mapping.yaml",
             "diagnostic_mapping_sha256": sha_zero,
-            "missing_policy_source": {axis: "default" for axis in _AXES},
+            "missing_policy_source": dict.fromkeys(_AXES, "default"),
         },
         "standard_axes_used": list(_AXES),
         "standard_axes_skipped": [],
@@ -386,9 +384,7 @@ def _build_student_master_df(roster: list[dict[str, Any]]) -> pd.DataFrame:
     Phase 2 student_master parquet that production immersio writes).
     """
     rows: list[dict[str, Any]] = []
-    axis_scores_json = json.dumps(
-        {axis: None for axis in _AXES}, ensure_ascii=False, sort_keys=True
-    )
+    axis_scores_json = json.dumps(dict.fromkeys(_AXES), ensure_ascii=False, sort_keys=True)
     for r in sorted(roster, key=lambda x: x["student_id"]):
         rows.append(
             {
@@ -494,12 +490,8 @@ def _build_student_metrics_df(roster: list[dict[str, Any]]) -> pd.DataFrame:
             score_pct = score  # max=100 ⇒ percent equals raw
             section_p = float(rng.uniform(0.0, 100.0))
             cohort_p = float(rng.uniform(0.0, 100.0))
-            z = (
-                (score - pop_mean) / pop_sd if pop_sd > 0 else None
-            )
-            chap_rates = {
-                ch: float(np.clip(rng.beta(2, 2), 0.0, 1.0)) for ch in _CHAPTERS
-            }
+            z = (score - pop_mean) / pop_sd if pop_sd > 0 else None
+            chap_rates = {ch: float(np.clip(rng.beta(2, 2), 0.0, 1.0)) for ch in _CHAPTERS}
         else:
             score = None
             score_pct = None
@@ -639,9 +631,7 @@ def build_silver_phase3_missing_factor_scores(out_root: Path) -> None:
 
 def build_silver_phase3_small_subgroup(out_root: Path) -> None:
     """T015 — occupation category n=2 to exercise n<10 auto-exclude."""
-    _write_silver_tree(
-        out_root=out_root, roster=_build_roster_small_subgroup(), k=3
-    )
+    _write_silver_tree(out_root=out_root, roster=_build_roster_small_subgroup(), k=3)
 
 
 def build_all(fixtures_root: Path) -> None:
@@ -651,12 +641,8 @@ def build_all(fixtures_root: Path) -> None:
     """
     build_silver_phase3_minimal(fixtures_root / "silver_phase3_minimal")
     build_silver_phase3_no_clusters(fixtures_root / "silver_phase3_no_clusters")
-    build_silver_phase3_missing_factor_scores(
-        fixtures_root / "silver_phase3_missing_factor_scores"
-    )
-    build_silver_phase3_small_subgroup(
-        fixtures_root / "silver_phase3_small_subgroup"
-    )
+    build_silver_phase3_missing_factor_scores(fixtures_root / "silver_phase3_missing_factor_scores")
+    build_silver_phase3_small_subgroup(fixtures_root / "silver_phase3_small_subgroup")
 
 
 __all__ = [

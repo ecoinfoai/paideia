@@ -146,9 +146,7 @@ class TestAssignSubsections:
         shuffled = [ordered[2], ordered[0], ordered[3], ordered[1]]
 
         def fingerprint(out: list[Slot]) -> list[tuple[str, str, int]]:
-            return [
-                (s.slot_id, s.subsection_chunk_id, s.intra_ordinal) for s in out
-            ]
+            return [(s.slot_id, s.subsection_chunk_id, s.intra_ordinal) for s in out]
 
         a = assign_subsections(_slots(10), ordered)
         b = assign_subsections(_slots(10), shuffled)

@@ -69,8 +69,7 @@ def write_dispatch_report_md(
     """
     if not isinstance(gold_dir, Path):
         raise TypeError(
-            f"write_dispatch_report_md: gold_dir must be Path, got "
-            f"{type(gold_dir).__name__}"
+            f"write_dispatch_report_md: gold_dir must be Path, got {type(gold_dir).__name__}"
         )
     gold_dir.mkdir(parents=True, exist_ok=True)
 
@@ -102,10 +101,7 @@ def write_dispatch_report_md(
     # 키 하에서는 ``failed`` 가 winner 가 되고 ``--retry-skipped`` 의
     # skip_statuses 에 포함되어 건너뛴다 — 운영자가 ``--retry-failed``
     # 모드를 명시적으로 사용해야 재시도 가능.
-    if (
-        retry_mode == RetryMode.RETRY_SKIPPED
-        and failed_skipped_count >= 1
-    ):
+    if retry_mode == RetryMode.RETRY_SKIPPED and failed_skipped_count >= 1:
         prefix = "v0.1.1 동작 변화: 발송 실패(failed) 상태인 학생 "  # noqa: E501  # ALLOW_HARDCODING: notice
         middle = f"{failed_skipped_count}명은 건너뜀(skip) — "
         suffix = "`--retry-failed` 모드를 사용해야 재시도됩니다."
@@ -119,8 +115,7 @@ def write_dispatch_report_md(
         lines.append("|---|---|---|")
         for row in report_data.failed_rows:
             lines.append(
-                f"| {row.student_id} | {row.name_kr} | "
-                f"{row.error_kind} — {row.error_detail} |"
+                f"| {row.student_id} | {row.name_kr} | {row.error_kind} — {row.error_detail} |"
             )
         lines.append("")
 
@@ -131,8 +126,7 @@ def write_dispatch_report_md(
         lines.append("|---|---|---|")
         for row in report_data.skipped_rows:
             lines.append(
-                f"| {row.student_id} | {row.name_kr} | "
-                f"{row.error_kind} — {row.error_detail} |"
+                f"| {row.student_id} | {row.name_kr} | {row.error_kind} — {row.error_detail} |"
             )
         lines.append("")
 

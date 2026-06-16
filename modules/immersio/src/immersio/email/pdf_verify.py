@@ -54,17 +54,11 @@ def verify_pdf_body_contains_student_id(
         on the first failed check, or ``ok=True`` + empty error_kind.
     """
     if attachment_max_bytes < 1:
-        raise ValueError(
-            f"attachment_max_bytes must be ≥ 1 (got {attachment_max_bytes})"
-        )
+        raise ValueError(f"attachment_max_bytes must be ≥ 1 (got {attachment_max_bytes})")
     if bundle.pdf_size_bytes > attachment_max_bytes:
-        return PDFVerifyResult(
-            bundle=bundle, ok=False, error_kind="attachment_size_exceeded"
-        )
+        return PDFVerifyResult(bundle=bundle, ok=False, error_kind="attachment_size_exceeded")
     if not bundle.body_contains_student_id:
-        return PDFVerifyResult(
-            bundle=bundle, ok=False, error_kind="pdf_no_student_id"
-        )
+        return PDFVerifyResult(bundle=bundle, ok=False, error_kind="pdf_no_student_id")
     return PDFVerifyResult(bundle=bundle, ok=True, error_kind="")
 
 

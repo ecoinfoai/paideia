@@ -102,9 +102,7 @@ _SUBSECTION_CAP: int = 3
 """Max slots per subsection (FR-003/SC-002); never relaxed."""
 
 
-def assign_subsections(
-    slots: list[Slot], chunks: list[TextbookChunk]
-) -> list[Slot]:
+def assign_subsections(slots: list[Slot], chunks: list[TextbookChunk]) -> list[Slot]:
     """Distribute slots across textbook subsections by body length (cap ≤3).
 
     Deterministically assigns each slot to a subsection (``TextbookChunk``) so
@@ -158,13 +156,9 @@ def assign_subsections(
     capacity = min(len(slots), _SUBSECTION_CAP * len(chunks))
     working = slots[:capacity]
 
-    ordered_chunks = sorted(
-        chunks, key=lambda c: (-len(c.text), c.line_start, c.chunk_id)
-    )
+    ordered_chunks = sorted(chunks, key=lambda c: (-len(c.text), c.line_start, c.chunk_id))
 
-    allocation = _largest_remainder_alloc(
-        capacity, [len(c.text) for c in ordered_chunks]
-    )
+    allocation = _largest_remainder_alloc(capacity, [len(c.text) for c in ordered_chunks])
 
     enriched: list[Slot] = []
     cursor = 0

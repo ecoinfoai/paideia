@@ -20,7 +20,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from immersio.combine.manifest import (
     SchemaVersionMismatch,
     compute_input_sha256,
@@ -31,7 +30,6 @@ from immersio.combine.manifest import (
 from paideia_shared.schemas.combined_analysis_manifest import (
     CombinedAnalysisManifest,
 )
-
 
 _SHA = "0" * 64
 
@@ -140,9 +138,7 @@ def test_serialize_manifest_canonical_form() -> None:
     posthoc = payload["posthoc_method_used"]
     assert posthoc == "Games_Howell"
     # Top-level keys must be in sorted order — re-encode and require equality.
-    canonical = (
-        json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
-    )
+    canonical = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     assert text == canonical
 
 

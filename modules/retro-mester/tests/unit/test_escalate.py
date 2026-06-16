@@ -200,8 +200,8 @@ class TestEscalateStructural:
         from retro_mester.gaps.escalate import escalate_structural
 
         rows = [
-            _make_row("2026000001", {"8장": 0.4, "9장": 0.4}),   # 학령기
-            _make_row("2026000002", {"8장": 0.3, "9장": 0.8}),   # 만학도
+            _make_row("2026000001", {"8장": 0.4, "9장": 0.4}),  # 학령기
+            _make_row("2026000002", {"8장": 0.3, "9장": 0.8}),  # 만학도
         ]
         roster = {"2026000001": "학령기", "2026000002": "만학도"}
         config = _make_config(roster=roster, baseline_segment="만학도")

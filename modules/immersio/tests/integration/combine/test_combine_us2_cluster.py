@@ -19,16 +19,13 @@ from pathlib import Path
 from types import ModuleType
 
 import openpyxl
-import pyarrow.parquet as pq
 import pytest
 
 
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -77,14 +74,7 @@ def test_us2_k3_emits_fig5(tmp_path_factory: pytest.TempPathFactory) -> None:
         gold_dir=tmp / "gold",
         include_cluster=True,
     )
-    fig5 = (
-        tmp
-        / "gold"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "figs"
-        / "fig5_cluster_boxplot.png"
-    )
+    fig5 = tmp / "gold" / "immersio" / "2026-1-anatomy" / "figs" / "fig5_cluster_boxplot.png"
     assert fig5.exists()
 
 
@@ -104,13 +94,7 @@ def test_us2_k3_manifest_posthoc_set(
         gold_dir=tmp / "gold",
         include_cluster=True,
     )
-    manifest_path = (
-        tmp
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "manifest_phase3.json"
-    )
+    manifest_path = tmp / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["posthoc_method_used"] in {"Tukey_HSD", "Games_Howell"}
 
@@ -131,9 +115,7 @@ def test_us2_k3_md_contains_section_4_active(
         gold_dir=tmp / "gold",
         include_cluster=True,
     )
-    md_path = (
-        tmp / "gold" / "immersio" / "2026-1-anatomy" / "결합분석보고서.md"
-    )
+    md_path = tmp / "gold" / "immersio" / "2026-1-anatomy" / "결합분석보고서.md"
     text = md_path.read_text(encoding="utf-8")
     assert "## 4. 군집별 비교" in text
     assert "(US2 미수행)" not in text
@@ -163,13 +145,7 @@ def test_us2_k1_fallback_yields_na_posthoc(
     )
     assert rc == 0
 
-    manifest_path = (
-        tmp
-        / "silver"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "manifest_phase3.json"
-    )
+    manifest_path = tmp / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["posthoc_method_used"] == "N/A"
 
@@ -196,7 +172,9 @@ def test_us2_k1_fallback_no_pairwise_rows(
     pair_rows = [
         row
         for row in sheet.iter_rows(values_only=True)
-        if row and isinstance(row[0], str) and "-" in row[0]
+        if row
+        and isinstance(row[0], str)
+        and "-" in row[0]
         and row[0] not in {"raw_p", "ci_low_95", "ci_high_95"}
     ]
     # k=1 → 0 pairwise. (Header rows like '군집별 통계' / '검정 결과' / '사후 비교'
@@ -227,14 +205,7 @@ def test_us1_partial_default_emits_two_sheets(
     xlsx_path = tmp / "gold" / "immersio" / "2026-1-anatomy" / "결합분석.xlsx"
     wb = openpyxl.load_workbook(xlsx_path, read_only=True)
     assert wb.sheetnames == ["상관매트릭스", "회귀결과"]
-    fig5 = (
-        tmp
-        / "gold"
-        / "immersio"
-        / "2026-1-anatomy"
-        / "figs"
-        / "fig5_cluster_boxplot.png"
-    )
+    fig5 = tmp / "gold" / "immersio" / "2026-1-anatomy" / "figs" / "fig5_cluster_boxplot.png"
     assert not fig5.exists(), "fig5 must not land when include_cluster=False"
 
 
@@ -267,10 +238,6 @@ def test_us2_silver_byte_identical_re_run(
         gold_dir=b / "gold",
         include_cluster=True,
     )
-    pa = (
-        a / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
-    ).read_bytes()
-    pb = (
-        b / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
-    ).read_bytes()
+    pa = (a / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet").read_bytes()
+    pb = (b / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet").read_bytes()
     assert pa == pb

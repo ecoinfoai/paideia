@@ -23,34 +23,34 @@ from paideia_shared.schemas import ExamItemDraft, TextbookEvidence
 # ---------------------------------------------------------------------------
 
 EXPECTED_COLUMNS = [
-    "번호",            # 1  item_no
-    "출처",            # 2  source (형성평가/퀴즈/교과서)
-    "원본출처식별자",   # 3  source_ref
-    "챕터",            # 4  chapter
-    "절",              # 5  section
-    "주차",            # 6  week
-    "핵심개념",         # 7  key_concept
-    "강조여부",         # 8  is_emphasized (강의강조/자습)
-    "문제유형",         # 9  question_type
-    "난이도",           # 10 difficulty
-    "문두방향",         # 11 stem_polarity
-    "문제",            # 12 text
-    "보기1",           # 13 options[0]
-    "보기2",           # 14 options[1]
-    "보기3",           # 15 options[2]
-    "보기4",           # 16 options[3]
-    "보기5",           # 17 options[4]
-    "정답",            # 18 answer_no
-    "보기별오답근거",   # 19 distractor_rationale joined by \n
-    "오답설명",         # 20 wrong_explanation
-    "도약설명",         # 21 leap_explanation
-    "교재근거위치",     # 22 textbook_evidence (파일:행 + status)
-    "출제의도",         # 23 intent
-    "보기글자수검증",   # 24 option_length_ok (OK/위반)
-    "중복플래그",       # 25 duplicate_flag
-    "문제검증",         # 26 review_note (blank at generation)
-    "채택상태",         # 27 adoption_status
-    "비고",            # 28 note
+    "번호",  # 1  item_no
+    "출처",  # 2  source (형성평가/퀴즈/교과서)
+    "원본출처식별자",  # 3  source_ref
+    "챕터",  # 4  chapter
+    "절",  # 5  section
+    "주차",  # 6  week
+    "핵심개념",  # 7  key_concept
+    "강조여부",  # 8  is_emphasized (강의강조/자습)
+    "문제유형",  # 9  question_type
+    "난이도",  # 10 difficulty
+    "문두방향",  # 11 stem_polarity
+    "문제",  # 12 text
+    "보기1",  # 13 options[0]
+    "보기2",  # 14 options[1]
+    "보기3",  # 15 options[2]
+    "보기4",  # 16 options[3]
+    "보기5",  # 17 options[4]
+    "정답",  # 18 answer_no
+    "보기별오답근거",  # 19 distractor_rationale joined by \n
+    "오답설명",  # 20 wrong_explanation
+    "도약설명",  # 21 leap_explanation
+    "교재근거위치",  # 22 textbook_evidence (파일:행 + status)
+    "출제의도",  # 23 intent
+    "보기글자수검증",  # 24 option_length_ok (OK/위반)
+    "중복플래그",  # 25 duplicate_flag
+    "문제검증",  # 26 review_note (blank at generation)
+    "채택상태",  # 27 adoption_status
+    "비고",  # 28 note
 ]
 
 assert len(EXPECTED_COLUMNS) == 28, f"Expected 28 columns, got {len(EXPECTED_COLUMNS)}"
@@ -128,11 +128,10 @@ _PINNED_WHEN = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 class TestXlsxColumnContract:
     """Verify exact 28-column layout of write_xlsx output."""
 
-    def _write(
-        self, items: list[ExamItemDraft], path: Path
-    ) -> None:
+    def _write(self, items: list[ExamItemDraft], path: Path) -> None:
         from examen.output.determinism import finalize_xlsx
         from examen.output.xlsx import write_xlsx
+
         write_xlsx(items, path)
         finalize_xlsx(path, _PINNED_WHEN)
 
@@ -157,9 +156,7 @@ class TestXlsxColumnContract:
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
         assert headers == EXPECTED_COLUMNS, (
-            f"Column order mismatch.\n"
-            f"Expected: {EXPECTED_COLUMNS}\n"
-            f"Got:      {headers}"
+            f"Column order mismatch.\nExpected: {EXPECTED_COLUMNS}\nGot:      {headers}"
         )
 
     def test_xlsx_row_count_matches_items(self, tmp_path: Path) -> None:
@@ -241,7 +238,7 @@ class TestXlsxColumnContract:
         ws = wb.active
         for col_idx, col_no in enumerate(range(13, 18)):
             val = ws.cell(row=2, column=col_no).value
-            assert val is not None, f"보기{col_idx+1} is None at column {col_no}"
+            assert val is not None, f"보기{col_idx + 1} is None at column {col_no}"
             assert isinstance(val, str)
 
     def test_xlsx_byte_identical_on_rewrite(self, tmp_path: Path) -> None:
@@ -262,9 +259,7 @@ class TestXlsxColumnContract:
         wb = openpyxl.load_workbook(dest)
         ws = wb.active
         val = ws.cell(row=2, column=8).value
-        assert val in ("강의강조", "자습", "", None), (
-            f"강조여부 column: unexpected value {val!r}"
-        )
+        assert val in ("강의강조", "자습", "", None), f"강조여부 column: unexpected value {val!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +272,7 @@ class TestYamlContract:
 
     def _write(self, items: list[ExamItemDraft], path: Path) -> None:
         from examen.output.yaml_out import write_yaml
+
         write_yaml(items, path)
 
     def test_yaml_file_created(self, tmp_path: Path) -> None:
@@ -432,6 +428,4 @@ class TestXlsxYamlConsistency:
         yaml_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
         yaml_nos = [d["item_no"] for d in yaml_data]
 
-        assert xlsx_nos == yaml_nos, (
-            f"item_no mismatch: xlsx={xlsx_nos} yaml={yaml_nos}"
-        )
+        assert xlsx_nos == yaml_nos, f"item_no mismatch: xlsx={xlsx_nos} yaml={yaml_nos}"

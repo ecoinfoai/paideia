@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._common import CourseSlug, SemesterCode, StandardAxisKey
 
-
 ReliabilityLabel = Literal["high", "medium", "low", "N/A — single/double item"]
 """v0.1.1 threshold-based reliability tag (data-model.md §5).
 
@@ -142,7 +141,6 @@ class ScaleReliabilityReport(BaseModel):
                     duplicates.append(k)
                 seen.add(k)
             raise ValueError(
-                f"ScaleReliabilityReport V1: duplicate axis_key entries: "
-                f"{sorted(set(duplicates))}."
+                f"ScaleReliabilityReport V1: duplicate axis_key entries: {sorted(set(duplicates))}."
             )
         return self

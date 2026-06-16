@@ -37,7 +37,9 @@ def _tiny_silver(tmp_path: Path) -> Path:
         }
         for i in range(5)
     ]
-    pq.write_table(pa.Table.from_pandas(pd.DataFrame(sm_rows)), silver_dir / "student_master.parquet")
+    pq.write_table(
+        pa.Table.from_pandas(pd.DataFrame(sm_rows)), silver_dir / "student_master.parquet"
+    )
 
     # v0.1.1 V6 strict requires axes.required = full 8-key set. Each
     # responder contributes one likert response per axis so factor_scores
@@ -71,7 +73,9 @@ def _tiny_silver(tmp_path: Path) -> Path:
                     "source_column": source_for[axis],
                 }
             )
-    pq.write_table(pa.Table.from_pandas(pd.DataFrame(dr_rows)), silver_dir / "diagnostic_response.parquet")
+    pq.write_table(
+        pa.Table.from_pandas(pd.DataFrame(dr_rows)), silver_dir / "diagnostic_response.parquet"
+    )
 
     mapping = {
         "metadata": {
@@ -96,9 +100,7 @@ def _tiny_silver(tmp_path: Path) -> Path:
     }
     mapping_dir = tmp_path / "bronze" / "매핑"
     mapping_dir.mkdir(parents=True)
-    (mapping_dir / "anatomy.diagnostic.yaml").write_text(
-        yaml.safe_dump(mapping), encoding="utf-8"
-    )
+    (mapping_dir / "anatomy.diagnostic.yaml").write_text(yaml.safe_dump(mapping), encoding="utf-8")
     return tmp_path
 
 

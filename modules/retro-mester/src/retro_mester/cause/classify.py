@@ -56,12 +56,10 @@ def classify_cause(
 
     # --- compute item signals ---
     if chapter_items:
-        hard_share = sum(
-            1 for it in chapter_items if it.expected_difficulty == "어려움"
-        ) / len(chapter_items)
-        item_mean_correct_rate = sum(it.correct_rate for it in chapter_items) / len(
+        hard_share = sum(1 for it in chapter_items if it.expected_difficulty == "어려움") / len(
             chapter_items
         )
+        item_mean_correct_rate = sum(it.correct_rate for it in chapter_items) / len(chapter_items)
     else:
         hard_share = 0.0
         item_mean_correct_rate = 0.0
@@ -73,9 +71,7 @@ def classify_cause(
         if config.group_roster.get(row.student_id) == segment
         and chapter in row.chapter_correct_rates
     ]
-    segment_mean_rate = (
-        sum(segment_rates) / len(segment_rates) if segment_rates else 0.0
-    )
+    segment_mean_rate = sum(segment_rates) / len(segment_rates) if segment_rates else 0.0
 
     signals: dict[str, float] = {
         "hard_share": hard_share,

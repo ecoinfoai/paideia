@@ -36,9 +36,7 @@ def test_cli_disabled_short_circuits_without_torch_import(
     def _boom(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("analyze_sentiment must not run when enabled=False")
 
-    monkeypatch.setattr(
-        "needs_map.free_text.roberta_fallback.analyze_sentiment", _boom
-    )
+    monkeypatch.setattr("needs_map.free_text.roberta_fallback.analyze_sentiment", _boom)
 
     results, report = analyze_with_fallback(
         ["수업이 막막해요", "기대돼요"],
@@ -73,9 +71,7 @@ def test_torch_unavailable_reports_fallback_reason(
         _raise_torch_unavailable,
     )
 
-    results, report = analyze_with_fallback(
-        ["수업이 막막해요"], enabled=True
-    )
+    results, report = analyze_with_fallback(["수업이 막막해요"], enabled=True)
     assert len(results) == 1
     assert results[0].negativity is None
     assert report.fallback_reason == "torch-unavailable"
@@ -91,18 +87,14 @@ def test_model_unavailable_reports_fallback_reason(
     from needs_map.free_text.sentiment import RobertaUnavailableError
 
     def _raise_model_unavailable(*_args: object, **_kwargs: object) -> object:
-        raise RobertaUnavailableError(
-            "could not load model_id — model cache missing and offline."
-        )
+        raise RobertaUnavailableError("could not load model_id — model cache missing and offline.")
 
     monkeypatch.setattr(
         "needs_map.free_text.roberta_fallback.analyze_sentiment",
         _raise_model_unavailable,
     )
 
-    results, report = analyze_with_fallback(
-        ["수업이 막막해요"], enabled=True
-    )
+    results, report = analyze_with_fallback(["수업이 막막해요"], enabled=True)
     assert report.fallback_reason == "model-unavailable"
     assert report.enabled is False
     # Single non-empty text → n_attempted=1; n_fallback=1 (V1 holds).

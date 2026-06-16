@@ -34,9 +34,7 @@ class ClusterNameOut(BaseModel):
     label: str = Field(min_length=1, max_length=20)
 
 
-def name_clusters_rule(
-    centroids: pd.DataFrame, axis_labels_kr: dict[str, str]
-) -> dict[int, str]:
+def name_clusters_rule(centroids: pd.DataFrame, axis_labels_kr: dict[str, str]) -> dict[int, str]:
     """Rule-based cluster names — "고{maxAxisKR}·저{minAxisKR}형".
 
     Args:
@@ -77,14 +75,12 @@ def _llm_label_for_cluster(
 ) -> tuple[str | None, LLMCallOutcome]:
     """Single-cluster LLM call. Returns (label_or_None, outcome)."""
     summary_lines = [
-        f"- {axis_labels_kr.get(axis, axis)}: {value:+.2f}"
-        for axis, value in centroid_row.items()
+        f"- {axis_labels_kr.get(axis, axis)}: {value:+.2f}" for axis, value in centroid_row.items()
     ]
     prompt = (
         "다음은 한 학생 군집의 표준화된 의미축 평균 점수입니다 (z-score). "
         "이 군집을 한국어로 짧게(2~6자) 라벨링하세요. "
-        "예: '고동기·저자습형'.\n\n"
-        + "\n".join(summary_lines)
+        "예: '고동기·저자습형'.\n\n" + "\n".join(summary_lines)
     )
     messages = [{"role": "user", "content": prompt}]
     result, outcome = call_with_response_model(

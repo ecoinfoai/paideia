@@ -23,8 +23,14 @@ _N_CHAPTERS = 12
 _CHAPTERS = [f"{i}장. 해부학{i:02d}" for i in range(1, _N_CHAPTERS + 1)]
 
 _AXES = [
-    "digital_efficacy", "motivation", "time_availability", "material_preference",
-    "study_strategy", "study_environment", "social_learning", "feedback_seeking",
+    "digital_efficacy",
+    "motivation",
+    "time_availability",
+    "material_preference",
+    "study_strategy",
+    "study_environment",
+    "social_learning",
+    "feedback_seeking",
 ]
 
 _PERF_THRESHOLD_SECONDS = 10.0
@@ -55,9 +61,7 @@ def _combined_row(student_id: str, chapter_rates: dict[str, float]) -> dict:
         "chapter_correct_rates": json.dumps(chapter_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -123,9 +127,7 @@ def _build_large_fixture(data_root: Path) -> None:
         rates = dict.fromkeys(_CHAPTERS, 0.4 + i % 5 * 0.03)
         combined_rows.append(_combined_row(sid, rates))
 
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_im / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_im / "진단×시험결합.parquet", index=False)
 
     # 2 items per chapter = 24 items
     item_rows = []
@@ -155,9 +157,7 @@ def _build_large_fixture(data_root: Path) -> None:
         "cognitive_cliff_drop": 0.15,
         "effort_ratings": dict.fromkeys(_CHAPTERS, "중"),
     }
-    (bronze / "retro_config.yaml").write_text(
-        yaml.dump(cfg, allow_unicode=True), encoding="utf-8"
-    )
+    (bronze / "retro_config.yaml").write_text(yaml.dump(cfg, allow_unicode=True), encoding="utf-8")
 
     blueprint = {
         "semester": _SEMESTER,

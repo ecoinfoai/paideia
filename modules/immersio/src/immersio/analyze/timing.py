@@ -48,5 +48,5 @@ def resolve_created_at_utc(inputs_sha256: str, override: str | None) -> str:
 
     head = inputs_sha256[:8]
     epoch_seconds = int(head, 16)
-    derived = _dt.datetime.fromtimestamp(epoch_seconds, tz=_dt.timezone.utc)
+    derived = _dt.datetime.fromtimestamp(epoch_seconds, tz=_dt.UTC)
     return derived.strftime("%Y-%m-%dT%H:%M:%SZ")

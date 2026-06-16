@@ -36,9 +36,7 @@ class EmailManifestInputs(BaseModel):
     @classmethod
     def _v_sha256(cls, value: str) -> str:
         if not _HEX64_RE.fullmatch(value):
-            raise ValueError(
-                f"manifest input sha256 must be hex64 (got {value!r})"
-            )
+            raise ValueError(f"manifest input sha256 must be hex64 (got {value!r})")
         return value
 
 
@@ -103,19 +101,14 @@ class EmailManifest(BaseModel):
     @classmethod
     def _v_course_slug(cls, value: str) -> str:
         if not _COURSE_SLUG_RE.fullmatch(value):
-            raise ValueError(
-                f"course_slug must match ^[a-z][a-z0-9-]{{1,39}}$ (got {value!r})"
-            )
+            raise ValueError(f"course_slug must match ^[a-z][a-z0-9-]{{1,39}}$ (got {value!r})")
         return value
 
     @field_validator("profile_name")
     @classmethod
     def _v_profile_name(cls, value: str) -> str:
         if not _PROFILE_NAME_RE.fullmatch(value):
-            raise ValueError(
-                f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"profile_name must match ^[a-z][a-z0-9-]{{1,30}}$ (got {value!r})")
         return value
 
 

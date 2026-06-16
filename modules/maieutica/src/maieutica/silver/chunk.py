@@ -55,11 +55,11 @@ from maieutica.ingest.textbook_clean import clean_textbook
 # pattern captures (marker, title); the emitted section label is the verbatim
 # heading text "<marker> <title>".
 _SECTION_HEADING_PATTERNS: Final = (
-    re.compile(r"^\s*(\d+\.\d+)\s+(.+)$"),       # N.M   e.g. "1.1 제목"
-    re.compile(r"^\s*(\d+\.)\s+(.+)$"),          # N.    e.g. "1. 제목"
-    re.compile(r"^\s*(\d+\))\s+(.+)$"),          # N)    e.g. "1) 코"
-    re.compile(r"^\s*(\(\d+\))\s+(.+)$"),        # (N)   e.g. "(1) 코"
-    re.compile(r"^\s*([가-힣]\))\s+(.+)$"),       # 가)   e.g. "가) 성대"
+    re.compile(r"^\s*(\d+\.\d+)\s+(.+)$"),  # N.M   e.g. "1.1 제목"
+    re.compile(r"^\s*(\d+\.)\s+(.+)$"),  # N.    e.g. "1. 제목"
+    re.compile(r"^\s*(\d+\))\s+(.+)$"),  # N)    e.g. "1) 코"
+    re.compile(r"^\s*(\(\d+\))\s+(.+)$"),  # (N)   e.g. "(1) 코"
+    re.compile(r"^\s*([가-힣]\))\s+(.+)$"),  # 가)   e.g. "가) 성대"
     re.compile(r"^\s*([①-⑳])\s+(.+)$"),  # ①-⑳ e.g. "① 중추 조절"
 )
 
@@ -108,11 +108,7 @@ def _body_char_count(
     Returns:
         Total character count of the subsection's non-blank body lines.
     """
-    return sum(
-        len(text)
-        for lineno, text in non_blank_kept
-        if line_start <= lineno <= line_end
-    )
+    return sum(len(text) for lineno, text in non_blank_kept if line_start <= lineno <= line_end)
 
 
 def _paragraph_split(
@@ -280,18 +276,13 @@ def chunk_chapter(
     # contiguous, ORIGINAL, and non-overlapping).
     subsections: list[tuple[str, int, int]] = []
     for idx, (heading_lineno, section_text) in enumerate(body_headings):
-        end_lineno = (
-            body_headings[idx + 1][0] - 1
-            if idx + 1 < len(body_headings)
-            else last_line
-        )
+        end_lineno = body_headings[idx + 1][0] - 1 if idx + 1 < len(body_headings) else last_line
         subsections.append((section_text, heading_lineno, end_lineno))
 
     # Oversized threshold: subsections whose body exceeds median × K are
     # paragraph-split (C2).  K is the fixed code constant _OVERSIZE_K.
     body_char_counts = [
-        _body_char_count(non_blank_kept, start, end)
-        for _, start, end in subsections
+        _body_char_count(non_blank_kept, start, end) for _, start, end in subsections
     ]
     sorted_counts = sorted(body_char_counts)
     n_sub = len(sorted_counts)
@@ -305,25 +296,15 @@ def chunk_chapter(
     # A single global ordinal across ALL final chunks keeps chunk_ids unique and
     # deterministic even when an oversized subsection yields several pieces (C5).
     ordinal = 0
-    for (section_text, start, end), char_count in zip(
-        subsections, body_char_counts, strict=True
-    ):
-        pieces = (
-            _paragraph_split(kept, start, end)
-            if char_count > threshold
-            else [(start, end)]
-        )
+    for (section_text, start, end), char_count in zip(subsections, body_char_counts, strict=True):
+        pieces = _paragraph_split(kept, start, end) if char_count > threshold else [(start, end)]
 
         for piece_start, piece_end in pieces:
             section_lines = [
-                text
-                for lineno, text in non_blank_kept
-                if piece_start <= lineno <= piece_end
+                text for lineno, text in non_blank_kept if piece_start <= lineno <= piece_end
             ]
             text_body = "\n".join(section_lines)
-            chunk_id = _make_chunk_id(
-                semester, course_slug, chapter_no, section_text, ordinal
-            )
+            chunk_id = _make_chunk_id(semester, course_slug, chapter_no, section_text, ordinal)
             chunks.append(
                 TextbookChunk(
                     semester=semester,

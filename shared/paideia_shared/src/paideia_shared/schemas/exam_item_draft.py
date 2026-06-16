@@ -107,9 +107,7 @@ class ExamItemDraft(BaseModel):
     def _v1_options_len(self) -> Self:
         """V1: options must have exactly 5 elements."""
         if len(self.options) != 5:
-            raise ValueError(
-                f"V1: len(options) == {len(self.options)}, must be 5."
-            )
+            raise ValueError(f"V1: len(options) == {len(self.options)}, must be 5.")
         return self
 
     @model_validator(mode="after")

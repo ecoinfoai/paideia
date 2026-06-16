@@ -47,9 +47,7 @@ def _row_to_dict(row: pd.Series) -> dict:
     return out
 
 
-def _validate_sample(
-    df: pd.DataFrame, model: type, *, label: str, path: Path
-) -> None:
+def _validate_sample(df: pd.DataFrame, model: type, *, label: str, path: Path) -> None:
     """Validate the first ``_SAMPLE_SIZE`` rows against ``model``.
 
     Raises ValueError(message including path) on first contract violation. Full
@@ -62,14 +60,10 @@ def _validate_sample(
         try:
             model.model_validate(_row_to_dict(row))
         except Exception as exc:
-            raise ValueError(
-                f"{label} contract violation at {path} row {index}: {exc}"
-            ) from exc
+            raise ValueError(f"{label} contract violation at {path} row {index}: {exc}") from exc
 
 
-def load_diagnostic_response(
-    input_root: Path, semester: str, course: str
-) -> pd.DataFrame:
+def load_diagnostic_response(input_root: Path, semester: str, course: str) -> pd.DataFrame:
     """Load ``diagnostic_response.parquet`` and sample-validate.
 
     Args:
@@ -91,9 +85,7 @@ def load_diagnostic_response(
     return df
 
 
-def load_student_master(
-    input_root: Path, semester: str, course: str
-) -> pd.DataFrame:
+def load_student_master(input_root: Path, semester: str, course: str) -> pd.DataFrame:
     """Load ``student_master.parquet`` and sample-validate.
 
     Args:

@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from google.oauth2.service_account import Credentials  # ALLOW_HARDCODING: SA imports
 from googleapiclient.discovery import build  # ALLOW_HARDCODING: live Gmail API
@@ -31,6 +32,9 @@ from paideia_shared.schemas import (
 
 from .composer import to_email_message
 from .secrets import get_gmail_credentials
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 @dataclass(frozen=True)
@@ -106,12 +110,9 @@ class GmailAPIDispatcher:
                 f"GmailAPIDispatcher: profile must be ProfessorProfile or "
                 f"TestProfile, got {type(profile).__name__}"
             )
-        if rate_per_minute is not None and (
-            rate_per_minute < 1 or rate_per_minute > 30
-        ):
+        if rate_per_minute is not None and (rate_per_minute < 1 or rate_per_minute > 30):
             raise ValueError(
-                f"GmailAPIDispatcher: rate_per_minute must be 1 ≤ N ≤ 30 "
-                f"(got {rate_per_minute})"
+                f"GmailAPIDispatcher: rate_per_minute must be 1 ≤ N ≤ 30 (got {rate_per_minute})"
             )
         self._profile = profile
         self._service = None
@@ -128,7 +129,12 @@ class GmailAPIDispatcher:
         )
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         self._service = None
         self._creds = None
 
@@ -144,23 +150,17 @@ class GmailAPIDispatcher:
             return
         time.sleep(60.0 / self._rate_per_minute)
 
-    def send_one(
-        self, draft: EmailMessageDraft, *, pdf_bytes: bytes
-    ) -> SendResult:
+    def send_one(self, draft: EmailMessageDraft, *, pdf_bytes: bytes) -> SendResult:
         """Send a single ``EmailMessageDraft`` via the Gmail API."""
         if self._service is None:
-            raise RuntimeError(
-                "GmailAPIDispatcher: send_one called outside context manager"
-            )
+            raise RuntimeError("GmailAPIDispatcher: send_one called outside context manager")
 
         msg = to_email_message(draft, pdf_bytes=pdf_bytes)
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
         body = {"raw": raw}
 
         try:
-            request = self._service.users().messages().send(
-                userId="me", body=body
-            )
+            request = self._service.users().messages().send(userId="me", body=body)
             response = request.execute()
         except HttpError as exc:
             status, error_kind = classify_gmail_api_error(exc)

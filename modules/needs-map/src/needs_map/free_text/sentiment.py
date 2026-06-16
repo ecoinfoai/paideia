@@ -135,9 +135,7 @@ def analyze_sentiment(
     tokenizer_sha256 = _tokenizer_vocab_sha256(tokenizer)
     id2label: dict[int, str] = model.config.id2label
     label_to_idx = {label: idx for idx, label in id2label.items()}
-    negative_indices = [
-        label_to_idx[label] for label in NEGATIVE_LABELS if label in label_to_idx
-    ]
+    negative_indices = [label_to_idx[label] for label in NEGATIVE_LABELS if label in label_to_idx]
 
     results: list[SentimentResult] = []
     for text in texts:

@@ -30,6 +30,7 @@ import json
 from pathlib import Path
 
 import pyarrow.parquet as pq
+from paideia_shared.schemas import CombinedAnalysisManifest
 
 from .archival import archive_phase3_previous_run
 from .cluster_compare import compute_cluster_score_comparison
@@ -51,31 +52,23 @@ from .student_report import build_student_reports
 from .subgroup_compare import compute_subgroup_score_comparison
 from .xlsx_writer import write_us1_xlsx
 
-from paideia_shared.schemas import CombinedAnalysisManifest
-
 _GENERATED_AT_UTC = "2026-04-30T00:00:00Z"
 
 
 def _load_inputs(silver_dir: Path, semester: str, course_slug: str) -> dict:
     nm = silver_dir / "needs-map" / f"{semester}-{course_slug}"
     im = silver_dir / "immersio" / f"{semester}-{course_slug}"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
     return {
         "nm_dir": nm,
         "im_dir": im,
         "student_master": pq.read_table(im / "student_master.parquet").to_pandas(),
         "factor_scores": pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        "cluster_assignment": pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        "cluster_assignment": pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         "cluster_names": cluster_names,
         "student_metrics": pq.read_table(im / "학생지표.parquet").to_pandas(),
-        "diagnostic_response": pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        "diagnostic_response": pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     }
 
 
@@ -160,20 +153,16 @@ def run_us1_pipeline(
     cluster_header = None
     cluster_pairwise = None
     if include_cluster:
-        cluster_rows, cluster_header, cluster_pairwise = (
-            compute_cluster_score_comparison(df, inputs["cluster_names"])
+        cluster_rows, cluster_header, cluster_pairwise = compute_cluster_score_comparison(
+            df, inputs["cluster_names"]
         )
         # fig5 — cluster boxplot of total_score per cluster.
         scores_by_cluster: dict[int, list[float]] = {}
         cluster_df = df[
-            df["exam_taken"].astype(bool)
-            & df["cluster_id"].notna()
-            & df["total_score"].notna()
+            df["exam_taken"].astype(bool) & df["cluster_id"].notna() & df["total_score"].notna()
         ]
         for cid, group in cluster_df.groupby("cluster_id"):
-            scores_by_cluster[int(cid)] = [
-                float(v) for v in group["total_score"].tolist()
-            ]
+            scores_by_cluster[int(cid)] = [float(v) for v in group["total_score"].tolist()]
         if scores_by_cluster:
             render_fig5_cluster_boxplot(
                 scores_by_cluster=scores_by_cluster,
@@ -189,15 +178,13 @@ def run_us1_pipeline(
         # occupation 컬럼으로 매핑 (R-10 옵션 A — fixture 합성 정합).
         dr = inputs["diagnostic_response"]
         if "axis" in dr.columns:
-            occ_rows = dr[dr["axis"] == "occupation"][
-                ["student_id", "value_text"]
-            ].rename(columns={"value_text": "occupation"})
+            occ_rows = dr[dr["axis"] == "occupation"][["student_id", "value_text"]].rename(
+                columns={"value_text": "occupation"}
+            )
             df_for_subgroup = df.merge(occ_rows, on="student_id", how="left")
         else:
             df_for_subgroup = df.copy()
-        subgroup_rows, subgroup_headers = (
-            compute_subgroup_score_comparison(df_for_subgroup)
-        )
+        subgroup_rows, subgroup_headers = compute_subgroup_score_comparison(df_for_subgroup)
         render_fig6_subgroup_panels(rows=subgroup_rows, path=fig6_path)
 
     # 8. manifest — partition counts + R-10 audit + 6 sha256
@@ -212,21 +199,13 @@ def run_us1_pipeline(
         semester=semester,
         course_slug=course_slug,
         generated_at_utc=_GENERATED_AT_UTC,
-        factor_scores_sha256=compute_input_sha256(
-            inputs["nm_dir"] / "factor_scores.parquet"
-        ),
+        factor_scores_sha256=compute_input_sha256(inputs["nm_dir"] / "factor_scores.parquet"),
         cluster_assignment_sha256=compute_input_sha256(
             inputs["nm_dir"] / "cluster_assignment.parquet"
         ),
-        cluster_names_sha256=compute_input_sha256(
-            inputs["nm_dir"] / "cluster_names.json"
-        ),
-        student_metrics_sha256=compute_input_sha256(
-            inputs["im_dir"] / "학생지표.parquet"
-        ),
-        student_master_sha256=compute_input_sha256(
-            inputs["im_dir"] / "student_master.parquet"
-        ),
+        cluster_names_sha256=compute_input_sha256(inputs["nm_dir"] / "cluster_names.json"),
+        student_metrics_sha256=compute_input_sha256(inputs["im_dir"] / "학생지표.parquet"),
+        student_master_sha256=compute_input_sha256(inputs["im_dir"] / "student_master.parquet"),
         diagnostic_response_sha256=compute_input_sha256(
             inputs["im_dir"] / "diagnostic_response.parquet"
         ),
@@ -244,9 +223,7 @@ def run_us1_pipeline(
         regression_method="OLS",
         multiple_comparison_method="BH-FDR",
         # US1 partial mode = "N/A"; US2 wiring uses the actual posthoc.
-        posthoc_method_used=(
-            cluster_header.posthoc_test if cluster_header is not None else "N/A"
-        ),
+        posthoc_method_used=(cluster_header.posthoc_test if cluster_header is not None else "N/A"),
         run_seed=0,
         needs_map_schema_version="1.1.0",
         immersio_phase2_schema_version="0.1.0",
@@ -270,18 +247,10 @@ def run_us1_pipeline(
         cluster_rows=cluster_rows,
         cluster_header=cluster_header,
         cluster_pairwise=cluster_pairwise,
-        fig5_path=(
-            Path("figs/fig5_cluster_boxplot.png")
-            if include_cluster
-            else None
-        ),
+        fig5_path=(Path("figs/fig5_cluster_boxplot.png") if include_cluster else None),
         subgroup_rows=subgroup_rows,
         subgroup_headers=subgroup_headers,
-        fig6_path=(
-            Path("figs/fig6_subgroup_panels.png")
-            if include_subgroup
-            else None
-        ),
+        fig6_path=(Path("figs/fig6_subgroup_panels.png") if include_subgroup else None),
     )
 
     # 10. report_pdf (uses md_text + image_base_dir=gold_target so figs/

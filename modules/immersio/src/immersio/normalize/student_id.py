@@ -26,8 +26,7 @@ def normalize_student_id(value: str | int) -> str:
     """
     if isinstance(value, bool) or not isinstance(value, (str, int)):
         raise TypeError(
-            f"normalize_student_id: expected str or int, got "
-            f"{type(value).__name__} ({value!r})."
+            f"normalize_student_id: expected str or int, got {type(value).__name__} ({value!r})."
         )
     raw = str(value)
     cleaned = _STRIP_PATTERN.sub("", raw)

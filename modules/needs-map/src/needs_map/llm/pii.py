@@ -40,9 +40,7 @@ def redact(text: str, names: Iterable[str]) -> tuple[str, bool]:
         TypeError: If ``text`` is not a ``str``.
     """
     if not isinstance(text, str):
-        raise TypeError(
-            f"redact: expected str text, got {type(text).__name__}."
-        )
+        raise TypeError(f"redact: expected str text, got {type(text).__name__}.")
 
     redacted = _STUDENT_ID_RE.sub(_REDACTED_TOKEN, text)
     for name in names:

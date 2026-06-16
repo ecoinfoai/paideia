@@ -17,12 +17,10 @@ import math
 
 import numpy as np
 import pandas as pd
-import pytest
-from scipy.stats import false_discovery_control, pearsonr
-
 from immersio.combine.correlation import compute_correlation_matrix
 from paideia_shared.schemas import CorrelationCell
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+from scipy.stats import false_discovery_control, pearsonr
 
 
 def _synthetic_df(n: int, seed: int = 0) -> pd.DataFrame:
@@ -34,8 +32,7 @@ def _synthetic_df(n: int, seed: int = 0) -> pd.DataFrame:
         "exam_taken": [True] * n,
         "total_score": rng.normal(70, 10, n).tolist(),
         "chapter_correct_rates": [
-            {"신경계": float(rng.beta(2, 2)), "근골격계": float(rng.beta(2, 2))}
-            for _ in range(n)
+            {"신경계": float(rng.beta(2, 2)), "근골격계": float(rng.beta(2, 2))} for _ in range(n)
         ],
     }
     for axis in STANDARD_AXIS_KEYS:
@@ -131,9 +128,7 @@ def test_significant_after_correction_thresholds_at_005() -> None:
     df = _synthetic_df(n=60, seed=7)
     cells = compute_correlation_matrix(df)
     for cell in cells:
-        assert cell.significant_after_correction == (
-            cell.fdr_q is not None and cell.fdr_q < 0.05
-        )
+        assert cell.significant_after_correction == (cell.fdr_q is not None and cell.fdr_q < 0.05)
 
 
 # ----------------------------------------------------------------------

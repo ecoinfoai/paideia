@@ -195,9 +195,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="PATH",
-        help=(
-            "강의 녹취(STT) 디렉터리 — 미지정 시 bronze 규약 경로 자동 탐색"
-        ),
+        help=("강의 녹취(STT) 디렉터리 — 미지정 시 bronze 규약 경로 자동 탐색"),
     )
 
     return parser
@@ -322,9 +320,7 @@ def _run_verify(args: argparse.Namespace) -> int:
     return 0
 
 
-def _select_backend(
-    args: argparse.Namespace, semester: str, course: str
-) -> LLMBackend:
+def _select_backend(args: argparse.Namespace, semester: str, course: str) -> LLMBackend:
     """Construct the real LLM backend for ``build`` from ``args.backend``.
 
     Factored out of ``_run_build`` so tests can inject a network-free

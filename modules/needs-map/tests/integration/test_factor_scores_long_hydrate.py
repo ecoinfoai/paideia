@@ -56,9 +56,7 @@ def test_factor_scores_long_dict_categories_hydrated_no_roberta(tmp_path: Path) 
         roberta_enabled=False,
     )
     run_needs_map(args)
-    long_csv = (
-        tmp_path / "out" / "gold" / "needs-map" / "2026-1-anatomy" / "factor_scores_long.csv"
-    )
+    long_csv = tmp_path / "out" / "gold" / "needs-map" / "2026-1-anatomy" / "factor_scores_long.csv"
     assert long_csv.is_file()
     df = pd.read_csv(long_csv)
 
@@ -69,8 +67,7 @@ def test_factor_scores_long_dict_categories_hydrated_no_roberta(tmp_path: Path) 
     q62_filled = df["freetext_q62_categories"].dropna().astype(str).str.len()
     total_chars = int(q61_filled.sum()) + int(q62_filled.sum())
     assert total_chars > 0, (
-        "factor_scores_long must hydrate at least one freetext "
-        "categories column under --no-roberta"
+        "factor_scores_long must hydrate at least one freetext categories column under --no-roberta"
     )
 
     # Sentiment fields stay empty when RoBERTa is disabled (no model run).

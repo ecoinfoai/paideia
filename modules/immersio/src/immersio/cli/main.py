@@ -67,9 +67,7 @@ def _validate_glob_pattern(label: str, value: str | None) -> None:
     if any(ord(c) < 32 or ord(c) == 127 for c in value):
         raise ValueError(f"{label} contains control bytes")
     if len(value) > _MAX_GLOB_PATTERN_LEN:
-        raise ValueError(
-            f"{label} exceeds max length ({len(value)} > {_MAX_GLOB_PATTERN_LEN})"
-        )
+        raise ValueError(f"{label} exceeds max length ({len(value)} > {_MAX_GLOB_PATTERN_LEN})")
     if value.startswith("/") or value.startswith("\\"):
         raise ValueError(
             f"{label} must not be an absolute path "
@@ -77,9 +75,7 @@ def _validate_glob_pattern(label: str, value: str | None) -> None:
         )
     parts = re.split(r"[\\/]", value)
     if any(part == ".." for part in parts):
-        raise ValueError(
-            f"{label} must not contain '..' parent-segment (escape blocked)"
-        )
+        raise ValueError(f"{label} must not contain '..' parent-segment (escape blocked)")
 
 
 def _validate_paths(
@@ -144,9 +140,7 @@ def _validate_paths(
             output_real.relative_to(bronze_real)
         except ValueError:
             return
-        raise ValueError(
-            f"output_dir ({output_real}) cannot be inside bronze_dir ({bronze_real})"
-        )
+        raise ValueError(f"output_dir ({output_real}) cannot be inside bronze_dir ({bronze_real})")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -443,9 +437,7 @@ def app(argv: list[str] | None = None) -> int:
         students = [(d.student_id, d.name_kr) for d in profile.dummy_students]
         from pathlib import Path as _Path
 
-        written = generate_dummy_pdfs(
-            _Path(str(profile.dummy_fixture_dir)), students
-        )
+        written = generate_dummy_pdfs(_Path(str(profile.dummy_fixture_dir)), students)
         print(
             f"[immersio email-init-test-fixtures] wrote {len(written)} dummy "
             f"PDFs to {profile.dummy_fixture_dir}",
@@ -463,9 +455,7 @@ def app(argv: list[str] | None = None) -> int:
         from immersio.email.log import DispatchLockError, ExamNameInvariantError
 
         log_csv_path = (
-            Path("data/gold/immersio")
-            / f"{args.semester}-{args.course}"
-            / "메일_발송로그.csv"
+            Path("data/gold/immersio") / f"{args.semester}-{args.course}" / "메일_발송로그.csv"
         )
         keep_tokens = args.keep.split(",")
 
@@ -566,6 +556,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
             return 1
         try:
             import datetime as _dt
+
             _dt.datetime.fromisoformat(args.created_at_utc.replace("Z", "+00:00"))
         except ValueError as exc:
             print(

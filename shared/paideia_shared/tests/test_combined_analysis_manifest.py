@@ -11,12 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas.combined_analysis_manifest import (
     CombinedAnalysisManifest,
 )
-
+from pydantic import ValidationError
 
 _SHA = "0" * 64
 
@@ -96,30 +94,22 @@ def test_v1_count_consistency_fails_when_sum_mismatches() -> None:
 
 def test_r10_unmatched_factor_scores_negative_rejected() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(n_unmatched_factor_scores=-1)
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(n_unmatched_factor_scores=-1))
 
 
 def test_r10_unmatched_cluster_assignment_negative_rejected() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(n_unmatched_cluster_assignment=-1)
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(n_unmatched_cluster_assignment=-1))
 
 
 def test_r10_unmatched_student_metrics_negative_rejected() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(n_unmatched_student_metrics=-1)
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(n_unmatched_student_metrics=-1))
 
 
 def test_r10_off_roster_respondents_negative_rejected() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(n_off_roster_respondents=-1)
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(n_off_roster_respondents=-1))
 
 
 def test_r10_unmatched_positive_values_land() -> None:
@@ -167,17 +157,13 @@ def test_v3_top3_more_than_three_rejected() -> None:
 
 def test_top3_invalid_axis_key_rejected() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(top3_predictor_axes=["not_an_axis"])
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(top3_predictor_axes=["not_an_axis"]))
 
 
 def test_sha256_pattern_64_hex_required() -> None:
     """SHA256 fields must match ^[a-f0-9]{64}$ exactly."""
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(factor_scores_sha256="too-short")
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(factor_scores_sha256="too-short"))
 
 
 def test_cluster_names_sha256_required() -> None:
@@ -190,24 +176,18 @@ def test_cluster_names_sha256_required() -> None:
 
 def test_cluster_names_sha256_pattern_enforced() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(cluster_names_sha256="not-a-hash")
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(cluster_names_sha256="not-a-hash"))
 
 
 def test_sha256_uppercase_hex_rejected() -> None:
     """Pattern enforces lowercase a-f only."""
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(factor_scores_sha256="A" * 64)
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(factor_scores_sha256="A" * 64))
 
 
 def test_regression_method_must_be_ols_literal() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(regression_method="GLS")
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(regression_method="GLS"))
 
 
 def test_posthoc_method_na_when_k_eq_1() -> None:
@@ -218,9 +198,7 @@ def test_posthoc_method_na_when_k_eq_1() -> None:
 
 def test_extra_field_forbidden() -> None:
     with pytest.raises(ValidationError):
-        CombinedAnalysisManifest(
-            **_baseline_kwargs(unknown_field="x")
-        )
+        CombinedAnalysisManifest(**_baseline_kwargs(unknown_field="x"))
 
 
 def test_frozen_immutable() -> None:

@@ -32,11 +32,9 @@ import json
 from pathlib import Path
 
 import responses
-
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
 from paideia_shared.schemas.email_dispatch_manifest import EmailManifest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -128,12 +126,8 @@ def _load_manifest(gold_dir: Path) -> EmailManifest:
     ``model_validate_json`` proves the schema invariant.
     """
     manifest_path = gold_dir / "manifest_email.json"
-    assert manifest_path.is_file(), (
-        f"manifest_email.json missing at {manifest_path}"
-    )
-    return EmailManifest.model_validate_json(
-        manifest_path.read_text(encoding="utf-8")
-    )
+    assert manifest_path.is_file(), f"manifest_email.json missing at {manifest_path}"
+    return EmailManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +162,10 @@ def test_dry_run_manifest_outputs_have_dryrun_suffix(email_fixture) -> None:
 
     # Absolute path 단언.
     assert Path(dispatch_log_path).is_absolute(), (
-        f"manifest outputs.dispatch_log_path is not absolute: "
-        f"{dispatch_log_path!r}"
+        f"manifest outputs.dispatch_log_path is not absolute: {dispatch_log_path!r}"
     )
     assert Path(report_md_path).is_absolute(), (
-        f"manifest outputs.report_md_path is not absolute: "
-        f"{report_md_path!r}"
+        f"manifest outputs.report_md_path is not absolute: {report_md_path!r}"
     )
 
     # FR-C03d: dry-run → ``_dryrun`` 접미사.
@@ -212,9 +204,7 @@ def test_send_manifest_outputs_have_no_suffix(email_fixture, monkeypatch) -> Non
     가리켜야 함.
     """
     _AlwaysSucceeds.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds)
 
     rc = run_email_dispatch(_send_args())
     assert rc == 0
@@ -226,12 +216,10 @@ def test_send_manifest_outputs_have_no_suffix(email_fixture, monkeypatch) -> Non
 
     # Absolute path 단언.
     assert Path(dispatch_log_path).is_absolute(), (
-        f"manifest outputs.dispatch_log_path is not absolute: "
-        f"{dispatch_log_path!r}"
+        f"manifest outputs.dispatch_log_path is not absolute: {dispatch_log_path!r}"
     )
     assert Path(report_md_path).is_absolute(), (
-        f"manifest outputs.report_md_path is not absolute: "
-        f"{report_md_path!r}"
+        f"manifest outputs.report_md_path is not absolute: {report_md_path!r}"
     )
 
     # FR-C03d: send → 접미사 없음.
@@ -260,9 +248,7 @@ def test_send_manifest_outputs_have_no_suffix(email_fixture, monkeypatch) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_dry_run_and_send_manifests_share_same_schema(
-    email_fixture, monkeypatch
-) -> None:
+def test_dry_run_and_send_manifests_share_same_schema(email_fixture, monkeypatch) -> None:
     """FR-C06b: dry-run + send manifests parse via the *same* EmailManifest schema.
 
     `_load_manifest` already calls ``EmailManifest.model_validate_json`` which
@@ -278,24 +264,18 @@ def test_dry_run_and_send_manifests_share_same_schema(
     # already block schema drift, but we also compare top-level + nested keys
     # explicitly so a drift is reported clearly).
     dry_raw = json.loads(
-        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(
-            encoding="utf-8"
-        )
+        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(encoding="utf-8")
     )
 
     # --- send leg (overwrites manifest_email.json) ---
     _AlwaysSucceeds.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _AlwaysSucceeds)
     rc = run_email_dispatch(_send_args())
     assert rc == 0
     send_manifest = _load_manifest(email_fixture["gold_email_dir"])
 
     send_raw = json.loads(
-        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(
-            encoding="utf-8"
-        )
+        (email_fixture["gold_email_dir"] / "manifest_email.json").read_text(encoding="utf-8")
     )
 
     # Top-level key sets are identical (FR-C06b — schema unchanged).

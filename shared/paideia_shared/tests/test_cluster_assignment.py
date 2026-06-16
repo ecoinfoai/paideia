@@ -11,7 +11,9 @@ from paideia_shared.schemas import (
 from pydantic import ValidationError
 
 
-def _row(student_id: str = "2026194042", cluster_id: int = 0, distance: float | None = 0.5) -> ClusterAssignmentRow:
+def _row(
+    student_id: str = "2026194042", cluster_id: int = 0, distance: float | None = 0.5
+) -> ClusterAssignmentRow:
     return ClusterAssignmentRow(
         student_id=student_id, cluster_id=cluster_id, distance_to_centroid=distance
     )

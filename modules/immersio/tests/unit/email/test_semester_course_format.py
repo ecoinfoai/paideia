@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from immersio.cli.main import _build_parser
 
 
@@ -37,9 +36,7 @@ def test_course_anatomy_accepted() -> None:
 
 
 def test_exam_name_korean_accepted() -> None:
-    args = _parse(
-        "--semester", "2026-1", "--course", "anatomy"
-    )
+    args = _parse("--semester", "2026-1", "--course", "anatomy")
     # default already injected by _parse — ensures Korean string survives
     assert args.exam_name == "중간고사"
 
@@ -78,13 +75,19 @@ from immersio.cli.main import app
 
 def test_email_invalid_semester_exits_1(capsys) -> None:
     """--semester '26-1' rejected at CLI entry, before pipeline starts."""
-    rc = app([
-        "email",
-        "--profile", "alpha-prof",
-        "--semester", "26-1",
-        "--course", "anatomy",
-        "--exam-name", "중간고사",
-    ])
+    rc = app(
+        [
+            "email",
+            "--profile",
+            "alpha-prof",
+            "--semester",
+            "26-1",
+            "--course",
+            "anatomy",
+            "--exam-name",
+            "중간고사",
+        ]
+    )
     assert rc == 1
     captured = capsys.readouterr()
     assert "invalid_semester" in captured.err
@@ -93,13 +96,19 @@ def test_email_invalid_semester_exits_1(capsys) -> None:
 
 def test_email_invalid_course_exits_1(capsys) -> None:
     """--course 'Anatomy' (uppercase) rejected at CLI entry."""
-    rc = app([
-        "email",
-        "--profile", "alpha-prof",
-        "--semester", "2026-1",
-        "--course", "Anatomy",
-        "--exam-name", "중간고사",
-    ])
+    rc = app(
+        [
+            "email",
+            "--profile",
+            "alpha-prof",
+            "--semester",
+            "2026-1",
+            "--course",
+            "Anatomy",
+            "--exam-name",
+            "중간고사",
+        ]
+    )
     assert rc == 1
     captured = capsys.readouterr()
     assert "invalid_course" in captured.err
@@ -107,13 +116,19 @@ def test_email_invalid_course_exits_1(capsys) -> None:
 
 def test_email_empty_exam_name_exits_1(capsys) -> None:
     """--exam-name whitespace-only rejected (FR-B04)."""
-    rc = app([
-        "email",
-        "--profile", "alpha-prof",
-        "--semester", "2026-1",
-        "--course", "anatomy",
-        "--exam-name", "   ",
-    ])
+    rc = app(
+        [
+            "email",
+            "--profile",
+            "alpha-prof",
+            "--semester",
+            "2026-1",
+            "--course",
+            "anatomy",
+            "--exam-name",
+            "   ",
+        ]
+    )
     assert rc == 1
     captured = capsys.readouterr()
     assert "invalid_exam_name" in captured.err

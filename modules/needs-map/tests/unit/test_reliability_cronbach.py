@@ -181,9 +181,7 @@ def _build_inline_mapping(*, single_item_axis: str | None = None):
                 )
             )
     return DiagnosticMappingConfig(
-        metadata=MappingMetadata(
-            semester="2026-1", course_slug="anatomy", mapping_version=2
-        ),
+        metadata=MappingMetadata(semester="2026-1", course_slug="anatomy", mapping_version=2),
         columns=columns,
         axes=MappingAxes(required=list(_REQUIRED_AXES_8), optional=[]),
     )

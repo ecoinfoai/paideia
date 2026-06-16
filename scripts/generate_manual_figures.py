@@ -24,9 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-_OUTPUT_DIR = Path(
-    "shared/paideia_shared/src/paideia_shared/assets/manual_figures"
-)
+_OUTPUT_DIR = Path("shared/paideia_shared/src/paideia_shared/assets/manual_figures")
 _DPI = 150
 _BBOX = "tight"
 _RNG_SEED = 42
@@ -77,18 +75,31 @@ def _radar_example(rng: np.random.Generator) -> bytes:
     ax.set_yticks([1, 2, 3, 4, 5, 6, 7])
     ax.set_yticklabels(["1", "2", "3", "4", "5", "6", "7"], fontsize=6)
     ax.set_ylim(0.0, 7.0)
-    ax.plot(angles_closed, cohort_closed, linestyle="--", linewidth=1.0,
-            color="grey", label="전체 평균 n=194")
-    ax.plot(angles_closed, student_closed, linestyle="-", linewidth=1.5,
-            color="black", label="2026****01")
+    ax.plot(
+        angles_closed,
+        cohort_closed,
+        linestyle="--",
+        linewidth=1.0,
+        color="grey",
+        label="전체 평균 n=194",
+    )
+    ax.plot(
+        angles_closed,
+        student_closed,
+        linestyle="-",
+        linewidth=1.5,
+        color="black",
+        label="2026****01",
+    )
     ax.fill(angles_closed, student_closed, alpha=0.1, color="black")
     ax.legend(loc="lower right", fontsize=6, frameon=False)
 
     from io import BytesIO
 
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=_DPI, bbox_inches=_BBOX,
-                metadata={"Software": "paideia/manual"})
+    fig.savefig(
+        buf, format="png", dpi=_DPI, bbox_inches=_BBOX, metadata={"Software": "paideia/manual"}
+    )
     plt.close(fig)
     return buf.getvalue()
 
@@ -98,8 +109,7 @@ def _distribution_example(rng: np.random.Generator) -> bytes:
     fig, axes = plt.subplots(2, 4, figsize=(8.0, 4.0), dpi=_DPI)
     for ax, key in zip(axes.flatten(), _AXIS_KEYS, strict=True):
         values = rng.normal(loc=4.5, scale=1.0, size=180).clip(1.0, 7.0)
-        ax.hist(values, bins=14, range=(1, 7), color="steelblue",
-                edgecolor="black", linewidth=0.3)
+        ax.hist(values, bins=14, range=(1, 7), color="steelblue", edgecolor="black", linewidth=0.3)
         ax.set_title(_AXIS_LABELS_KR[key], fontsize=8)
         ax.set_xticks([1, 4, 7])
         ax.tick_params(axis="both", labelsize=6)
@@ -108,8 +118,9 @@ def _distribution_example(rng: np.random.Generator) -> bytes:
     from io import BytesIO
 
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=_DPI, bbox_inches=_BBOX,
-                metadata={"Software": "paideia/manual"})
+    fig.savefig(
+        buf, format="png", dpi=_DPI, bbox_inches=_BBOX, metadata={"Software": "paideia/manual"}
+    )
     plt.close(fig)
     return buf.getvalue()
 
@@ -122,13 +133,29 @@ def _cluster_example(rng: np.random.Generator) -> bytes:
     for i, (color, label) in enumerate(zip(colors, labels, strict=True)):
         center = rng.uniform(-1.5, 1.5, size=2)
         pts = rng.normal(loc=center, scale=0.5, size=(40, 2))
-        ax.scatter(pts[:, 0], pts[:, 1], c=color, label=label,
-                   s=20, alpha=0.7, edgecolors="black", linewidths=0.3)
-        ax.annotate(label, center, fontsize=7, ha="center", va="center",
-                    bbox={"boxstyle": "round,pad=0.2",
-                          "facecolor": "white",
-                          "edgecolor": "black",
-                          "linewidth": 0.3})
+        ax.scatter(
+            pts[:, 0],
+            pts[:, 1],
+            c=color,
+            label=label,
+            s=20,
+            alpha=0.7,
+            edgecolors="black",
+            linewidths=0.3,
+        )
+        ax.annotate(
+            label,
+            center,
+            fontsize=7,
+            ha="center",
+            va="center",
+            bbox={
+                "boxstyle": "round,pad=0.2",
+                "facecolor": "white",
+                "edgecolor": "black",
+                "linewidth": 0.3,
+            },
+        )
         _ = i
     ax.set_xlabel("PC1 (학습 적극성)", fontsize=8)
     ax.set_ylabel("PC2 (협업·환경 의존)", fontsize=8)
@@ -138,8 +165,9 @@ def _cluster_example(rng: np.random.Generator) -> bytes:
     from io import BytesIO
 
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=_DPI, bbox_inches=_BBOX,
-                metadata={"Software": "paideia/manual"})
+    fig.savefig(
+        buf, format="png", dpi=_DPI, bbox_inches=_BBOX, metadata={"Software": "paideia/manual"}
+    )
     plt.close(fig)
     return buf.getvalue()
 
@@ -158,8 +186,9 @@ def main() -> None:
         regular_path, _bold_path = resolve_korean_font_paths()
         register_for_matplotlib(regular_path)
     except Exception as exc:  # noqa: BLE001
-        print(f"WARN: NanumGothic registration skipped ({exc!s}); "
-              "Korean glyphs may render as boxes.")
+        print(
+            f"WARN: NanumGothic registration skipped ({exc!s}); Korean glyphs may render as boxes."
+        )
     artefacts = {
         "radar_example.png": _radar_example,
         "distribution_example.png": _distribution_example,

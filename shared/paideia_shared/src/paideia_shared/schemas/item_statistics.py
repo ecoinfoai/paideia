@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from ._common import CourseSlug, SemesterCode
 
@@ -57,15 +57,13 @@ class ItemStatistics(BaseModel):
     top_distractor_no: int | None = Field(default=None, ge=1, le=5, description="최다오답 번호")
     top_distractor_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     is_top_distractor_adjacent: bool = Field(description="최다오답이 정답 인접 보기인가")
-    option_distribution: dict[int, float] = Field(
-        description="{보기번호: 응답비율}, 합 ≤ 1.0"
-    )
+    option_distribution: dict[int, float] = Field(description="{보기번호: 응답비율}, 합 ≤ 1.0")
 
     distractor_label: DistractorLabel
 
     @field_validator("n_correct")
     @classmethod
-    def correct_le_responders(cls, v: int, info) -> int:  # type: ignore[no-untyped-def]
+    def correct_le_responders(cls, v: int, info: ValidationInfo) -> int:
         """V1: n_correct ≤ n_responders."""
         if v > info.data.get("n_responders", 0):
             raise ValueError("ItemStatistics V1: n_correct > n_responders")
@@ -73,7 +71,7 @@ class ItemStatistics(BaseModel):
 
     @field_validator("n_omit")
     @classmethod
-    def omit_le_responders(cls, v: int, info) -> int:  # type: ignore[no-untyped-def]
+    def omit_le_responders(cls, v: int, info: ValidationInfo) -> int:
         """V2: n_omit ≤ n_responders."""
         if v > info.data.get("n_responders", 0):
             raise ValueError("ItemStatistics V2: n_omit > n_responders")

@@ -35,9 +35,7 @@ def _make_real_path(tmp_path: Path, name: str) -> Path:
     return target
 
 
-def _patch_fc_match(
-    monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str | Exception]
-) -> None:
+def _patch_fc_match(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str | Exception]) -> None:
     """Replace ``subprocess.run`` so calls to fc-match return ``mapping[pattern]``.
 
     ``mapping`` maps the second positional argument (the fontconfig pattern,
@@ -45,9 +43,7 @@ def _patch_fc_match(
     Raise an Exception value to simulate fc-match raising.
     """
 
-    def _fake_run(
-        cmd: list[str], **kwargs: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def _fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         assert cmd[0] == "fc-match", f"unexpected exec target: {cmd!r}"
         # cmd shape: ['fc-match', '-f', '%{file}', pattern]
         pattern = cmd[-1]
@@ -229,9 +225,9 @@ def test_env_var_extension_whitelist_rejects_non_font(
     with pytest.raises(KoreanFontUnavailableError) as exc:
         resolve_korean_font_paths()
     msg = str(exc.value)
-    assert (
-        "extension" in msg.lower() or ".ttf" in msg or ".otf" in msg
-    ), f"expected extension whitelist message, got: {msg}"
+    assert "extension" in msg.lower() or ".ttf" in msg or ".otf" in msg, (
+        f"expected extension whitelist message, got: {msg}"
+    )
 
 
 def test_env_var_size_cap_rejects_oversized_file(
@@ -254,9 +250,9 @@ def test_env_var_size_cap_rejects_oversized_file(
     with pytest.raises(KoreanFontUnavailableError) as exc:
         resolve_korean_font_paths()
     msg = str(exc.value)
-    assert (
-        "size" in msg.lower() or "MB" in msg or "50" in msg
-    ), f"expected size-cap message, got: {msg}"
+    assert "size" in msg.lower() or "MB" in msg or "50" in msg, (
+        f"expected size-cap message, got: {msg}"
+    )
 
 
 def test_env_var_path_traversal_resolved_strict(

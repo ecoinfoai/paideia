@@ -29,29 +29,21 @@ class StudentPDFBundle(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"StudentPDFBundle.student_id must match ^\\d{{10}}$ "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"StudentPDFBundle.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
     @field_validator("pdf_filename")
     @classmethod
     def _v_filename_basename(cls, value: str) -> str:
         if value != Path(value).name:
-            raise ValueError(
-                f"StudentPDFBundle.pdf_filename must be basename only "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"StudentPDFBundle.pdf_filename must be basename only (got {value!r})")
         return value
 
     @field_validator("pdf_sha256")
     @classmethod
     def _v_pdf_sha256(cls, value: str) -> str:
         if not _HEX64_RE.fullmatch(value):
-            raise ValueError(
-                f"StudentPDFBundle.pdf_sha256 must be hex64 (got {value!r})"
-            )
+            raise ValueError(f"StudentPDFBundle.pdf_sha256 must be hex64 (got {value!r})")
         return value
 
 

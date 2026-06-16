@@ -13,9 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from immersio.combine.report_pdf import render_combined_analysis_pdf
-
 
 _VALID_MD = """# 진단 × 시험 결합 분석 보고서
 
@@ -87,9 +85,7 @@ def test_title_metadata_combined_analysis(tmp_path: Path) -> None:
     reader = pypdf.PdfReader(str(out))
     info = reader.metadata or {}
     title = str(info.get("/Title", ""))
-    assert "결합분석" in title, (
-        f"PDF /Title does not contain '결합분석' (got {title!r})"
-    )
+    assert "결합분석" in title, f"PDF /Title does not contain '결합분석' (got {title!r})"
     assert "시험품질" not in title, (
         f"PDF /Title leaks Phase 1+2 'phase 1+2 시험품질' marker (got {title!r})"
     )

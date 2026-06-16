@@ -22,7 +22,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from paideia_shared.schemas import (
-    ClusterPairwise,
     ClusterRow,
     ClusterScoreComparison,
     RegressionCoefficient,
@@ -76,9 +75,7 @@ def _build_text(
                 f"|β| 상위, 동률 시 axis_key 알파벳 우선):"
             )
         else:
-            parts.append(
-                f"가용한 유의 축 {len(top3)}개 (q<{_SIGNIFICANCE_THRESHOLD}):"
-            )
+            parts.append(f"가용한 유의 축 {len(top3)}개 (q<{_SIGNIFICANCE_THRESHOLD}):")
         for c in top3:
             parts.append(_format_axis_phrase(c))
     else:
@@ -171,8 +168,11 @@ def build_cluster_recommendations(
         )
 
     valid = [
-        r for r in cluster_rows
-        if r.mean is not None and r.excluded_reason is None and r.n > 0
+        r
+        for r in cluster_rows
+        if r.mean is not None
+        and r.excluded_reason is None
+        and r.n > 0
         and r.cluster_id != "overall"
     ]
     if not valid:

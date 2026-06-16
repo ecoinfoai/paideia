@@ -196,7 +196,9 @@ class TestBuildAlignmentFlags:
 
         # With equal share on both sides, expect 정렬됨 for all
         for chapter in ["1장", "2장"]:
-            assert flags.get(chapter) == "정렬됨", f"Expected 정렬됨 for {chapter}, got {flags.get(chapter)}"
+            assert flags.get(chapter) == "정렬됨", (
+                f"Expected 정렬됨 for {chapter}, got {flags.get(chapter)}"
+            )
 
     def test_인지수준절벽_when_cliff(self) -> None:
         """Chapter with a cognitive cliff → 인지수준절벽 flag."""
@@ -209,7 +211,7 @@ class TestBuildAlignmentFlags:
         # 지식축적 high, 이해 low → cliff
         items = [
             _make_item(1, "1장", "지식축적", 0.85),
-            _make_item(2, "1장", "이해", 0.55),   # 0.85 - 0.55 = 0.30 > 0.15
+            _make_item(2, "1장", "이해", 0.55),  # 0.85 - 0.55 = 0.30 > 0.15
         ]
         curriculum = _make_curriculum([(1, "1장", 1)])
         blueprint = _make_blueprint(["1장"], total_items=40)
@@ -229,15 +231,17 @@ class TestBuildAlignmentFlags:
         ]
         # 1장 gets 1 week but many items; 2장 gets 3 weeks but few items
         items = (
-            [_make_item(i, "1장") for i in range(1, 11)]   # 10 items for 1장
+            [_make_item(i, "1장") for i in range(1, 11)]  # 10 items for 1장
             + [_make_item(i + 10, "2장") for i in range(1, 3)]  # 2 items for 2장
         )
-        curriculum = _make_curriculum([
-            (1, "1장", 1),       # 1 week
-            (2, "2장", 2),       # 3 weeks
-            (3, "2장", 2),
-            (4, "2장", 2),
-        ])
+        curriculum = _make_curriculum(
+            [
+                (1, "1장", 1),  # 1 week
+                (2, "2장", 2),  # 3 weeks
+                (3, "2장", 2),
+                (4, "2장", 2),
+            ]
+        )
         blueprint = _make_blueprint(["1장", "2장"], total_items=40)
         config = _make_config()
 
@@ -321,10 +325,9 @@ class TestBuildAlignmentFlags:
 
         rows = [_make_row("2026000001", {"1장": 0.70})]
         # Many items (would trigger 과소교수-과다평가) AND cliff exists
-        items = (
-            [_make_item(1, "1장", "지식축적", 0.85)]
-            + [_make_item(i, "1장", "이해", 0.50) for i in range(2, 11)]
-        )
+        items = [_make_item(1, "1장", "지식축적", 0.85)] + [
+            _make_item(i, "1장", "이해", 0.50) for i in range(2, 11)
+        ]
         curriculum = _make_curriculum([(1, "1장", 1), (2, "2장", 2), (3, "2장", 2), (4, "2장", 2)])
         blueprint = _make_blueprint(["1장", "2장"], total_items=40)
         config = _make_config(cliff_drop=0.15)

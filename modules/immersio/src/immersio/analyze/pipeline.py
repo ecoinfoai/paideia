@@ -37,13 +37,12 @@ from pathlib import Path
 from typing import IO
 
 import pandas as pd
-
 from paideia_shared.schemas import (
     ImmersioPhase1Manifest,
     ItemStatistics,
 )
 
-from ..analysis.discrimination import compute_discrimination
+from ..analysis.discrimination import DiscriminationResult, compute_discrimination
 from ..analysis.distractor_labels import label_distractor_pattern
 from ..analysis.histogram import compute_score_histogram
 from ..analysis.item_stats import compute_item_statistics
@@ -60,7 +59,6 @@ from ..report.legacy_diff import LegacyLoadError, generate_legacy_diff
 from ..report.md_writer import render_quality_report_md
 from ..report.pdf_writer import render_quality_report_pdf
 from ..report.xlsx_writer import write_analysis_xlsx
-from .archival import ArchivalError, archive_previous_run
 from .silver_writer import write_student_metrics_parquet
 from .timing import resolve_created_at_utc
 
@@ -195,7 +193,9 @@ def _maybe_load_needs_map(
         # come from the same Bronze CSV but live under separate silver
         # roots when needs-map has run.
         immersio_diag = (
-            args.silver_root / "immersio" / _key(args.semester, args.course_slug)
+            args.silver_root
+            / "immersio"
+            / _key(args.semester, args.course_slug)
             / "diagnostic_response.parquet"
         )
         if not immersio_diag.is_file():
@@ -254,7 +254,7 @@ def _enrich_items_with_labels(
 
 def _attach_discrimination_to_items(
     items: list[ItemStatistics],
-    discrimination_map,
+    discrimination_map: dict[int, DiscriminationResult],
 ) -> list[ItemStatistics]:
     """Re-emit items with discrimination_index + point_biserial filled.
 
@@ -409,11 +409,7 @@ def run_immersio_phase1(args: PipelineArgs) -> int:
     # Build per-student total_score map from the long response table.
     if not silver["exam_result"].empty:
         per_student_scores: dict[str, float] = (
-            silver["exam_result"]
-            .groupby("student_id")["is_correct"]
-            .sum()
-            .astype(float)
-            .to_dict()
+            silver["exam_result"].groupby("student_id")["is_correct"].sum().astype(float).to_dict()
         )
     else:
         per_student_scores = {}
@@ -520,7 +516,10 @@ def run_immersio_phase1(args: PipelineArgs) -> int:
 
     parquet_path = silver_dir / "학생지표.parquet"
     write_student_metrics_parquet(rows=student_metrics, output_path=parquet_path)
-    _emit(stream, f"[immersio analyze] phase=silver_parquet 학생지표.parquet rows={len(student_metrics)}")
+    _emit(
+        stream,
+        f"[immersio analyze] phase=silver_parquet 학생지표.parquet rows={len(student_metrics)}",
+    )
 
     # --- legacy_diff ---------------------------------------------------------
 
@@ -630,9 +629,7 @@ def _build_item_responses_map(
     return out
 
 
-def _per_student_score_df(
-    exam_result_df: pd.DataFrame, exam_item_df: pd.DataFrame
-) -> pd.DataFrame:
+def _per_student_score_df(exam_result_df: pd.DataFrame, exam_item_df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate response long-table into per-student total / max / omit."""
     if exam_result_df.empty:
         return pd.DataFrame(
@@ -642,7 +639,9 @@ def _per_student_score_df(
         exam_result_df.groupby("student_id")
         .agg(
             exam_total_score=("is_correct", "sum"),
-            n_omit_responses=("is_omit", "sum") if "is_omit" in exam_result_df.columns else ("is_correct", "size"),
+            n_omit_responses=("is_omit", "sum")
+            if "is_omit" in exam_result_df.columns
+            else ("is_correct", "size"),
         )
         .reset_index()
     )
@@ -656,12 +655,7 @@ def _per_student_score_df(
 def _per_student_total_scores(exam_result_df: pd.DataFrame) -> list[float]:
     if exam_result_df.empty:
         return []
-    return (
-        exam_result_df.groupby("student_id")["is_correct"]
-        .sum()
-        .astype(float)
-        .tolist()
-    )
+    return exam_result_df.groupby("student_id")["is_correct"].sum().astype(float).tolist()
 
 
 def _build_student_metrics_input(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:

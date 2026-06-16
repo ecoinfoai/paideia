@@ -184,8 +184,7 @@ def test_dry_run_degrade_writes_subsection_scoped_bundles(
         )
         # Allowed degrade: nothing generated yet → avoid_list empty.
         assert meta["avoid_list"] == [], (
-            f"{bundle_file.name}: avoid_list must be empty in dry-run, "
-            f"got {meta['avoid_list']!r}"
+            f"{bundle_file.name}: avoid_list must be empty in dry-run, got {meta['avoid_list']!r}"
         )
         # Bundle is non-empty / has a rendered prompt.
         assert data["prompt"].strip(), f"{bundle_file.name}: empty prompt"
@@ -193,15 +192,13 @@ def test_dry_run_degrade_writes_subsection_scoped_bundles(
 
     # Spread proof: the assigned bundles cover ≥2 distinct subsections.
     assert len(seen_subsections) >= 2, (
-        f"quiz bundles cover only {len(seen_subsections)} subsection(s) — "
-        "assignment did not spread"
+        f"quiz bundles cover only {len(seen_subsections)} subsection(s) — assignment did not spread"
     )
 
     # Formative bundles exist too (one per formative slot).
     formative_bundles = sorted(staging.glob("formative-*.json"))
     assert len(formative_bundles) == _FORMATIVE_COUNT, (
-        f"expected {_FORMATIVE_COUNT} formative bundles, "
-        f"found {len(formative_bundles)}"
+        f"expected {_FORMATIVE_COUNT} formative bundles, found {len(formative_bundles)}"
     )
     for bundle_file in formative_bundles:
         data = json.loads(bundle_file.read_text(encoding="utf-8"))

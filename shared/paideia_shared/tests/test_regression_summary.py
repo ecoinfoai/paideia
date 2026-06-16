@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas.regression_summary import (
     RegressionCoefficient,
     RegressionFitSummary,
 )
-
+from pydantic import ValidationError
 
 # RegressionCoefficient
 

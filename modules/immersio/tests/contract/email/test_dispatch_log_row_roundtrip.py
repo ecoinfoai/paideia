@@ -7,12 +7,11 @@ round-trips without loss.
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 
 import hypothesis.strategies as st
 from hypothesis import given, settings
-
 from paideia_shared.schemas import (
     CohortLabel,
     DispatchLogRow,

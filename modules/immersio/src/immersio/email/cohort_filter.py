@@ -82,27 +82,20 @@ def _read_metrics(
     """
     if not isinstance(student_metrics_path, Path):
         raise CohortError(
-            f"student_metrics_path must be Path, got "
-            f"{type(student_metrics_path).__name__}"
+            f"student_metrics_path must be Path, got {type(student_metrics_path).__name__}"
         )
     if not student_metrics_path.is_file():
-        raise CohortError(
-            f"FR-H02: student metrics parquet not found at "
-            f"{student_metrics_path}"
-        )
+        raise CohortError(f"FR-H02: student metrics parquet not found at {student_metrics_path}")
     table = pq.read_table(student_metrics_path)
     cols = table.column_names
     missing = [c for c in ("student_id", "name_kr", "score_percent") if c not in cols]
     if missing:
         raise CohortError(
-            f"student metrics parquet at {student_metrics_path} missing "
-            f"required columns: {missing}"
+            f"student metrics parquet at {student_metrics_path} missing required columns: {missing}"
         )
     df = table.to_pydict()
     out: dict[str, tuple[str, float | None]] = {}
-    for sid, name, score in zip(
-        df["student_id"], df["name_kr"], df["score_percent"], strict=True
-    ):
+    for sid, name, score in zip(df["student_id"], df["name_kr"], df["score_percent"], strict=True):
         out[str(sid)] = (
             (name or "") if name is not None else "",
             float(score) if score is not None else None,
@@ -134,9 +127,7 @@ def filter_by_cohort(
             cohort label is invalid.
     """
     if not isinstance(cohort, CohortLabel):
-        raise CohortError(
-            f"cohort must be CohortLabel, got {type(cohort).__name__}"
-        )
+        raise CohortError(f"cohort must be CohortLabel, got {type(cohort).__name__}")
 
     metrics = _read_metrics(student_metrics_path)
 
@@ -191,9 +182,7 @@ def filter_by_cohort(
     )
 
 
-def write_cohort_silver(
-    rows: list[CohortRow], parquet_path: Path
-) -> None:
+def write_cohort_silver(rows: list[CohortRow], parquet_path: Path) -> None:
     """Write cohort silver parquet deterministically (ADR-008).
 
     Args:
@@ -240,9 +229,7 @@ def _format_cohort_md_table(rows: list[CohortRow], heading: str) -> list[str]:
     lines.append("| 학번 | 이름 | 점수 |")
     lines.append("|---|---|---:|")
     for row in rows:
-        lines.append(
-            f"| {row.student_id} | {row.name_kr} | {row.score_percent:.1f} |"
-        )
+        lines.append(f"| {row.student_id} | {row.name_kr} | {row.score_percent:.1f} |")
     lines.append("")
     return lines
 
@@ -266,12 +253,8 @@ def write_cohort_md(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     combined_lines: list[str] = ["# Cohort 명단", ""]
-    combined_lines.extend(
-        _format_cohort_md_table(low_rows, _COHORT_KR_NAME[CohortLabel.LOW_SCORE])
-    )
-    combined_lines.extend(
-        _format_cohort_md_table(rest_rows, _COHORT_KR_NAME[CohortLabel.REST])
-    )
+    combined_lines.extend(_format_cohort_md_table(low_rows, _COHORT_KR_NAME[CohortLabel.LOW_SCORE]))
+    combined_lines.extend(_format_cohort_md_table(rest_rows, _COHORT_KR_NAME[CohortLabel.REST]))
     combined_path = output_dir / "cohort_명단.md"
     combined_path.write_text("\n".join(combined_lines) + "\n", encoding="utf-8")
 

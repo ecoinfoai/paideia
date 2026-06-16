@@ -21,14 +21,12 @@ The renderer is deterministic — same inputs → byte-identical Markdown.
 from __future__ import annotations
 
 import pytest
-
+from immersio.report.md_writer import render_quality_report_md
 from paideia_shared.schemas import (
     HistogramBin,
     ItemStatistics,
     MetadataAggregate,
 )
-
-from immersio.report.md_writer import render_quality_report_md
 
 
 def _stub_overall() -> list[dict[str, object]]:

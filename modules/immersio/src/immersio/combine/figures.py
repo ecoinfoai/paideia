@@ -25,21 +25,21 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless backend; X 의존 0
 import matplotlib.pyplot as plt  # noqa: E402
-
-from immersio import fonts as _fonts  # noqa: E402
-from immersio.report.figures import PNG_METADATA  # noqa: E402
-
 from paideia_shared.schemas import (  # noqa: E402
     CorrelationCell,
     RegressionCoefficient,
 )
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS  # noqa: E402
 
+from immersio import fonts as _fonts  # noqa: E402
+from immersio.report.figures import PNG_METADATA  # noqa: E402
+
 
 def _register_korean_font() -> str:
     """Resolve + register NanumGothic for matplotlib. Returns family name."""
     regular_path, _bold_path = _fonts.resolve_korean_font_paths()
     return _fonts.register_for_matplotlib(regular_path)
+
 
 _DPI = 150
 _SIGNIFICANCE_THRESHOLD = 0.05
@@ -61,9 +61,7 @@ def _save_png(fig: plt.Figure, path: Path) -> None:
     plt.close(fig)
 
 
-def render_fig3_heatmap(
-    cells: Sequence[CorrelationCell], path: Path
-) -> None:
+def render_fig3_heatmap(cells: Sequence[CorrelationCell], path: Path) -> None:
     """Render the 8-axis × N-metric correlation heatmap.
 
     - rows: axes in ``STANDARD_AXIS_KEYS`` order
@@ -95,12 +93,8 @@ def render_fig3_heatmap(
     n_axes = len(STANDARD_AXIS_KEYS)
     n_metrics = len(metric_keys)
 
-    grid_r: list[list[float | None]] = [
-        [None] * n_metrics for _ in range(n_axes)
-    ]
-    grid_sig: list[list[bool]] = [
-        [False] * n_metrics for _ in range(n_axes)
-    ]
+    grid_r: list[list[float | None]] = [[None] * n_metrics for _ in range(n_axes)]
+    grid_sig: list[list[bool]] = [[False] * n_metrics for _ in range(n_axes)]
     metric_idx = {k: i for i, k in enumerate(metric_keys)}
     axis_idx = {a: i for i, a in enumerate(STANDARD_AXIS_KEYS)}
     for c in cells:
@@ -155,9 +149,7 @@ def render_fig3_heatmap(
     _save_png(fig, path)
 
 
-def render_fig4_beta_bar(
-    coefs: Sequence[RegressionCoefficient], path: Path
-) -> None:
+def render_fig4_beta_bar(coefs: Sequence[RegressionCoefficient], path: Path) -> None:
     """Render the 8-z-axis standardized β bar chart with q<0.05 highlight.
 
     - x: 8 axes in ``STANDARD_AXIS_KEYS`` order
@@ -270,9 +262,7 @@ def render_fig6_subgroup_panels(
 
     fig, axes = plt.subplots(2, 2, figsize=(10.0, 7.0))
     axes = axes.flatten()
-    for idx, meta_kind in enumerate(
-        ["section", "prior_biology", "occupation", "education"]
-    ):
+    for idx, meta_kind in enumerate(["section", "prior_biology", "occupation", "education"]):
         ax = axes[idx]
         meta_rows = sorted(by_meta[meta_kind], key=lambda r: r.meta_value)
         if not meta_rows:
@@ -281,10 +271,7 @@ def render_fig6_subgroup_panels(
             continue
         labels = [r.meta_value for r in meta_rows]
         means = [r.mean if r.mean is not None else 0.0 for r in meta_rows]
-        colors = [
-            "#1f3b73" if r.excluded_reason is None else "#cccccc"
-            for r in meta_rows
-        ]
+        colors = ["#1f3b73" if r.excluded_reason is None else "#cccccc" for r in meta_rows]
         ax.bar(range(len(labels)), means, color=colors)
         ax.set_xticks(range(len(labels)))
         ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)

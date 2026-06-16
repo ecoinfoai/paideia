@@ -53,9 +53,7 @@ def normalize_likert(text: str) -> int:
         ValueError: If text is not in the canonical vocabulary.
     """
     if not isinstance(text, str):
-        raise TypeError(
-            f"normalize_likert: expected str, got {type(text).__name__} ({text!r})."
-        )
+        raise TypeError(f"normalize_likert: expected str, got {type(text).__name__} ({text!r}).")
     canonical = _canonicalize(text)
     if canonical in _TABLE_CANONICAL:
         return _TABLE_CANONICAL[canonical]

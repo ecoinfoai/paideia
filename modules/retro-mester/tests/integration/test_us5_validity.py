@@ -35,8 +35,8 @@ _SEMESTER = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEMESTER}-{_COURSE}"
 
-_CHAPTER_BAD = "1장. 해부학 서론"   # all items low-discrimination → 문항수선
-_CHAPTER_OK = "2장. 세포와 조직"   # all items ok → 건전
+_CHAPTER_BAD = "1장. 해부학 서론"  # all items low-discrimination → 문항수선
+_CHAPTER_OK = "2장. 세포와 조직"  # all items ok → 건전
 
 _STUDENT_IDS = {
     "2026000001": "학령기",
@@ -156,9 +156,7 @@ def _build_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_BAD: 0.35, _CHAPTER_OK: 0.45}),
         _combined_row("2026000004", {_CHAPTER_BAD: 0.20, _CHAPTER_OK: 0.50}),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     # CHAPTER_BAD: 3 items, all low-discrimination (0.05 < threshold 0.2)
     # CHAPTER_OK:  3 items, all good-discrimination (0.35 > threshold 0.2)
@@ -201,8 +199,20 @@ def _build_fixture_tree(data_root: Path) -> None:
         "semester": _SEMESTER,
         "course_slug": _COURSE,
         "entries": [
-            {"week": 1, "chapter": _CHAPTER_BAD, "chapter_no": 1, "subtopic": None, "sections": ["1.1"]},
-            {"week": 2, "chapter": _CHAPTER_OK, "chapter_no": 2, "subtopic": None, "sections": ["2.1"]},
+            {
+                "week": 1,
+                "chapter": _CHAPTER_BAD,
+                "chapter_no": 1,
+                "subtopic": None,
+                "sections": ["1.1"],
+            },
+            {
+                "week": 2,
+                "chapter": _CHAPTER_OK,
+                "chapter_no": 2,
+                "subtopic": None,
+                "sections": ["2.1"],
+            },
         ],
     }
 
@@ -294,8 +304,7 @@ class TestSC006RecPrescription:
         assert len(bad_recs) > 0, f"No recs found for {_CHAPTER_BAD}"
         for _, row in bad_recs.iterrows():
             assert row["validity"] == "문항수선", (
-                f"Expected '문항수선' validity for {_CHAPTER_BAD} rec, "
-                f"got {row['validity']!r}"
+                f"Expected '문항수선' validity for {_CHAPTER_BAD} rec, got {row['validity']!r}"
             )
 
     def test_bad_chapter_rec_gets_repair_prescription(self, tmp_path: Path) -> None:
@@ -310,13 +319,10 @@ class TestSC006RecPrescription:
         assert len(bad_recs) > 0, f"No recs found for {_CHAPTER_BAD}"
         for _, row in bad_recs.iterrows():
             assert row["prescription_key"] == REPAIR_PRESCRIPTION, (
-                f"Expected repair prescription for {_CHAPTER_BAD}, "
-                f"got {row['prescription_key']!r}"
+                f"Expected repair prescription for {_CHAPTER_BAD}, got {row['prescription_key']!r}"
             )
 
-    def test_ok_chapter_rec_does_not_get_repair_prescription(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ok_chapter_rec_does_not_get_repair_prescription(self, tmp_path: Path) -> None:
         """CHAPTER_OK recs must NOT carry the repair prescription (normal re-teach)."""
         import pyarrow.parquet as pq
 
@@ -332,9 +338,7 @@ class TestSC006RecPrescription:
                 f"got {row['prescription_key']!r}"
             )
 
-    def test_bad_chapter_rec_prescription_not_a_reteach_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_bad_chapter_rec_prescription_not_a_reteach_string(self, tmp_path: Path) -> None:
         """CHAPTER_BAD prescriptions must not be re-teaching catalogue entries."""
         import pyarrow.parquet as pq
 
@@ -374,9 +378,7 @@ class TestSC006ValiditySheet:
 
         gold, _ = _run(tmp_path)
         wb = load_workbook(gold / "회고분석.xlsx")
-        assert "타당도" in wb.sheetnames, (
-            f"'타당도' sheet missing; sheets: {wb.sheetnames}"
-        )
+        assert "타당도" in wb.sheetnames, f"'타당도' sheet missing; sheets: {wb.sheetnames}"
 
     def test_타당도_sheet_header_columns(self, tmp_path: Path) -> None:
         """타당도 sheet header must include expected columns."""
@@ -386,7 +388,13 @@ class TestSC006ValiditySheet:
         wb = load_workbook(gold / "회고분석.xlsx")
         ws = wb["타당도"]
         headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
-        for col in ("chapter", "verdict", "mean_discrimination", "low_disc_share", "bad_distractor_share"):
+        for col in (
+            "chapter",
+            "verdict",
+            "mean_discrimination",
+            "low_disc_share",
+            "bad_distractor_share",
+        ):
             assert col in headers, f"Missing column '{col}' in 타당도 header: {headers}"
 
     def test_타당도_sheet_has_bad_chapter_row(self, tmp_path: Path) -> None:

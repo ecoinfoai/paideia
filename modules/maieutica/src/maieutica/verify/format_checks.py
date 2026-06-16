@@ -59,10 +59,7 @@ def _compute_explanation_length_ok(wrong_explanation: str, leap_text: str) -> bo
     Returns:
         ``True`` iff both strings are at most ``200`` codepoints (incl. spaces).
     """
-    return (
-        len(wrong_explanation) <= _EXPLANATION_MAX_LEN
-        and len(leap_text) <= _EXPLANATION_MAX_LEN
-    )
+    return len(wrong_explanation) <= _EXPLANATION_MAX_LEN and len(leap_text) <= _EXPLANATION_MAX_LEN
 
 
 def check_format(item: QuizItemCandidate) -> QuizItemCandidate:
@@ -79,9 +76,7 @@ def check_format(item: QuizItemCandidate) -> QuizItemCandidate:
         ``explanation_length_ok``.
     """
     option_length_ok = _compute_option_length_ok(list(item.options))
-    explanation_length_ok = _compute_explanation_length_ok(
-        item.wrong_explanation, item.leap.text
-    )
+    explanation_length_ok = _compute_explanation_length_ok(item.wrong_explanation, item.leap.text)
     return item.model_copy(
         update={
             "option_length_ok": option_length_ok,
@@ -107,10 +102,7 @@ def is_confirmed_anchor(item: QuizItemCandidate) -> bool:
     """
     ev = item.textbook_evidence
     return (
-        ev is not None
-        and ev.status == "확인"
-        and ev.chunk_id is not None
-        and ev.line is not None
+        ev is not None and ev.status == "확인" and ev.chunk_id is not None and ev.line is not None
     )
 
 

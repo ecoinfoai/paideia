@@ -106,9 +106,7 @@ def reconcile_config(
         )
 
     # Collect unclassified students (do NOT raise).
-    unclassified = sorted(
-        sid for sid in config.group_roster if sid not in student_ids
-    )
+    unclassified = sorted(sid for sid in config.group_roster if sid not in student_ids)
 
     return ConfigReconcileReport(unclassified_students=unclassified)
 

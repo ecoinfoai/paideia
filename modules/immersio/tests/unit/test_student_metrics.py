@@ -25,7 +25,6 @@ import math
 
 import pandas as pd
 import pytest
-
 from immersio.analysis.student_metrics import compute_student_metrics
 
 
@@ -62,9 +61,15 @@ def _master_row(
     }
 
 
-def _item(item_no: int, *, chapter: str = "1장. 서론", source: str = "교과서",
-          difficulty_level: int = 2, expected_difficulty: str = "보통",
-          item_type: str = "지식축적") -> dict:
+def _item(
+    item_no: int,
+    *,
+    chapter: str = "1장. 서론",
+    source: str = "교과서",
+    difficulty_level: int = 2,
+    expected_difficulty: str = "보통",
+    item_type: str = "지식축적",
+) -> dict:
     return {
         "item_no": item_no,
         "chapter": chapter,
@@ -80,10 +85,20 @@ def _build_synthetic_cohort() -> tuple[pd.DataFrame, pd.DataFrame, list[dict]]:
     items = [
         _item(1, chapter="1장. 서론", source="교과서"),
         _item(2, chapter="1장. 서론", source="교과서"),
-        _item(3, chapter="2장. 세포와 조직", source="형성평가",
-              difficulty_level=3, expected_difficulty="어려움"),
-        _item(4, chapter="2장. 세포와 조직", source="형성평가",
-              difficulty_level=3, expected_difficulty="어려움"),
+        _item(
+            3,
+            chapter="2장. 세포와 조직",
+            source="형성평가",
+            difficulty_level=3,
+            expected_difficulty="어려움",
+        ),
+        _item(
+            4,
+            chapter="2장. 세포와 조직",
+            source="형성평가",
+            difficulty_level=3,
+            expected_difficulty="어려움",
+        ),
     ]
 
     masters = [

@@ -67,12 +67,7 @@ class CombinedAnalysisManifest(BaseModel):
     @model_validator(mode="after")
     def _v1_count_consistency(self) -> Self:
         """V1: only/both/neither sum == combined; R-10 unmatched all ≥ 0 (already enforced)."""
-        s = (
-            self.n_diagnostic_only
-            + self.n_exam_only
-            + self.n_both
-            + self.n_neither
-        )
+        s = self.n_diagnostic_only + self.n_exam_only + self.n_both + self.n_neither
         if s != self.n_students_combined:
             raise ValueError(
                 f"V1 count consistency: only/both/neither sum ({s}) != "
@@ -95,9 +90,7 @@ class CombinedAnalysisManifest(BaseModel):
     def _v3_top3_length_at_most_3(self) -> Self:
         """V3: top3_predictor_axes length ≤ 3."""
         if len(self.top3_predictor_axes) > 3:
-            raise ValueError(
-                f"V3 top3 length: must be ≤ 3, got {len(self.top3_predictor_axes)}"
-            )
+            raise ValueError(f"V3 top3 length: must be ≤ 3, got {len(self.top3_predictor_axes)}")
         return self
 
 

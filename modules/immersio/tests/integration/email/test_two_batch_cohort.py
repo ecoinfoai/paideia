@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import argparse
 import io
-from pathlib import Path
 
-import pytest
-
-from .conftest import write_student_metrics_parquet
 from immersio.email.pipeline import run_email_dispatch
 from paideia_shared.schemas import DispatchStatus
+
+from .conftest import write_student_metrics_parquet
 
 
 def _args(*, cohort: str) -> argparse.Namespace:
@@ -69,9 +67,7 @@ def test_two_batch_low_then_rest(email_fixture, monkeypatch) -> None:
     5 fixture students: 2 low_score (45.0, 55.0) + 3 rest (75.0, 85.0, 90.0).
     """
     sids = [s[0] for s in email_fixture["students"]]
-    silver_dir = (
-        email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
-    )
+    silver_dir = email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
     write_student_metrics_parquet(
         silver_dir,
         [
@@ -85,9 +81,7 @@ def test_two_batch_low_then_rest(email_fixture, monkeypatch) -> None:
 
     # Batch 1 — low_score only
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc1 = run_email_dispatch(_args(cohort="low_score"))
     assert rc1 == 0
     batch1 = list(_CountingDispatcher.captured)
@@ -103,14 +97,10 @@ def test_two_batch_low_then_rest(email_fixture, monkeypatch) -> None:
     assert not (set(batch1) & set(batch2))
 
 
-def test_sc016_low_score_count_matches_send_count(
-    email_fixture, monkeypatch
-) -> None:
+def test_sc016_low_score_count_matches_send_count(email_fixture, monkeypatch) -> None:
     """SC-016: 학생지표 의 score_percent < 60 학생 수 == 1차 발송 (success+skipped) 합계."""
     sids = [s[0] for s in email_fixture["students"]]
-    silver_dir = (
-        email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
-    )
+    silver_dir = email_fixture["base"] / "data" / "silver" / "immersio" / "2026-1-anatomy"
     # 2 low_score in metrics
     write_student_metrics_parquet(
         silver_dir,
@@ -124,9 +114,7 @@ def test_sc016_low_score_count_matches_send_count(
     )
 
     _CountingDispatcher.captured = []
-    monkeypatch.setattr(
-        "immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher
-    )
+    monkeypatch.setattr("immersio.email.sender.GmailAPIDispatcher", _CountingDispatcher)
     rc = run_email_dispatch(_args(cohort="low_score"))
     assert rc == 0
 
@@ -134,7 +122,8 @@ def test_sc016_low_score_count_matches_send_count(
     text = log_path.read_text(encoding="utf-8")
     # Count rows where cohort=low_score (success or skipped)
     low_score_rows = [
-        line for line in text.splitlines()
+        line
+        for line in text.splitlines()
         if "low_score" in line and ("success" in line or "skipped" in line)
     ]
     # 2 low_score students in metrics → 2 send rows

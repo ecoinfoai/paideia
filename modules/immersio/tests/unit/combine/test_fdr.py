@@ -15,20 +15,43 @@ import math
 
 import numpy as np
 import pytest
-
 from immersio.combine.fdr import bh_fdr_adjust
-
 
 # BH-1995 Example 2 — 15 raw p-values (sorted ascending in the paper).
 _BH1995_P = (
-    0.0001, 0.0004, 0.0019, 0.0095, 0.0201, 0.0278, 0.0298, 0.0344,
-    0.0459, 0.3240, 0.4262, 0.5719, 0.6528, 0.7590, 1.000,
+    0.0001,
+    0.0004,
+    0.0019,
+    0.0095,
+    0.0201,
+    0.0278,
+    0.0298,
+    0.0344,
+    0.0459,
+    0.3240,
+    0.4262,
+    0.5719,
+    0.6528,
+    0.7590,
+    1.000,
 )
 # Expected BH q-values (scipy reference, ±1e-6 tolerance).
 _BH1995_Q_EXPECTED = (
-    0.001500, 0.003000, 0.009500, 0.035625, 0.060300, 0.063857,
-    0.063857, 0.064500, 0.076500, 0.486000, 0.581182, 0.714875,
-    0.753231, 0.813214, 1.000000,
+    0.001500,
+    0.003000,
+    0.009500,
+    0.035625,
+    0.060300,
+    0.063857,
+    0.063857,
+    0.064500,
+    0.076500,
+    0.486000,
+    0.581182,
+    0.714875,
+    0.753231,
+    0.813214,
+    1.000000,
 )
 
 
@@ -37,9 +60,7 @@ def test_bh1995_example_matches_reference() -> None:
     q = bh_fdr_adjust(list(_BH1995_P))
     assert len(q) == len(_BH1995_P)
     for got, expected in zip(q, _BH1995_Q_EXPECTED):
-        assert math.isclose(got, expected, abs_tol=1e-6), (
-            f"q={got} expected={expected}"
-        )
+        assert math.isclose(got, expected, abs_tol=1e-6), f"q={got} expected={expected}"
 
 
 def test_input_order_preserved() -> None:

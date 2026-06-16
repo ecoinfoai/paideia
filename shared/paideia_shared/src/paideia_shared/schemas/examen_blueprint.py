@@ -77,7 +77,7 @@ class ExamenBlueprint(BaseModel):
         total = sum(self.difficulty_targets.values())
         if abs(total - 1.0) > _FLOAT_EPS:
             raise ValueError(
-                f"V3: sum(difficulty_targets) == {total:.8f}, 1.0 과 차이가 {abs(total-1.0):.2e} "
+                f"V3: sum(difficulty_targets) == {total:.8f}, 1.0 과 차이가 {abs(total - 1.0):.2e} "
                 f"(허용 ±{_FLOAT_EPS:.0e})."
             )
         return self

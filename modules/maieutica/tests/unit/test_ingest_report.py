@@ -58,9 +58,7 @@ class TestWriteIngestReport:
 
         raw = dest.read_text(encoding="utf-8")
         keys_in_order = [
-            line.split('"')[1]
-            for line in raw.splitlines()
-            if '"' in line and ":" in line
+            line.split('"')[1] for line in raw.splitlines() if '"' in line and ":" in line
         ]
         assert keys_in_order[:3] == sorted(keys_in_order[:3])
 

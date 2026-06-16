@@ -39,9 +39,7 @@ def _present_axis_columns(scores_df: pd.DataFrame) -> list[str]:
     return [c for c in _AXIS_COLUMNS if c in scores_df.columns]
 
 
-def _drop_all_nan_rows(
-    scores_df: pd.DataFrame, axes: list[str]
-) -> tuple[pd.DataFrame, list[str]]:
+def _drop_all_nan_rows(scores_df: pd.DataFrame, axes: list[str]) -> tuple[pd.DataFrame, list[str]]:
     """Return (substantive_df, excluded_student_ids) sorted by student_id."""
     sorted_df = scores_df.sort_values("student_id").reset_index(drop=True)
     if not axes:

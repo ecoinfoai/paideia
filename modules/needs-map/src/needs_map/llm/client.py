@@ -27,9 +27,7 @@ class LLMCallOutcome(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     succeeded: bool
-    failure_kind: (
-        Literal["timeout", "rate_limit", "auth", "pii_block", "other"] | None
-    ) = None
+    failure_kind: Literal["timeout", "rate_limit", "auth", "pii_block", "other"] | None = None
 
 
 def make_client(provider: str, model: str, timeout: float) -> instructor.Instructor:

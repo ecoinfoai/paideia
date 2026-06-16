@@ -63,35 +63,25 @@ def compute_discrimination(
             is empty.
     """
     if not (0.0 < top_pct < 0.5):
-        raise ValueError(
-            f"compute_discrimination: top_pct must be in (0.0, 0.5), got {top_pct}"
-        )
+        raise ValueError(f"compute_discrimination: top_pct must be in (0.0, 0.5), got {top_pct}")
     if not total_scores:
         raise ValueError("compute_discrimination: total_scores is empty")
 
-    sorted_students = sorted(
-        total_scores.items(), key=lambda kv: kv[1], reverse=True
-    )
+    sorted_students = sorted(total_scores.items(), key=lambda kv: kv[1], reverse=True)
     n = len(sorted_students)
     n_27 = max(1, _round_half_to_even(n * top_pct))
 
     if n_27 > n:
-        raise ValueError(
-            f"compute_discrimination: n_27={n_27} exceeds cohort size {n}"
-        )
+        raise ValueError(f"compute_discrimination: n_27={n_27} exceeds cohort size {n}")
 
     top_boundary_score = sorted_students[n_27 - 1][1]
     bottom_boundary_score = sorted_students[-n_27][1]
 
     top_ids: set[str] = {sid for sid, score in sorted_students if score >= top_boundary_score}
-    bottom_ids: set[str] = {
-        sid for sid, score in sorted_students if score <= bottom_boundary_score
-    }
+    bottom_ids: set[str] = {sid for sid, score in sorted_students if score <= bottom_boundary_score}
 
     out: dict[int, DiscriminationResult] = {}
-    score_array = np.array(
-        [total_scores[sid] for sid, _ in sorted_students], dtype=float
-    )
+    score_array = np.array([total_scores[sid] for sid, _ in sorted_students], dtype=float)
     student_id_to_idx = {sid: idx for idx, (sid, _) in enumerate(sorted_students)}
 
     for item_no, responses in item_responses.items():

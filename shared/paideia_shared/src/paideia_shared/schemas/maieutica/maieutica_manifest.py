@@ -76,14 +76,12 @@ class MaieuticaManifest(BaseModel):
     option_length_violations: int = Field(
         ...,
         description=(
-            "Number of quiz items where any option is outside 30–50 chars. "
-            "Target 0 (SC-004)."
+            "Number of quiz items where any option is outside 30–50 chars. Target 0 (SC-004)."
         ),
     )
     explanation_length_violations: int = Field(
         ...,
         description=(
-            "Number of quiz items where explanation_length_ok is False. "
-            "Target 0 (SC-006)."
+            "Number of quiz items where explanation_length_ok is False. Target 0 (SC-006)."
         ),
     )

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from paideia_shared.schemas.correlation_cell import CorrelationCell
+from pydantic import ValidationError
 
 
 def test_n_zero_with_all_none_passes() -> None:

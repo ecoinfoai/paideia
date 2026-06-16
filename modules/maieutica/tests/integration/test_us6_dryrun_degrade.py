@@ -129,9 +129,7 @@ def test_us6_dryrun_writes_quiz_and_formative_bundles(
 
     assert exit_code == 0, f"expected exit 0, got {exit_code}"
 
-    silver = (
-        data_root / "silver" / "maieutica" / f"{_SEMESTER}-{_COURSE}"
-    )
+    silver = data_root / "silver" / "maieutica" / f"{_SEMESTER}-{_COURSE}"
     staging = silver / "staging"
 
     # --- Quiz bundles exist ---

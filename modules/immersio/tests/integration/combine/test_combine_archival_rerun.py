@@ -19,9 +19,7 @@ import pytest
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -47,9 +45,7 @@ def test_re_run_silver_byte_identical_after_archival(
         gold_dir=tmp / "gold",
     )
     assert rc1 == 0
-    silver_path = (
-        tmp / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
-    )
+    silver_path = tmp / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
     bytes1 = silver_path.read_bytes()
 
     # 2nd run on the same dirs — archival hook moves 1st run aside.
@@ -85,9 +81,7 @@ def test_re_run_archives_first_run_outputs(
         silver_dir=tmp / "silver",
         gold_dir=tmp / "gold",
     )
-    silver_archive = (
-        tmp / "silver" / "immersio" / "2026-1-anatomy" / "_archive"
-    )
+    silver_archive = tmp / "silver" / "immersio" / "2026-1-anatomy" / "_archive"
     archived_files = {p.name for p in silver_archive.rglob("*") if p.is_file()}
     assert "진단×시험결합.parquet" in archived_files
     assert "manifest_phase3.json" in archived_files
@@ -110,9 +104,7 @@ def test_archive_disabled_by_flag(
         gold_dir=tmp / "gold",
         archive=False,
     )
-    silver_archive = (
-        tmp / "silver" / "immersio" / "2026-1-anatomy" / "_archive"
-    )
+    silver_archive = tmp / "silver" / "immersio" / "2026-1-anatomy" / "_archive"
     assert not silver_archive.exists()
 
 

@@ -30,9 +30,8 @@ def test_no_http_url_in_email_modules() -> None:
             if "ALLOW_HARDCODING" in line:
                 continue
             hits.append((str(py.relative_to(_REPO_ROOT)), line_no, m.group(0)))
-    assert not hits, (
-        f"FR-C06: HTTP (plaintext) URL detected in email module(s):\n"
-        + "\n".join(f"  {p}:{ln} {url!r}" for p, ln, url in hits)
+    assert not hits, "FR-C06: HTTP (plaintext) URL detected in email module(s):\n" + "\n".join(
+        f"  {p}:{ln} {url!r}" for p, ln, url in hits
     )
 
 

@@ -18,11 +18,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import statsmodels.api as sm
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-
 from immersio.combine.regression import compute_ols_regression
 from paideia_shared.schemas import RegressionCoefficient, RegressionFitSummary
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
 def _synthetic_complete_case(n: int, seed: int = 0) -> pd.DataFrame:
@@ -162,9 +161,7 @@ def test_fdr_q_matches_scipy() -> None:
 def test_multicollinearity_flag_when_vif_gt_10() -> None:
     """Build a near-collinear pair and confirm flag fires."""
     df = _synthetic_complete_case(n=200, seed=99)
-    df["digital_efficacy_z"] = (
-        df["motivation_z"] + np.random.default_rng(0).normal(0, 0.01, 200)
-    )
+    df["digital_efficacy_z"] = df["motivation_z"] + np.random.default_rng(0).normal(0, 0.01, 200)
     coefs, _ = compute_ols_regression(df)
     flagged = {c.axis_key for c in coefs if c.multicollinearity_flag}
     # Both motivation and digital_efficacy should hit the flag.

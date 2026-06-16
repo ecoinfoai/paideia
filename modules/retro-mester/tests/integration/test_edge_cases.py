@@ -65,9 +65,7 @@ def _combined_row(
         "chapter_correct_rates": json.dumps(chapter_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -198,17 +196,13 @@ def _write_tree(
     """Write fixture file tree under data_root."""
     silver_im = data_root / "silver" / "immersio" / _KEY
     silver_im.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_im / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_im / "진단×시험결합.parquet", index=False)
     pd.DataFrame(item_rows).to_parquet(silver_im / "문항통계.parquet", index=False)
 
     bronze = data_root / "bronze" / "retro-mester" / _KEY
     bronze.mkdir(parents=True, exist_ok=True)
     cfg = config_dict if config_dict is not None else _retro_config()
-    (bronze / "retro_config.yaml").write_text(
-        yaml.dump(cfg, allow_unicode=True), encoding="utf-8"
-    )
+    (bronze / "retro_config.yaml").write_text(yaml.dump(cfg, allow_unicode=True), encoding="utf-8")
     (bronze / "blueprint.yaml").write_text(
         yaml.dump(_blueprint(), allow_unicode=True), encoding="utf-8"
     )
@@ -315,9 +309,7 @@ class TestFewerThanThreeGaps:
         gaps_df = pq.read_table(silver / "빈틈표.parquet").to_pandas()
 
         # Recs ≤ gaps: no padding
-        assert len(recs_df) <= len(gaps_df), (
-            "Recs must not exceed gaps — no synthetic padding"
-        )
+        assert len(recs_df) <= len(gaps_df), "Recs must not exceed gaps — no synthetic padding"
 
     def test_zero_gaps_uncovered_ratio_is_nan_or_zero(self, tmp_path: Path) -> None:
         """When all chapters are above threshold, uncovered_ratio is 0 or NaN."""
@@ -339,8 +331,9 @@ class TestFewerThanThreeGaps:
         import json as _json
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json")
-            .read_text(encoding="utf-8")
+            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+                encoding="utf-8"
+            )
         )
         ratio = manifest["counts"]["uncovered_ratio"]
         # 0 gaps → ratio is 0 or NaN (float('nan') serialises as null in JSON)
@@ -403,8 +396,9 @@ class TestTinySampleSegment:
         _run(data_root)
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json")
-            .read_text(encoding="utf-8")
+            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+                encoding="utf-8"
+            )
         )
         assert manifest["counts"]["students"] == 4.0
         assert manifest["counts"]["segments"] == 2.0  # 학령기 + 만학도
@@ -505,8 +499,9 @@ class TestColdStart:
         _run(data_root, prior_yaml_path=None)
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json")
-            .read_text(encoding="utf-8")
+            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+                encoding="utf-8"
+            )
         )
         assert manifest["degrade"]["prior_year_present"] is False
 

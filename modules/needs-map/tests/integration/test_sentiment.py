@@ -75,9 +75,7 @@ def test_negative_labels_are_subset_of_id2label() -> None:
     AutoModelForSequenceClassification = (  # noqa: N806
         transformers.AutoModelForSequenceClassification
     )
-    model = AutoModelForSequenceClassification.from_pretrained(
-        "searle-j/kote_for_easygoing_people"
-    )
+    model = AutoModelForSequenceClassification.from_pretrained("searle-j/kote_for_easygoing_people")
     id2label = model.config.id2label.values()
     missing = [label for label in NEGATIVE_LABELS if label not in id2label]
     assert not missing, f"NEGATIVE_LABELS not in id2label: {missing}"

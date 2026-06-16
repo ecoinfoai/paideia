@@ -8,9 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 _FIXTURE_ROOT = Path("modules/needs-map/tests/fixtures/silver_minimal")
-_PARTIAL_MAPPING = Path(
-    "modules/needs-map/tests/fixtures/mappings/anatomy_partial.diagnostic.yaml"
-)
+_PARTIAL_MAPPING = Path("modules/needs-map/tests/fixtures/mappings/anatomy_partial.diagnostic.yaml")
 
 
 def _stage(tmp_path: Path) -> Path:

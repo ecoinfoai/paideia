@@ -204,9 +204,7 @@ class TestOutputSeparation:
         from maieutica.output.paths import gold_dir, run_gold_dir
 
         gold = gold_dir("2026-1", "anatomy", data_root=tmp_path)
-        run_path = run_gold_dir(
-            "2026-1", "anatomy", run_id="abc123", data_root=tmp_path
-        )
+        run_path = run_gold_dir("2026-1", "anatomy", run_id="abc123", data_root=tmp_path)
         assert str(run_path).startswith(str(gold))
 
     def test_same_run_id_produces_same_path(self, tmp_path: Path) -> None:
@@ -222,7 +220,5 @@ class TestOutputSeparation:
         from maieutica.output.paths import gold_dir, run_gold_dir
 
         gold = gold_dir("2026-1", "anatomy", data_root=tmp_path)
-        run_path = run_gold_dir(
-            "2026-1", "anatomy", run_id="abc", data_root=tmp_path
-        )
+        run_path = run_gold_dir("2026-1", "anatomy", run_id="abc", data_root=tmp_path)
         assert run_path != gold

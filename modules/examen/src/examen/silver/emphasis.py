@@ -177,13 +177,7 @@ def aggregate_emphasis(
         keywords = keyword_dict.get((chapter_no, section), [])
 
         # Classes that have data in ANY of the teaching weeks.
-        classes_with_data = sorted(
-            {
-                cid
-                for (cid, wk) in by_class_week
-                if wk in weeks
-            }
-        )
+        classes_with_data = sorted({cid for (cid, wk) in by_class_week if wk in weeks})
         # The department teaches ≤4 sections (1A–1D), so len(classes_with_data)
         # is normally ≤4; the min() guards the EmphasisCell le=4 bound defensively
         # in case malformed input ever yields a 5th observed class id.
@@ -193,9 +187,7 @@ def aggregate_emphasis(
         evidence_refs: list[str] = []
         for class_id in classes_with_data:
             class_sessions = [
-                sess
-                for wk in weeks
-                for sess in by_class_week.get((class_id, wk), [])
+                sess for wk in weeks for sess in by_class_week.get((class_id, wk), [])
             ]
             matched = False
             for sess in class_sessions:
@@ -267,9 +259,7 @@ def label_items_with_emphasis(
     if not cells:
         return list(items)
 
-    cell_by_key: dict[tuple[int, str], EmphasisCell] = {
-        (c.chapter_no, c.section): c for c in cells
-    }
+    cell_by_key: dict[tuple[int, str], EmphasisCell] = {(c.chapter_no, c.section): c for c in cells}
 
     # chapter_no -> (is_emphasized_any, max_emphasized_count)
     chapter_summary: dict[int, tuple[bool, int]] = {}
@@ -299,11 +289,7 @@ def label_items_with_emphasis(
                     section = key[1]
                     break
 
-        cell = (
-            cell_by_key.get((item.chapter_no, section))
-            if section is not None
-            else None
-        )
+        cell = cell_by_key.get((item.chapter_no, section)) if section is not None else None
 
         if cell is not None:
             labeled.append(

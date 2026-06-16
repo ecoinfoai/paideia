@@ -109,12 +109,14 @@ FIXTURE_LINES: list[str] = [
 # T021: textbook_clean
 # ============================================================================
 
+
 class TestTextbookClean:
     """Tests for examen.ingest.textbook_clean.clean_textbook."""
 
     def _clean(self, lines: list[str]) -> tuple[list[tuple[int, str]], list[str]]:
         """Helper: import and run clean_textbook, return (kept, removed_spans)."""
         from examen.ingest.textbook_clean import clean_textbook
+
         return clean_textbook(lines)
 
     def test_spaced_letter_header_removed(self) -> None:
@@ -158,7 +160,14 @@ class TestTextbookClean:
     def test_figure_table_caption_logged(self) -> None:
         """Removed figure/table captions appear in removed_spans."""
         _, removed = self._clean(FIXTURE_LINES)
-        assert any("caption" in r.lower() or "figure" in r.lower() or "table" in r.lower() or "그림" in r or "표" in r for r in removed)
+        assert any(
+            "caption" in r.lower()
+            or "figure" in r.lower()
+            or "table" in r.lower()
+            or "그림" in r
+            or "표" in r
+            for r in removed
+        )
 
     def test_exercise_block_removed(self) -> None:
         """From '연습문제' to end of chapter is removed."""
@@ -211,6 +220,7 @@ class TestTextbookClean:
     def test_deterministic_output(self) -> None:
         """Calling clean_textbook twice on same input produces identical results."""
         from examen.ingest.textbook_clean import clean_textbook
+
         r1 = clean_textbook(FIXTURE_LINES)
         r2 = clean_textbook(FIXTURE_LINES)
         assert r1 == r2
@@ -249,10 +259,10 @@ class TestTextbookClean:
     @pytest.mark.parametrize(
         "heading",
         [
-            "연습 문제",       # 공백 변형
-            "연습문제:",       # 콜론 꼬리
-            "[연습문제]",      # 대괄호 헤딩
-            "■ 연습문제",      # 선두 장식
+            "연습 문제",  # 공백 변형
+            "연습문제:",  # 콜론 꼬리
+            "[연습문제]",  # 대괄호 헤딩
+            "■ 연습문제",  # 선두 장식
             "연습문제 (5문항)",  # 괄호 안 문항수
         ],
     )
@@ -287,6 +297,7 @@ class TestTextbookClean:
 # T022: textbook loader + evidence_index + verify_chapter_files
 # ============================================================================
 
+
 class TestLoadTextbookChapter:
     """Tests for examen.ingest.textbook.load_chapter."""
 
@@ -298,6 +309,7 @@ class TestLoadTextbookChapter:
     def test_load_returns_original_lines(self, tmp_path: Path) -> None:
         """load_chapter returns list of (1-based lineno, text) pairs."""
         from examen.ingest.textbook import load_chapter
+
         p = self._write_fixture(tmp_path)
         result = load_chapter(p)
         # Should return 1-based: first line is (1, FIXTURE_LINES[0])
@@ -307,6 +319,7 @@ class TestLoadTextbookChapter:
     def test_load_line_count_matches_file(self, tmp_path: Path) -> None:
         """Number of returned entries equals number of lines in file."""
         from examen.ingest.textbook import load_chapter
+
         p = self._write_fixture(tmp_path)
         result = load_chapter(p)
         assert len(result) == len(FIXTURE_LINES)
@@ -314,6 +327,7 @@ class TestLoadTextbookChapter:
     def test_load_missing_file_raises(self, tmp_path: Path) -> None:
         """Missing file raises FileNotFoundError with the path."""
         from examen.ingest.textbook import load_chapter
+
         missing = tmp_path / "nonexistent.txt"
         with pytest.raises(FileNotFoundError, match=str(missing)):
             load_chapter(missing)
@@ -321,6 +335,7 @@ class TestLoadTextbookChapter:
     def test_load_preserves_blank_lines(self, tmp_path: Path) -> None:
         """Blank lines are included in the result (line numbers must not skip)."""
         from examen.ingest.textbook import load_chapter
+
         p = self._write_fixture(tmp_path)
         result = load_chapter(p)
         # Line 5 should be blank (FIXTURE_LINES[4] == "")
@@ -329,6 +344,7 @@ class TestLoadTextbookChapter:
     def test_load_line_numbers_are_sequential(self, tmp_path: Path) -> None:
         """Line numbers from load_chapter are strictly sequential from 1."""
         from examen.ingest.textbook import load_chapter
+
         p = self._write_fixture(tmp_path)
         result = load_chapter(p)
         for i, (lineno, _) in enumerate(result):
@@ -340,6 +356,7 @@ class TestEvidenceIndex:
 
     def _build_index(self, source_file: str = "10장 내분비계통.txt"):  # type: ignore[return]
         from examen.silver.evidence_index import EvidenceIndex
+
         return EvidenceIndex.build(FIXTURE_LINES, source_file=source_file)
 
     def test_search_finds_known_term(self) -> None:
@@ -393,6 +410,7 @@ class TestEvidenceIndex:
     def test_build_rejects_tuple_shape(self) -> None:
         """Passing load_chapter's (lineno, text) tuples to build() fails fast."""
         from examen.silver.evidence_index import EvidenceIndex
+
         numbered = [(1, "본문"), (2, "다음 줄")]
         with pytest.raises(TypeError, match="from_chapter"):
             EvidenceIndex.build(numbered, source_file="x.txt")  # type: ignore[arg-type]
@@ -414,6 +432,7 @@ class TestEvidenceIndex:
     def test_from_chapter_rejects_bad_shape(self) -> None:
         """from_chapter fails fast on a non-(int, str) element."""
         from examen.silver.evidence_index import EvidenceIndex
+
         with pytest.raises(TypeError):
             EvidenceIndex.from_chapter(["plain string"], source_file="x.txt")  # type: ignore[arg-type]
 
@@ -423,6 +442,7 @@ class TestVerifyChapterFiles:
 
     def _make_curriculum_map(self, chapter_nos: list[int]):  # type: ignore[return]
         from paideia_shared.schemas import CurriculumEntry, CurriculumMap
+
         entries = [
             CurriculumEntry(
                 week=i + 1,
@@ -438,6 +458,7 @@ class TestVerifyChapterFiles:
     def test_all_files_present_does_not_raise(self, tmp_path: Path) -> None:
         """No exception when all required chapter files are found."""
         from examen.ingest.textbook import verify_chapter_files
+
         # Create stub files
         (tmp_path / "8장 호흡계통.txt").write_text("body", encoding="utf-8")
         (tmp_path / "9장 근육계통.txt").write_text("body", encoding="utf-8")
@@ -448,6 +469,7 @@ class TestVerifyChapterFiles:
     def test_missing_file_raises_exit2_error(self, tmp_path: Path) -> None:
         """Missing chapter file raises a FileNotFoundError-compatible error."""
         from examen.ingest.textbook import verify_chapter_files
+
         # Only chapter 8 present, curriculum requires 9 as well
         (tmp_path / "8장 호흡계통.txt").write_text("body", encoding="utf-8")
         cm = self._make_curriculum_map([8, 9])
@@ -461,6 +483,7 @@ class TestVerifyChapterFiles:
     def test_missing_file_raises_mentioning_chapter_no(self, tmp_path: Path) -> None:
         """Error message for missing chapter mentions the chapter number."""
         from examen.ingest.textbook import verify_chapter_files
+
         cm = self._make_curriculum_map([10])
         with pytest.raises((FileNotFoundError, SystemExit, ValueError)) as exc_info:
             verify_chapter_files(cm, bronze_dir=tmp_path)
@@ -470,6 +493,7 @@ class TestVerifyChapterFiles:
     def test_chapter_file_match_is_lenient(self, tmp_path: Path) -> None:
         """Chapter file matching: file '10장 내분비계통.txt' matches chapter_no=10."""
         from examen.ingest.textbook import verify_chapter_files
+
         (tmp_path / "10장 내분비계통.txt").write_text("body", encoding="utf-8")
         cm = self._make_curriculum_map([10])
         # Should not raise
@@ -478,6 +502,7 @@ class TestVerifyChapterFiles:
     def test_duplicate_chapter_nos_not_double_checked(self, tmp_path: Path) -> None:
         """If chapter_no appears in multiple entries, only one file check is done."""
         from examen.ingest.textbook import verify_chapter_files
+
         (tmp_path / "8장 호흡계통.txt").write_text("body", encoding="utf-8")
         # Two entries for same chapter_no=8 — only one file needed
         cm = self._make_curriculum_map([8, 8])
@@ -488,6 +513,7 @@ class TestVerifyChapterFiles:
 # ============================================================================
 # T023: section chunking
 # ============================================================================
+
 
 class TestChunkChapter:
     """Tests for examen.silver.chunk.chunk_chapter."""
@@ -502,6 +528,7 @@ class TestChunkChapter:
         source_file: str = "10장 내분비계통.txt",
     ):  # type: ignore[return]
         from examen.silver.chunk import chunk_chapter
+
         return chunk_chapter(
             lines=FIXTURE_LINES,
             chapter_no=chapter_no,
@@ -514,6 +541,7 @@ class TestChunkChapter:
     def test_returns_list_of_textbook_chunks(self) -> None:
         """chunk_chapter returns a non-empty list of TextbookChunk instances."""
         from paideia_shared.schemas import TextbookChunk
+
         chunks = self._make_chunks()
         assert len(chunks) > 0
         assert all(isinstance(c, TextbookChunk) for c in chunks)
@@ -578,9 +606,9 @@ class TestChunkChapter:
         all_removed = [span for c in chunks for span in c.removed_spans]
         assert len(all_removed) > 0
         # The 연습문제 terminal block (original lines 35–39) MUST be logged.
-        assert any(
-            "exercise_block" in span and "35" in span for span in all_removed
-        ), f"exercise-block span not found in removed_spans: {all_removed}"
+        assert any("exercise_block" in span and "35" in span for span in all_removed), (
+            f"exercise-block span not found in removed_spans: {all_removed}"
+        )
 
     def test_chunk_id_is_deterministic(self) -> None:
         """Same input always produces identical chunk_id values."""
@@ -599,19 +627,26 @@ class TestChunkChapter:
     def test_chunk_id_differs_across_chapters(self) -> None:
         """Same section in different chapters produces different chunk_ids."""
         from examen.silver.chunk import chunk_chapter
+
         lines = [
             "1. 절일",
             "",
             "본문 내용입니다.",
         ]
         c8 = chunk_chapter(
-            lines=lines, chapter_no=8, chapter="8장",
-            semester="2026-1", course_slug="anatomy",
+            lines=lines,
+            chapter_no=8,
+            chapter="8장",
+            semester="2026-1",
+            course_slug="anatomy",
             source_file="8장.txt",
         )
         c9 = chunk_chapter(
-            lines=lines, chapter_no=9, chapter="9장",
-            semester="2026-1", course_slug="anatomy",
+            lines=lines,
+            chapter_no=9,
+            chapter="9장",
+            semester="2026-1",
+            course_slug="anatomy",
             source_file="9장.txt",
         )
         ids8 = {c.chunk_id for c in c8}
@@ -635,13 +670,17 @@ class TestChunkChapter:
     def test_chapter_only_input_no_crash(self) -> None:
         """A file with body text but no explicit section headings doesn't crash."""
         from examen.silver.chunk import chunk_chapter
+
         lines = [
             "본문 텍스트가 하나만 있습니다.",
             "아무 절 헤딩도 없습니다.",
         ]
         chunks = chunk_chapter(
-            lines=lines, chapter_no=1, chapter="1장",
-            semester="2026-1", course_slug="anatomy",
+            lines=lines,
+            chapter_no=1,
+            chapter="1장",
+            semester="2026-1",
+            course_slug="anatomy",
             source_file="1장.txt",
         )
         # Should return at least one chunk (whole-chapter fallback)
@@ -658,21 +697,24 @@ class TestChunkChapter:
         it as a body heading but MUST log that the decision is ambiguous.
         """
         from examen.silver.chunk import chunk_chapter
+
         lines = [
-            "1. 뇌하수체",        # single occurrence — ambiguous (TOC vs body)
+            "1. 뇌하수체",  # single occurrence — ambiguous (TOC vs body)
             "",
             "뇌하수체는 터키안장에 위치한다.",
         ]
         chunks = chunk_chapter(
-            lines=lines, chapter_no=10, chapter="10장",
-            semester="2026-1", course_slug="anatomy",
+            lines=lines,
+            chapter_no=10,
+            chapter="10장",
+            semester="2026-1",
+            course_slug="anatomy",
             source_file="10장.txt",
         )
         all_removed = [span for c in chunks for span in c.removed_spans]
-        assert any(
-            "section-anchor-ambiguous" in span and "1×" in span
-            for span in all_removed
-        ), f"no 1× ambiguity warning recorded: {all_removed}"
+        assert any("section-anchor-ambiguous" in span and "1×" in span for span in all_removed), (
+            f"no 1× ambiguity warning recorded: {all_removed}"
+        )
 
     def test_heading_thrice_logs_duplicate_warning(self) -> None:
         """A heading occurring 3× records a warning and yields duplicate chunks.
@@ -681,17 +723,21 @@ class TestChunkChapter:
         two chunks share the same section label.  The ambiguity MUST be logged.
         """
         from examen.silver.chunk import chunk_chapter
+
         lines = [
-            "1. 뇌하수체",        # 1: TOC
+            "1. 뇌하수체",  # 1: TOC
             "",
-            "1. 뇌하수체",        # 2: body heading A
+            "1. 뇌하수체",  # 2: body heading A
             "첫 번째 본문.",
-            "1. 뇌하수체",        # 3: body heading B (duplicate)
+            "1. 뇌하수체",  # 3: body heading B (duplicate)
             "두 번째 본문.",
         ]
         chunks = chunk_chapter(
-            lines=lines, chapter_no=10, chapter="10장",
-            semester="2026-1", course_slug="anatomy",
+            lines=lines,
+            chapter_no=10,
+            chapter="10장",
+            semester="2026-1",
+            course_slug="anatomy",
             source_file="10장.txt",
         )
         # Two body chunks for the same section label
@@ -701,16 +747,15 @@ class TestChunkChapter:
         assert len({c.chunk_id for c in sec_chunks}) == 2
         # A 3× ambiguity warning must be recorded
         all_removed = [span for c in chunks for span in c.removed_spans]
-        assert any(
-            "section-anchor-ambiguous" in span and "3×" in span
-            for span in all_removed
-        ), f"no 3× ambiguity warning recorded: {all_removed}"
+        assert any("section-anchor-ambiguous" in span and "3×" in span for span in all_removed), (
+            f"no 3× ambiguity warning recorded: {all_removed}"
+        )
 
     def test_clean_two_occurrence_heading_no_ambiguity_warning(self) -> None:
         """The normal 2× case (TOC + one body) records NO ambiguity warning."""
         chunks = self._make_chunks()
         all_removed = [span for c in chunks for span in c.removed_spans]
         # Fixture headings each appear exactly 2× (TOC + body) → unambiguous
-        assert not any(
-            "section-anchor-ambiguous" in span for span in all_removed
-        ), f"unexpected ambiguity warning on clean 2× fixture: {all_removed}"
+        assert not any("section-anchor-ambiguous" in span for span in all_removed), (
+            f"unexpected ambiguity warning on clean 2× fixture: {all_removed}"
+        )

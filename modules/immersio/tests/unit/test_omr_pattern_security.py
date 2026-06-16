@@ -17,15 +17,12 @@ import os
 import unicodedata
 from pathlib import Path
 
-import pytest
-
 # Pre-populate ``immersio.ingest`` to break ``io ↔ ingest`` circular import
 # during standalone test collection. See test_attendance_roster_only.py.
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
+import pytest
 from immersio.cli.main import _validate_glob_pattern  # noqa: E402
 from immersio.io.exam_omr import discover_section_files  # noqa: E402
-
 
 # =====================================================================
 # CLI _validate_glob_pattern — A1 / A3 / A6 / A8 mitigation

@@ -49,9 +49,7 @@ class ProfileLoader:
         self,
         *,
         config_home: Path | None = None,
-        credentials_precheck: (
-            Callable[[ProfessorProfile | TestProfile], None] | None
-        ) = None,
+        credentials_precheck: (Callable[[ProfessorProfile | TestProfile], None] | None) = None,
     ) -> None:
         self._config_home = config_home or _default_config_home()
         self._credentials_precheck = credentials_precheck
@@ -70,9 +68,7 @@ class ProfileLoader:
                 invalid, or credentials precheck fails.
         """
         if not isinstance(profile_name, str) or not profile_name:
-            raise ProfileError(
-                f"profile_name must be non-empty string (got {profile_name!r})"
-            )
+            raise ProfileError(f"profile_name must be non-empty string (got {profile_name!r})")
 
         operator_path = self._config_home / "profiles" / f"{profile_name}.yaml"
         test_path = self._config_home / "test_profiles" / f"{profile_name}.yaml"
@@ -95,9 +91,7 @@ class ProfileLoader:
         try:
             raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         except yaml.YAMLError as exc:
-            raise ProfileError(
-                f"profile {profile_name!r} at {path}: invalid YAML — {exc}"
-            ) from exc
+            raise ProfileError(f"profile {profile_name!r} at {path}: invalid YAML — {exc}") from exc
 
         if not isinstance(raw, dict):
             raise ProfileError(
@@ -109,8 +103,7 @@ class ProfileLoader:
             profile = _PROFILE_ADAPTER.validate_python(raw)
         except ValidationError as exc:
             raise ProfileError(
-                f"profile {profile_name!r} at {path}: schema validation failed:\n"
-                f"{exc}"
+                f"profile {profile_name!r} at {path}: schema validation failed:\n{exc}"
             ) from exc
 
         # Cross-check: operator profile must live under profiles/, test

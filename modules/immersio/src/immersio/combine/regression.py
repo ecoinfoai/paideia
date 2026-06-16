@@ -19,10 +19,9 @@ from __future__ import annotations
 
 import pandas as pd
 import statsmodels.api as sm
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-
 from paideia_shared.schemas import RegressionCoefficient, RegressionFitSummary
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 from .fdr import bh_fdr_adjust
 
@@ -69,7 +68,7 @@ def compute_ols_regression(
 
     # joiner returns NaN→None coerced columns as object dtype; statsmodels
     # rejects object input. Cast back to float64 on the complete-case slice.
-    complete = complete.astype({col: float for col in cols_needed})
+    complete = complete.astype(dict.fromkeys(cols_needed, float))
 
     # GAP-9 mitigation B — zero-variance predictor reject.
     for axis in STANDARD_AXIS_KEYS:
@@ -81,20 +80,17 @@ def compute_ols_regression(
                 f"(qa GAP-9 mitigation B)"
             )
 
-    X = complete[z_cols]
+    X = complete[z_cols]  # noqa: N806  (statistical design-matrix convention)
     y = complete["total_score"]
-    X_const = sm.add_constant(X)
+    X_const = sm.add_constant(X)  # noqa: N806  (statistical design-matrix convention)
     model = sm.OLS(y, X_const).fit()
 
     raw_ps = [float(model.pvalues[f"{axis}_z"]) for axis in STANDARD_AXIS_KEYS]
     qs = bh_fdr_adjust(raw_ps)
 
     # Pre-compute VIFs for all 8 predictors.
-    X_arr = X_const.to_numpy()
-    vifs = [
-        float(variance_inflation_factor(X_arr, i + 1))
-        for i in range(len(STANDARD_AXIS_KEYS))
-    ]
+    X_arr = X_const.to_numpy()  # noqa: N806  (statistical design-matrix convention)
+    vifs = [float(variance_inflation_factor(X_arr, i + 1)) for i in range(len(STANDARD_AXIS_KEYS))]
 
     # Standardised β: since predictors are already z-scored (sd=1) and the
     # outcome is total_score, β* = β · sd_x / sd_y reduces to β / sd_y.

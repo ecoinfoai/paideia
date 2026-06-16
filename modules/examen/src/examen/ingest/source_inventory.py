@@ -61,9 +61,7 @@ def _parse_actual_txt(path: Path) -> list[dict[str, Any]]:
         ValueError: If a non-blank line does not match the expected format.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"load_formative_inventory: actual_txt not found: {path}"
-        )
+        raise FileNotFoundError(f"load_formative_inventory: actual_txt not found: {path}")
 
     items: list[dict[str, Any]] = []
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -100,9 +98,7 @@ def _load_chapter_yaml(path: Path) -> dict[str, Any]:
         ValueError: If the YAML is malformed or missing expected keys.
     """
     if not path.exists():
-        raise FileNotFoundError(
-            f"load_formative_inventory: chapter YAML not found: {path}"
-        )
+        raise FileNotFoundError(f"load_formative_inventory: chapter YAML not found: {path}")
     data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(
@@ -110,9 +106,7 @@ def _load_chapter_yaml(path: Path) -> dict[str, Any]:
             f"got {type(data).__name__}"
         )
     if "questions" not in data:
-        raise ValueError(
-            f"load_formative_inventory: YAML {path.name} missing 'questions' key"
-        )
+        raise ValueError(f"load_formative_inventory: YAML {path.name} missing 'questions' key")
     return data
 
 
@@ -136,8 +130,7 @@ def _build_yaml_index(
         metadata = data.get("metadata", {})
         if "chapter" not in metadata:
             raise ValueError(
-                f"load_formative_inventory: YAML {yaml_path.name} missing "
-                "'metadata.chapter' field"
+                f"load_formative_inventory: YAML {yaml_path.name} missing 'metadata.chapter' field"
             )
         ch_no = int(metadata["chapter"])
         index[ch_no] = data
@@ -371,6 +364,7 @@ def load_formative_inventory(
 # T040 — Quiz inventory parser (xlrd row dicts → SourceInventoryEntry)
 # ---------------------------------------------------------------------------
 
+
 def _week_to_chapter_no_for_quiz(week: int, curriculum_map: CurriculumMap) -> int | None:
     """Resolve week → chapter_no via curriculum_map (quiz variant).
 
@@ -513,9 +507,7 @@ def load_quiz_inventory(
     all_entries: list[SourceInventoryEntry] = []
     for xls_path in xls_paths:
         if not xls_path.exists():
-            raise FileNotFoundError(
-                f"load_quiz_inventory: .xls not found: {xls_path}"
-            )
+            raise FileNotFoundError(f"load_quiz_inventory: .xls not found: {xls_path}")
 
         # Parse week from filename (e.g. 'QuestionUploadExcel_9주차.xls' → 9)
         m = re.search(r"(\d+)주차", xls_path.stem)

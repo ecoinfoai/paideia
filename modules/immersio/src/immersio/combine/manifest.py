@@ -24,13 +24,12 @@ import json
 from pathlib import Path
 
 from packaging.version import InvalidVersion, Version
-
 from paideia_shared.schemas.combined_analysis_manifest import (
     CombinedAnalysisManifest,
 )
 
 
-class SchemaVersionMismatch(ValueError):
+class SchemaVersionMismatch(ValueError):  # noqa: N818  (intentional control-flow exception name, not an Error)
     """Raised when a needs-map / immersio Phase 2 silver schema_version is
     lower than the minimum this Phase 3 release requires (FR-024 exit 5)."""
 
@@ -54,9 +53,7 @@ def compute_input_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify_schema_version(
-    actual: str, *, minimum: str, name: str
-) -> None:
+def verify_schema_version(actual: str, *, minimum: str, name: str) -> None:
     """Reject ``actual < minimum`` per ``packaging.version.Version`` semver.
 
     String lexicographic comparison is *insufficient*: '0.1.10' < '0.1.2'

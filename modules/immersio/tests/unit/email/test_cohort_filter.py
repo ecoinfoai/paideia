@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.email.cohort_filter import (
     SCORE_THRESHOLD_PCT_100,
     CohortError,
@@ -22,7 +21,7 @@ def _entry(sid: str, idx: int = 0) -> EmailMappingEntry:
         student_id=sid,
         email=f"student{idx}@example.com",
         source_row_index=idx,
-        original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+        original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
     )
 
 
@@ -68,9 +67,7 @@ def test_score_exactly_threshold_in_rest(tmp_path: Path) -> None:
         tmp_path,
         [("1234567001", "홍길동", 60.0)],
     )
-    result = filter_by_cohort(
-        [_entry("1234567001")], metrics, CohortLabel.ALL
-    )
+    result = filter_by_cohort([_entry("1234567001")], metrics, CohortLabel.ALL)
     assert result.low_rows == []
     assert [r.student_id for r in result.rest_rows] == ["1234567001"]
 
@@ -149,9 +146,7 @@ def test_cohort_rest_keeps_only_rest(tmp_path: Path) -> None:
 
 def test_metrics_file_missing_raises(tmp_path: Path) -> None:
     with pytest.raises(CohortError, match="FR-H02"):
-        filter_by_cohort(
-            [_entry("1234567001")], tmp_path / "missing.parquet", CohortLabel.ALL
-        )
+        filter_by_cohort([_entry("1234567001")], tmp_path / "missing.parquet", CohortLabel.ALL)
 
 
 def test_metrics_missing_columns_raises(tmp_path: Path) -> None:

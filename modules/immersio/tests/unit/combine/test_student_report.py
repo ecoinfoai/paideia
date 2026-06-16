@@ -23,9 +23,7 @@ import pytest
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -51,12 +49,8 @@ def silver_setup(
         include_cluster=True,
     )
     assert rc == 0
-    silver_parquet = (
-        tmp / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
-    )
-    manifest_path = (
-        tmp / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
-    )
+    silver_parquet = tmp / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
+    manifest_path = tmp / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
     df = pq.read_table(silver_parquet).to_pandas()
     manifest_dict = json.loads(manifest_path.read_text(encoding="utf-8"))
     gold_target = tmp / "gold" / "immersio" / "2026-1-anatomy"
@@ -126,12 +120,8 @@ def test_byte_identical_re_run(
             gold_dir=root / "gold",
             include_cluster=True,
         )
-        silver_parquet = (
-            root / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
-        )
-        manifest_path = (
-            root / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
-        )
+        silver_parquet = root / "silver" / "immersio" / "2026-1-anatomy" / "진단×시험결합.parquet"
+        manifest_path = root / "silver" / "immersio" / "2026-1-anatomy" / "manifest_phase3.json"
         df = pq.read_table(silver_parquet).to_pandas()
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         gold = root / "gold" / "immersio" / "2026-1-anatomy"

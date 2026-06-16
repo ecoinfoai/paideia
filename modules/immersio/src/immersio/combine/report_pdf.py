@@ -16,10 +16,15 @@ Public API:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate
+
+if TYPE_CHECKING:
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import BaseDocTemplate
 
 from immersio import fonts as _fonts
 from immersio.report.md_parser import parse_markdown_to_flowables
@@ -43,11 +48,10 @@ def _to_epoch(iso_utc: str) -> int:
         dt = datetime.datetime.fromisoformat(s)
     except ValueError as exc:
         raise ValueError(
-            f"render_combined_analysis_pdf: created_at_utc is not valid "
-            f"ISO-8601 (got {iso_utc!r})"
+            f"render_combined_analysis_pdf: created_at_utc is not valid ISO-8601 (got {iso_utc!r})"
         ) from exc
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
     return int(dt.timestamp())
 
 
@@ -80,20 +84,15 @@ def render_combined_analysis_pdf(
             missing on the host (FR-023, exit 6 trigger).
     """
     if not isinstance(md_text, str) or not md_text.strip():
-        raise ValueError(
-            "render_combined_analysis_pdf: md_text must be a non-empty string"
-        )
+        raise ValueError("render_combined_analysis_pdf: md_text must be a non-empty string")
     output_path = Path(output_path)
     if not output_path.parent.is_dir():
         raise FileNotFoundError(
-            f"render_combined_analysis_pdf: parent directory missing: "
-            f"{output_path.parent}"
+            f"render_combined_analysis_pdf: parent directory missing: {output_path.parent}"
         )
 
     regular_path, bold_path = _fonts.resolve_korean_font_paths()
-    regular_name, bold_name = _fonts.register_for_reportlab(
-        regular_path, bold_path
-    )
+    regular_name, bold_name = _fonts.register_for_reportlab(regular_path, bold_path)
 
     # Patch the BodyText / Heading paragraph styles so md_parser's flowables
     # render Korean glyphs (Phase 1+2 inherit pattern).
@@ -117,7 +116,7 @@ def render_combined_analysis_pdf(
         producer=_PRODUCER,
     )
 
-    def _pin_metadata(canvas, _doc):
+    def _pin_metadata(canvas: Canvas, _doc: BaseDocTemplate) -> None:
         canvas.setProducer(_PRODUCER)
         canvas.setCreator(_PRODUCER)
         canvas.setTitle(_TITLE)

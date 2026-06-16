@@ -11,18 +11,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 # Pre-populate ``immersio.ingest`` to break ``io ↔ ingest`` circular import
 # during standalone test collection. See test_attendance_roster_only.py for
 # rationale.
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
+import pytest
 from immersio.io.exam_omr import (  # noqa: E402
     DEFAULT_RESULT_EXCLUDE_TOKENS,
     discover_section_files,
 )
-
 
 SECTION_TOKENS = ("A", "B", "C", "D")
 

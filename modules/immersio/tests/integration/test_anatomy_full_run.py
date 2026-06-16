@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from immersio import fonts as _fonts
 from immersio.analyze.pipeline import PipelineArgs, run_immersio_phase1
 

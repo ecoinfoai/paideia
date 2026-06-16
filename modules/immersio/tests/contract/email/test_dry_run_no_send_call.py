@@ -15,8 +15,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 
 _DRY_RUN_MODULES: tuple[Path, ...] = (
@@ -34,9 +32,7 @@ _DRY_RUN_MODULES: tuple[Path, ...] = (
 )
 
 _SEND_CALL_RE = re.compile(r"messages\(\)\.send\(")
-_GOOGLEAPICLIENT_IMPORT_RE = re.compile(
-    r"^\s*(import|from)\s+googleapiclient\b", re.MULTILINE
-)
+_GOOGLEAPICLIENT_IMPORT_RE = re.compile(r"^\s*(import|from)\s+googleapiclient\b", re.MULTILINE)
 
 
 def test_dry_run_modules_have_no_gmail_send_call() -> None:
@@ -65,7 +61,6 @@ def test_dry_run_modules_do_not_import_googleapiclient() -> None:
         for m in _GOOGLEAPICLIENT_IMPORT_RE.finditer(text):
             line_no = text.count("\n", 0, m.start()) + 1
             hits.append((str(path.relative_to(_REPO_ROOT)), str(line_no)))
-    assert not hits, (
-        "AV-S4: googleapiclient import detected in dry-run module(s):\n"
-        + "\n".join(f"  {p}:{ln}" for p, ln in hits)
+    assert not hits, "AV-S4: googleapiclient import detected in dry-run module(s):\n" + "\n".join(
+        f"  {p}:{ln}" for p, ln in hits
     )

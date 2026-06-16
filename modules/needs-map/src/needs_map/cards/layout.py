@@ -101,7 +101,8 @@ def render_card_pdf(
     c.setFont(font, 10)
     semester_kr = _format_semester_kr(semester)
     c.drawString(
-        left, y - 6 * mm,
+        left,
+        y - 6 * mm,
         f"{course_name_kr} ({semester_kr})    발행: {created_at_utc[:10]}",
     )
     _ = section  # 분반은 운영자 검토용 — silver/student_master에서 별도 조회
@@ -111,8 +112,13 @@ def render_card_pdf(
     radar_height = 100 * mm
     img = ImageReader(io.BytesIO(radar_png))
     c.drawImage(
-        img, left, radar_top - radar_height, width=right - left, height=radar_height,
-        preserveAspectRatio=True, mask="auto",
+        img,
+        left,
+        radar_top - radar_height,
+        width=right - left,
+        height=radar_height,
+        preserveAspectRatio=True,
+        mask="auto",
     )
 
     # C. Cluster

@@ -200,8 +200,17 @@ def _diagnostic_response_rows() -> list[dict]:
             }
         )
     # prior_knowledge: 1 multiselect partition item, options {bio_high, bio_none}
-    pk_choices = ["bio_high", "bio_high", "bio_none", "bio_none", "bio_high",
-                  "bio_high", "bio_none", "bio_high", "bio_high"]
+    pk_choices = [
+        "bio_high",
+        "bio_high",
+        "bio_none",
+        "bio_none",
+        "bio_high",
+        "bio_high",
+        "bio_none",
+        "bio_high",
+        "bio_high",
+    ]
     for sid, choice in zip(responder_ids, pk_choices, strict=False):
         for option in ("bio_high", "bio_none"):
             rows.append(
@@ -219,8 +228,17 @@ def _diagnostic_response_rows() -> list[dict]:
                 }
             )
     # life_context: 1 multiselect partition item, options {worker, student}
-    lc_choices = ["student", "worker", "student", "worker", "student",
-                  "worker", "student", "worker", "student"]
+    lc_choices = [
+        "student",
+        "worker",
+        "student",
+        "worker",
+        "student",
+        "worker",
+        "student",
+        "worker",
+        "student",
+    ]
     for sid, choice in zip(responder_ids, lc_choices, strict=False):
         for option in ("worker", "student"):
             rows.append(

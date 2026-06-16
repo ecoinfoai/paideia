@@ -25,7 +25,6 @@ from types import ModuleType
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
-
 from immersio.combine.joiner import join_silver_phase3
 from immersio.combine.silver_writer import (
     read_combined_silver,
@@ -37,9 +36,7 @@ from paideia_shared.schemas import CombinedAnalysisRow
 def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     builder_path = here.parents[2] / "fixtures" / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -55,22 +52,16 @@ def joined_df(tmp_path_factory: pytest.TempPathFactory) -> pd.DataFrame:
 
     nm = out / "silver" / "needs-map" / "2026-1-anatomy"
     im = out / "silver" / "immersio" / "2026-1-anatomy"
-    cluster_names_raw = json.loads(
-        (nm / "cluster_names.json").read_text(encoding="utf-8")
-    )
+    cluster_names_raw = json.loads((nm / "cluster_names.json").read_text(encoding="utf-8"))
     cluster_names = {int(k): v for k, v in cluster_names_raw.items()}
 
     df, _ = join_silver_phase3(
         student_master=pq.read_table(im / "student_master.parquet").to_pandas(),
         factor_scores=pq.read_table(nm / "factor_scores.parquet").to_pandas(),
-        cluster_assignment=pq.read_table(
-            nm / "cluster_assignment.parquet"
-        ).to_pandas(),
+        cluster_assignment=pq.read_table(nm / "cluster_assignment.parquet").to_pandas(),
         cluster_names=cluster_names,
         student_metrics=pq.read_table(im / "학생지표.parquet").to_pandas(),
-        diagnostic_response=pq.read_table(
-            im / "diagnostic_response.parquet"
-        ).to_pandas(),
+        diagnostic_response=pq.read_table(im / "diagnostic_response.parquet").to_pandas(),
     )
     return df
 
@@ -94,18 +85,14 @@ def test_written_parquet_has_60_columns(joined_df: pd.DataFrame, tmp_path: Path)
     assert len(table.column_names) == 60
 
 
-def test_written_parquet_row_count_matches(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_written_parquet_row_count_matches(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
     table = pq.read_table(out)
     assert table.num_rows == len(joined_df)
 
 
-def test_read_combined_silver_decodes_dict_columns(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_read_combined_silver_decodes_dict_columns(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """read_combined_silver lifts JSON-string dicts back into native dicts."""
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
@@ -123,9 +110,7 @@ def test_read_combined_silver_decodes_dict_columns(
         )
 
 
-def test_round_trip_pydantic_validation(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_round_trip_pydantic_validation(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """Every row survives Pydantic V1-V6 after parquet round-trip."""
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
@@ -139,9 +124,7 @@ def test_round_trip_pydantic_validation(
 # ---------------------------------------------------------------------------
 
 
-def test_determinism_vector_2_pyarrow_flags(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_determinism_vector_2_pyarrow_flags(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """research §R13 vector #2 — use_dictionary=False, write_statistics=False."""
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
@@ -158,8 +141,7 @@ def test_determinism_vector_2_pyarrow_flags(
         stats = col_meta.statistics
         if stats is not None:
             assert stats.min is None and stats.max is None, (
-                f"column {col_idx} carries min/max stats "
-                f"(write_statistics must be False)"
+                f"column {col_idx} carries min/max stats (write_statistics must be False)"
             )
 
 
@@ -175,9 +157,7 @@ def test_determinism_vector_6_row_order_student_id_ascending(
     assert sids == sorted(sids)
 
 
-def test_determinism_vector_1_dict_json_sort_keys(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_determinism_vector_1_dict_json_sort_keys(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """dict columns serialised with sort_keys=True ensures byte-identical JSON."""
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
@@ -187,14 +167,11 @@ def test_determinism_vector_1_dict_json_sort_keys(
     decoded = json.loads(sample)
     canonical = json.dumps(decoded, ensure_ascii=False, sort_keys=True)
     assert sample == canonical, (
-        f"chapter_correct_rates JSON not canonical: got {sample!r}, "
-        f"expected {canonical!r}"
+        f"chapter_correct_rates JSON not canonical: got {sample!r}, expected {canonical!r}"
     )
 
 
-def test_byte_identical_two_consecutive_writes(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_byte_identical_two_consecutive_writes(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """T021 의 integration 테스트가 본 invariant 에 의존."""
     out1 = tmp_path / "run1.parquet"
     out2 = tmp_path / "run2.parquet"
@@ -203,9 +180,7 @@ def test_byte_identical_two_consecutive_writes(
     assert out1.read_bytes() == out2.read_bytes()
 
 
-def test_dict_columns_stored_as_strings(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_dict_columns_stored_as_strings(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """5 dict columns must land as parquet string type (R8 + contract §Group 5)."""
     out = tmp_path / "out.parquet"
     write_combined_silver(joined_df, out)
@@ -219,8 +194,7 @@ def test_dict_columns_stored_as_strings(
     ):
         field = schema.field(col)
         assert "string" in str(field.type), (
-            f"dict column {col} must be string-typed in parquet, "
-            f"got {field.type}"
+            f"dict column {col} must be string-typed in parquet, got {field.type}"
         )
 
 
@@ -240,9 +214,7 @@ def test_write_rejects_input_missing_required_columns(
         write_combined_silver(bad, out)
 
 
-def test_write_rejects_bool_column_nan(
-    joined_df: pd.DataFrame, tmp_path: Path
-) -> None:
+def test_write_rejects_bool_column_nan(joined_df: pd.DataFrame, tmp_path: Path) -> None:
     """architect Phase 3 위협 (c): 13 bool 컬럼은 NaN 절대 불가 — Fail-Fast.
 
     pandas refuses to assign NaN to bool dtype directly, so we cast 진단응답

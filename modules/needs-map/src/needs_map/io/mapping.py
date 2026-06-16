@@ -99,9 +99,7 @@ def load_mapping(path: Path) -> DiagnosticMappingConfig:
             (message preserves V1-V6 prefix and offending axis or column).
     """
     if not isinstance(path, Path):
-        raise TypeError(
-            f"load_mapping: expected pathlib.Path, got {type(path).__name__}."
-        )
+        raise TypeError(f"load_mapping: expected pathlib.Path, got {type(path).__name__}.")
     if not path.is_file():
         raise FileNotFoundError(f"Mapping YAML not found: {path}")
 
@@ -122,8 +120,7 @@ def load_mapping(path: Path) -> DiagnosticMappingConfig:
     data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError(
-            f"load_mapping: expected top-level mapping in {path}, got "
-            f"{type(data).__name__}."
+            f"load_mapping: expected top-level mapping in {path}, got {type(data).__name__}."
         )
 
     # Drop the top-level ``ordinal_maps:`` block before forwarding to Pydantic
@@ -185,9 +182,7 @@ def _try_kind_error_message(
     if not isinstance(columns, list):
         return None
     column_lookup = {
-        c["source"]: c
-        for c in columns
-        if isinstance(c, dict) and isinstance(c.get("source"), str)
+        c["source"]: c for c in columns if isinstance(c, dict) and isinstance(c.get("source"), str)
     }
 
     for error in exc.errors():

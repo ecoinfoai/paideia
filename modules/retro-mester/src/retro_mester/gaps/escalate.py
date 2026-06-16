@@ -60,9 +60,7 @@ def escalate_structural(
     # For each chapter, compute whether the baseline segment is also below threshold.
     structural_chapters: set[str] = set()
     for chapter in chapters:
-        students_with_data = [
-            row for row in baseline_rows if chapter in row.chapter_correct_rates
-        ]
+        students_with_data = [row for row in baseline_rows if chapter in row.chapter_correct_rates]
         if not students_with_data:
             # No baseline data for this chapter — cannot confirm structural.
             continue

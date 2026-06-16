@@ -152,9 +152,7 @@ class TestInitialReviewNoteBlank:
     def test_generated_item_review_note_is_blank(self) -> None:
         """A freshly created ExamItemDraft has review_note='' by default."""
         item = _make_item(1)
-        assert item.review_note == "", (
-            f"Expected empty review_note, got {item.review_note!r}"
-        )
+        assert item.review_note == "", f"Expected empty review_note, got {item.review_note!r}"
 
     def test_generated_item_review_note_is_empty_string(self) -> None:
         """review_note defaults to '' not None."""
@@ -210,9 +208,7 @@ class TestReviewAgentFillsNote:
         cache = InputHashCache(backend=backend, cache_dir=tmp_path / "cache")
 
         reviewed = review_items(items, backend=backend, cache=cache)
-        assert len(reviewed) == len(items), (
-            f"Expected {len(items)} items, got {len(reviewed)}"
-        )
+        assert len(reviewed) == len(items), f"Expected {len(items)} items, got {len(reviewed)}"
 
     def test_item_nos_preserved(self, tmp_path: Path) -> None:
         """review_items preserves item order and item_no values."""
@@ -245,9 +241,7 @@ class TestReviewAgentAppendsNotOverwrites:
         assert existing_note in result.review_note, (
             "Original review_note was overwritten instead of appended"
         )
-        assert _FINDING_TEXT in result.review_note, (
-            "New finding was not appended to review_note"
-        )
+        assert _FINDING_TEXT in result.review_note, "New finding was not appended to review_note"
 
     def test_no_finding_does_not_clear_existing_note(self, tmp_path: Path) -> None:
         """If reviewer finds nothing, existing review_note is unchanged."""
@@ -262,8 +256,7 @@ class TestReviewAgentAppendsNotOverwrites:
         result = reviewed[0]
 
         assert result.review_note == existing_note, (
-            f"Expected unchanged review_note={existing_note!r}, "
-            f"got {result.review_note!r}"
+            f"Expected unchanged review_note={existing_note!r}, got {result.review_note!r}"
         )
 
 
@@ -369,8 +362,7 @@ class TestReviewAgentWithBuildPipeline:
                     ],
                     "answer_no": 1,
                     "distractor_rationale": [
-                        "틀린 진술: 가." if j == 0 else "옳은 진술."
-                        for j in range(5)
+                        "틀린 진술: 가." if j == 0 else "옳은 진술." for j in range(5)
                     ],
                     "wrong_explanation": "오답 설명." * 20,
                     "leap_explanation": "도약 설명." * 20,
@@ -412,9 +404,7 @@ class TestReviewAgentWithBuildPipeline:
         bronze_dir.mkdir(parents=True, exist_ok=True)
         for cn, ch in zip(chapter_nos_local, chapters_local, strict=False):
             fname = f"{cn}장 {ch.split(' ', 1)[1]}.txt"
-            (bronze_dir / fname).write_text(
-                f"{cn}장 {ch}\n내용\n기능\n", encoding="utf-8"
-            )
+            (bronze_dir / fname).write_text(f"{cn}장 {ch}\n내용\n기능\n", encoding="utf-8")
 
         items, _ = build_exam(
             blueprint=blueprint,

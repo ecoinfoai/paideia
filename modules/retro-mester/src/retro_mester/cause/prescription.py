@@ -130,15 +130,11 @@ def refine_cause(
         if config.group_roster.get(row.student_id) == baseline_seg
         and chapter in row.chapter_correct_rates
     ]
-    baseline_mean_rate = (
-        sum(baseline_rates) / len(baseline_rates) if baseline_rates else 0.0
-    )
+    baseline_mean_rate = sum(baseline_rates) / len(baseline_rates) if baseline_rates else 0.0
 
     # Check for hard items on this chapter.
     chapter_items = [it for it in items if it.chapter == chapter]
-    hard_item_present = any(
-        it.expected_difficulty == "어려움" for it in chapter_items
-    )
+    hard_item_present = any(it.expected_difficulty == "어려움" for it in chapter_items)
 
     signals: dict[str, float] = {
         "baseline_mean_rate": baseline_mean_rate,

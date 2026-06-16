@@ -14,6 +14,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write(tmp_path: Path, name: str, content: str) -> Path:
     p = tmp_path / name
     p.write_text(textwrap.dedent(content), encoding="utf-8")
@@ -63,6 +64,7 @@ _VALID_CURRICULUM_MAP = """\
 # T012 — load_blueprint
 # ---------------------------------------------------------------------------
 
+
 class TestLoadBlueprint:
     def test_valid_blueprint_returns_model(self, tmp_path: Path) -> None:
         """Valid blueprint.yaml is parsed and returns ExamenBlueprint."""
@@ -89,8 +91,10 @@ class TestLoadBlueprint:
 
         bad = _VALID_BLUEPRINT.replace("total_items: 48", "total_items: 10")
         # source_mix sum must still equal total_items=10 for V2 not to fire first
-        bad = bad.replace("formative: 12\n      quiz: 15\n      textbook: 21",
-                          "formative: 3\n      quiz: 4\n      textbook: 3")
+        bad = bad.replace(
+            "formative: 12\n      quiz: 15\n      textbook: 21",
+            "formative: 3\n      quiz: 4\n      textbook: 3",
+        )
         p = _write(tmp_path, "blueprint.yaml", bad)
         with pytest.raises(ValueError) as exc_info:
             load_blueprint(p)
@@ -134,6 +138,7 @@ class TestLoadBlueprint:
 # T012 — load_curriculum_map
 # ---------------------------------------------------------------------------
 
+
 class TestLoadCurriculumMap:
     def test_valid_map_returns_model(self, tmp_path: Path) -> None:
         """Valid curriculum_map.yaml returns CurriculumMap."""
@@ -163,8 +168,7 @@ class TestLoadCurriculumMap:
         """Missing 'entries' raises ValidationError with file + field name."""
         from examen.ingest.config import load_curriculum_map
 
-        p = _write(tmp_path, "curriculum_map.yaml",
-                   "semester: '2026-1'\ncourse_slug: 'anatomy'\n")
+        p = _write(tmp_path, "curriculum_map.yaml", "semester: '2026-1'\ncourse_slug: 'anatomy'\n")
         with pytest.raises(ValueError) as exc_info:
             load_curriculum_map(p)
         msg = str(exc_info.value)
@@ -175,6 +179,7 @@ class TestLoadCurriculumMap:
 # ---------------------------------------------------------------------------
 # T012 — bronze_dir helper
 # ---------------------------------------------------------------------------
+
 
 class TestBronzeDir:
     def test_returns_expected_path(self, tmp_path: Path) -> None:

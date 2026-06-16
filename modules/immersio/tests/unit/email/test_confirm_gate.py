@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import io
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from immersio.email.composer import build_email_draft
 from immersio.email.confirm_gate import ConfirmGateAborted, confirm_first_n
 from paideia_shared.schemas import (
@@ -73,7 +72,7 @@ def _make_drafts(tmp_path: Path, n: int):
             student_id=sid,
             email=f"student{i}@example.com",
             source_row_index=i,
-            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            original_timestamp=datetime(2026, 5, 1, 9, 0, 0, tzinfo=UTC),
         )
         draft = build_email_draft(
             profile=profile,
@@ -141,9 +140,7 @@ def test_sample_size_above_ten_rejected(tmp_path: Path) -> None:
 def test_sample_size_one_proceeds(tmp_path: Path) -> None:
     drafts = _make_drafts(tmp_path, 5)
     stdout = io.StringIO()
-    confirm_first_n(
-        drafts, sample_size=1, stdin=io.StringIO("yes\n"), stdout=stdout
-    )
+    confirm_first_n(drafts, sample_size=1, stdin=io.StringIO("yes\n"), stdout=stdout)
     # Only first student appears
     text = stdout.getvalue()
     assert "1234560000" in text

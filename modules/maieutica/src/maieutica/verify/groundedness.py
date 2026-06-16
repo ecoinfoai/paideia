@@ -83,11 +83,7 @@ def verify_groundedness(
         term = item.key_concept
     else:
         idx = item.answer_no - 1
-        term = (
-            item.option_evidence[idx]
-            if 0 <= idx < len(item.option_evidence)
-            else None
-        )
+        term = item.option_evidence[idx] if 0 <= idx < len(item.option_evidence) else None
     sentinel = not term or term == MISSING_EVIDENCE_PLACEHOLDER
 
     if sentinel:
@@ -111,13 +107,9 @@ def verify_groundedness(
     # still gets status="확인". US5's adversarial review pass (review_agent, R8) is
     # the backstop that scans leap.text for external/uncited content.
     leap_evidence = evidence.model_copy()
-    grounded_leap = item.leap.model_copy(
-        update={"textbook_evidence": leap_evidence}
-    )
+    grounded_leap = item.leap.model_copy(update={"textbook_evidence": leap_evidence})
 
-    return item.model_copy(
-        update={"textbook_evidence": evidence, "leap": grounded_leap}
-    )
+    return item.model_copy(update={"textbook_evidence": evidence, "leap": grounded_leap})
 
 
 def ground_formative(

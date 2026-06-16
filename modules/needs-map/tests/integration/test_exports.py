@@ -165,11 +165,15 @@ def test_factor_scores_long_csv_sorted_by_student_id(tmp_path: Path) -> None:
     lines = [line for line in text.splitlines() if line]
     # First non-header line starts with the lowest student_id.
     body_first_field = [line.split(",")[0] for line in lines[1:]]
-    assert body_first_field == sorted(body_first_field) == [
-        "2026194001",
-        "2026194042",
-        "2026194100",
-    ]
+    assert (
+        body_first_field
+        == sorted(body_first_field)
+        == [
+            "2026194001",
+            "2026194042",
+            "2026194100",
+        ]
+    )
 
 
 def test_factor_scores_long_yaml_round_trip(tmp_path: Path) -> None:
@@ -215,11 +219,7 @@ def test_factor_scores_long_missing_axis_renders_empty_cell(tmp_path: Path) -> N
     from needs_map.report.exports import write_factor_scores_long
     from paideia_shared.schemas import FactorScoresLongRow
 
-    rows = [
-        FactorScoresLongRow(
-            **_make_long_row("2026194001", missing_axis="motivation")
-        )
-    ]
+    rows = [FactorScoresLongRow(**_make_long_row("2026194001", missing_axis="motivation"))]
     csv_path, _ = write_factor_scores_long(rows, tmp_path)
     text = csv_path.read_text(encoding="utf-8-sig")
     # The motivation_raw cell must be empty, not "None"; pandas to_csv with
@@ -242,12 +242,8 @@ def test_axis_summary_csv_contains_three_row_kinds(tmp_path: Path) -> None:
     rows = [AxisSummaryRow(**_make_axis_summary_quant_row(axis)) for axis in _AXES]
     rows.extend(
         [
-            AxisSummaryRow(
-                **_make_axis_summary_aux_row("prior_readiness", "q5", "중간", 87)
-            ),
-            AxisSummaryRow(
-                **_make_axis_summary_aux_row("prior_readiness", "q5", "낮음", 30)
-            ),
+            AxisSummaryRow(**_make_axis_summary_aux_row("prior_readiness", "q5", "중간", 87)),
+            AxisSummaryRow(**_make_axis_summary_aux_row("prior_readiness", "q5", "낮음", 30)),
         ]
     )
     rows.extend(
@@ -268,9 +264,7 @@ def test_axis_summary_aux_row_carries_response_rate_base(tmp_path: Path) -> None
 
     rows = [
         AxisSummaryRow(**_make_axis_summary_quant_row("motivation")),
-        AxisSummaryRow(
-            **_make_axis_summary_aux_row("interest_topics", "q9", "신경계", 64)
-        ),
+        AxisSummaryRow(**_make_axis_summary_aux_row("interest_topics", "q9", "신경계", 64)),
     ]
     csv_path, _ = write_axis_summary(rows, tmp_path)
     text = csv_path.read_text(encoding="utf-8-sig")
@@ -283,12 +277,8 @@ def test_axis_summary_aux_row_carries_response_rate_base(tmp_path: Path) -> None
     for line in text.splitlines()[1:]:
         if "auxiliary_distribution" in line:
             cells = line.split(",")
-            assert "180" in cells or "180.0" in cells, (
-                f"expected n_responded=180 in row: {cells}"
-            )
-            assert "194" in cells or "194.0" in cells, (
-                f"expected n_cohort=194 in row: {cells}"
-            )
+            assert "180" in cells or "180.0" in cells, f"expected n_responded=180 in row: {cells}"
+            assert "194" in cells or "194.0" in cells, f"expected n_cohort=194 in row: {cells}"
 
 
 def test_axis_summary_yaml_groups_by_row_kind(tmp_path: Path) -> None:
@@ -300,9 +290,7 @@ def test_axis_summary_yaml_groups_by_row_kind(tmp_path: Path) -> None:
 
     rows = [
         AxisSummaryRow(**_make_axis_summary_quant_row("motivation")),
-        AxisSummaryRow(
-            **_make_axis_summary_aux_row("prior_readiness", "q5", "중간", 87)
-        ),
+        AxisSummaryRow(**_make_axis_summary_aux_row("prior_readiness", "q5", "중간", 87)),
         AxisSummaryRow(**_make_axis_summary_freetext_row("anxiety_freetext")),
     ]
     _, yaml_path = write_axis_summary(rows, tmp_path)
@@ -310,9 +298,7 @@ def test_axis_summary_yaml_groups_by_row_kind(tmp_path: Path) -> None:
     assert "quantitative_axes" in loaded
     assert "auxiliary_distributions" in loaded
     assert "freetext_summaries" in loaded
-    assert any(
-        item["axis_key"] == "motivation" for item in loaded["quantitative_axes"]
-    )
+    assert any(item["axis_key"] == "motivation" for item in loaded["quantitative_axes"])
 
 
 def test_axis_summary_byte_identical_two_writes(tmp_path: Path) -> None:
@@ -320,10 +306,7 @@ def test_axis_summary_byte_identical_two_writes(tmp_path: Path) -> None:
     from needs_map.report.exports import write_axis_summary
     from paideia_shared.schemas import AxisSummaryRow
 
-    rows = [
-        AxisSummaryRow(**_make_axis_summary_quant_row(axis))
-        for axis in _AXES[:2]
-    ]
+    rows = [AxisSummaryRow(**_make_axis_summary_quant_row(axis)) for axis in _AXES[:2]]
     out_a = tmp_path / "a"
     out_b = tmp_path / "b"
     out_a.mkdir()

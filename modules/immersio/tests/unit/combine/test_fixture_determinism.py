@@ -32,9 +32,7 @@ def _load_builder() -> ModuleType:
     here = Path(__file__).resolve()
     fixtures_root = here.parents[2] / "fixtures"
     builder_path = fixtures_root / "build_silver_phase3.py"
-    spec = importlib.util.spec_from_file_location(
-        "build_silver_phase3", builder_path
-    )
+    spec = importlib.util.spec_from_file_location("build_silver_phase3", builder_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load builder from {builder_path}")
     module = importlib.util.module_from_spec(spec)
@@ -106,8 +104,7 @@ def test_cluster_names_sidecar_canonical_json(tmp_path: Path) -> None:
     # (modulo trailing newline). This catches any drift in indent / sort.
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
     assert text.rstrip("\n") == canonical, (
-        "cluster_names.json drifted from canonical form (sort_keys + "
-        "ensure_ascii=False + indent=2)"
+        "cluster_names.json drifted from canonical form (sort_keys + ensure_ascii=False + indent=2)"
     )
 
 
@@ -136,11 +133,7 @@ def test_missing_factor_scores_fixture_omits_factor_scores(tmp_path: Path) -> No
     build_all(out)
 
     nm_root = (
-        out
-        / "silver_phase3_missing_factor_scores"
-        / "silver"
-        / "needs-map"
-        / "2026-1-anatomy"
+        out / "silver_phase3_missing_factor_scores" / "silver" / "needs-map" / "2026-1-anatomy"
     )
     assert (nm_root / "manifest.json").exists()
     assert (nm_root / "cluster_assignment.parquet").exists()

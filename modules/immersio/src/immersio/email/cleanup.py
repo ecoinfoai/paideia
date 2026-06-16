@@ -103,14 +103,9 @@ def _validate_keep_statuses(
         token = raw.strip()
         if not token:
             err.write(
-                "오류: 지원되지 않는 status: ``. "
-                "유효한 값 6종 — "
-                f"{_format_valid_statuses()}.\n"
+                f"오류: 지원되지 않는 status: ``. 유효한 값 6종 — {_format_valid_statuses()}.\n"
             )
-            err.write(
-                "참고 — 본 명령은 lock 을 획득하지 않았고 csv 를 "
-                "변경하지 않았습니다.\n"
-            )
+            err.write("참고 — 본 명령은 lock 을 획득하지 않았고 csv 를 변경하지 않았습니다.\n")
             raise ValueError(
                 "지원되지 않는 status: `` (empty token). "
                 f"유효한 값 6종 — {_format_valid_statuses()}."
@@ -121,13 +116,9 @@ def _validate_keep_statuses(
                 "유효한 값 6종 — "
                 f"{_format_valid_statuses()}.\n"
             )
-            err.write(
-                "참고 — 본 명령은 lock 을 획득하지 않았고 csv 를 "
-                "변경하지 않았습니다.\n"
-            )
+            err.write("참고 — 본 명령은 lock 을 획득하지 않았고 csv 를 변경하지 않았습니다.\n")
             raise ValueError(
-                f"지원되지 않는 status: `{token}`. "
-                f"유효한 값 6종 — {_format_valid_statuses()}."
+                f"지원되지 않는 status: `{token}`. 유효한 값 6종 — {_format_valid_statuses()}."
             )
         parsed.append(DispatchStatus(token))
     return parsed
@@ -334,8 +325,7 @@ def _cleanup_log_dry_run(
 ) -> int:
     """Dry-run path — read csv, emit preview + distribution, no writes."""
     out.write(
-        "[immersio email-cleanup-log] 모드: dry-run "
-        "(미리보기, 파일 변경 없음, lock 미획득)\n"
+        "[immersio email-cleanup-log] 모드: dry-run (미리보기, 파일 변경 없음, lock 미획득)\n"
     )
     out.write(f"  대상 csv: {log_csv_path}\n")
     out.write(f"  보존 status: {keep_labels_human}\n")
@@ -349,9 +339,7 @@ def _cleanup_log_dry_run(
             "`immersio email --send` 가 1회 이상 실행된 뒤에 "
             "cleanup-log 를 사용하세요.\n"
         )
-        raise FileNotFoundError(
-            f"발송 로그 csv 가 존재하지 않습니다: {log_csv_path}"
-        )
+        raise FileNotFoundError(f"발송 로그 csv 가 존재하지 않습니다: {log_csv_path}")
     rows = read_dispatch_log(log_csv_path)
     if not rows:
         err.write(
@@ -361,9 +349,7 @@ def _cleanup_log_dry_run(
             "`immersio email --send` 가 1회 이상 실행된 뒤에 "
             "cleanup-log 를 사용하세요.\n"
         )
-        raise FileNotFoundError(
-            f"발송 로그 csv 가 빈 파일입니다: {log_csv_path}"
-        )
+        raise FileNotFoundError(f"발송 로그 csv 가 빈 파일입니다: {log_csv_path}")
 
     rows_kept = [r for r in rows if r.status in keep_set]
     removed_count = len(rows) - len(rows_kept)
@@ -395,9 +381,7 @@ def _cleanup_log_real(
             "`immersio email --send` 가 1회 이상 실행된 뒤에 "
             "cleanup-log 를 사용하세요.\n"
         )
-        raise FileNotFoundError(
-            f"발송 로그 csv 가 존재하지 않습니다: {log_csv_path}"
-        )
+        raise FileNotFoundError(f"발송 로그 csv 가 존재하지 않습니다: {log_csv_path}")
 
     # Lock the csv file itself — same target as ``email --send``'s
     # ``_exclusive_lock``, so the two commands are mutually exclusive
@@ -413,9 +397,7 @@ def _cleanup_log_real(
                 "`immersio email --send` 가 1회 이상 실행된 뒤에 "
                 "cleanup-log 를 사용하세요.\n"
             )
-            raise FileNotFoundError(
-                f"발송 로그 csv 가 빈 파일입니다: {log_csv_path}"
-            )
+            raise FileNotFoundError(f"발송 로그 csv 가 빈 파일입니다: {log_csv_path}")
 
         # Step 4: filter + 0-row guard (real mode).
         rows_kept = [r for r in rows if r.status in keep_set]
@@ -444,8 +426,7 @@ def _cleanup_log_real(
         sha_bak = _compute_sha256(bak_path)
         if sha_bak != sha_pre:
             raise OSError(
-                f"백업 sha256 불일치: 백업({sha_bak}) != 원본({sha_pre}). "
-                f"백업 경로: {bak_path}"
+                f"백업 sha256 불일치: 백업({sha_bak}) != 원본({sha_pre}). 백업 경로: {bak_path}"
             )
 
         # Emit the §4.1 normal-completion preamble before atomic replace
@@ -455,9 +436,7 @@ def _cleanup_log_real(
         out.write(f"  대상 csv: {log_csv_path}\n")
         out.write(f"  보존 status: {keep_labels_human}\n")
         out.write(f"  백업 파일: {bak_path}\n")
-        out.write(
-            f"  백업 sha256: {sha_bak} == 정리 직전 csv sha256 ✓\n"
-        )
+        out.write(f"  백업 sha256: {sha_bak} == 정리 직전 csv sha256 ✓\n")
 
         # Step 6: atomic replace.
         new_content = _serialize_rows_csv(rows_kept)

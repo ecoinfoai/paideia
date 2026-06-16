@@ -51,9 +51,7 @@ def _make_index() -> EvidenceIndex:
             removed_spans=[],
         )
     ]
-    return EvidenceIndex.from_chapter(
-        lines=_LINES, chunks=chunks, source_file="8장 호흡계통.txt"
-    )
+    return EvidenceIndex.from_chapter(lines=_LINES, chunks=chunks, source_file="8장 호흡계통.txt")
 
 
 def _make_candidate(
@@ -232,8 +230,7 @@ class TestLeapGroundedness:
         out = verify_groundedness(item, _make_index())
         assert out.leap.text == item.leap.text
         assert (
-            out.answer_explanation_combined
-            == f"{out.wrong_explanation} ─ 도약 ─ {out.leap.text}"
+            out.answer_explanation_combined == f"{out.wrong_explanation} ─ 도약 ─ {out.leap.text}"
         )
 
     def test_original_leap_evidence_untouched(self) -> None:

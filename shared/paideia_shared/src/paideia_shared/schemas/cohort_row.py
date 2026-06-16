@@ -25,18 +25,14 @@ class CohortRow(BaseModel):
     @classmethod
     def _v_student_id(cls, value: str) -> str:
         if not _STUDENT_ID_RE.fullmatch(value):
-            raise ValueError(
-                f"CohortRow.student_id must match ^\\d{{10}}$ (got {value!r})"
-            )
+            raise ValueError(f"CohortRow.student_id must match ^\\d{{10}}$ (got {value!r})")
         return value
 
     @field_validator("cohort")
     @classmethod
     def _v_cohort_not_all(cls, value: CohortLabel) -> CohortLabel:
         if value == CohortLabel.ALL:
-            raise ValueError(
-                "CohortRow.cohort must be LOW_SCORE or REST (not ALL)"
-            )
+            raise ValueError("CohortRow.cohort must be LOW_SCORE or REST (not ALL)")
         return value
 
 

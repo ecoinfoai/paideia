@@ -48,7 +48,7 @@ class FreetextAuditRow(BaseModel):
     tokenizer_vocab_sha256: Annotated[str, Field(pattern=_SHA256_PATTERN)]
 
     @model_validator(mode="after")
-    def _char_offsets_within_text(self) -> "FreetextAuditRow":
+    def _char_offsets_within_text(self) -> FreetextAuditRow:
         """char_start ≤ char_end ≤ redacted_text_length — invariant per data-model §9."""
         if self.char_start > self.char_end:
             raise ValueError(

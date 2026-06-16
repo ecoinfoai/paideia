@@ -129,9 +129,7 @@ def _write_fixture_tree(data_root: Path) -> None:
         _combined_row("2026000003", {_CHAPTER_A: 0.45, _CHAPTER_B: 0.25}),
         _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
     ]
-    pd.DataFrame(combined_rows).to_parquet(
-        silver_dir / "진단×시험결합.parquet", index=False
-    )
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
     pd.DataFrame([_item_row(1, _CHAPTER_A), _item_row(2, _CHAPTER_B)]).to_parquet(
         silver_dir / "문항통계.parquet", index=False
     )
@@ -243,10 +241,7 @@ class TestUS1Determinism:
             assert p2.exists(), f"run2 missing: {rel}"
             b1 = p1.read_bytes()
             b2 = p2.read_bytes()
-            assert b1 == b2, (
-                f"Byte mismatch in {rel}: "
-                f"run1={len(b1)} bytes, run2={len(b2)} bytes"
-            )
+            assert b1 == b2, f"Byte mismatch in {rel}: run1={len(b1)} bytes, run2={len(b2)} bytes"
 
     def test_manifest_excluded_from_identity(self, tmp_path: Path) -> None:
         """manifest_retro.json is not required to be byte-identical across runs.
@@ -271,6 +266,13 @@ class TestUS1Determinism:
         )
 
         # Non-timestamp fields must be identical
-        for key in ("module_version", "schema_version", "semester", "course_slug",
-                    "thresholds", "counts", "degrade"):
+        for key in (
+            "module_version",
+            "schema_version",
+            "semester",
+            "course_slug",
+            "thresholds",
+            "counts",
+            "degrade",
+        ):
             assert m1[key] == m2[key], f"Manifest field '{key}' differs between runs"

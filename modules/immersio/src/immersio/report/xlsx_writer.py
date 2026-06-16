@@ -40,8 +40,8 @@ import datetime
 import io
 import re
 import zipfile
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -109,15 +109,15 @@ def _parse_iso8601_utc(s: str) -> datetime.datetime:
     try:
         dt = datetime.datetime.fromisoformat(s_norm)
     except ValueError as exc:
-        raise ValueError(
-            f"generated_at_utc is not a valid ISO8601 string: {s!r}"
-        ) from exc
+        raise ValueError(f"generated_at_utc is not a valid ISO8601 string: {s!r}") from exc
     if dt.tzinfo is not None:
-        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(datetime.UTC).replace(tzinfo=None)
     return dt
 
 
-def _stamp_workbook(wb: Workbook, semester: str, course_name_kr: str, when: datetime.datetime) -> None:
+def _stamp_workbook(
+    wb: Workbook, semester: str, course_name_kr: str, when: datetime.datetime
+) -> None:
     wb.properties.creator = _PRODUCER
     wb.properties.lastModifiedBy = _PRODUCER
     wb.properties.created = when
@@ -153,8 +153,15 @@ def _build_metadata_sheet(wb: Workbook, rows: Sequence[MetadataAggregate]) -> No
     ws = wb.create_sheet("2_메타데이터통계")
     bold = Font(bold=True)
     headers = (
-        "metadata_kind", "metadata_value", "n", "mean", "sd",
-        "test_kind", "test_p_value", "levene_p_value", "note",
+        "metadata_kind",
+        "metadata_value",
+        "n",
+        "mean",
+        "sd",
+        "test_kind",
+        "test_p_value",
+        "levene_p_value",
+        "note",
     )
     for c, h in enumerate(headers, start=1):
         ws.cell(1, c, h).font = bold
@@ -188,8 +195,14 @@ def _build_discrimination_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -
     ws = wb.create_sheet("3_변별력")
     bold = Font(bold=True)
     headers = (
-        "문항번호", "정답률", "변별력지수", "점-이연_상관",
-        "변별력_판정", "챕터", "문제유형", "난이도",
+        "문항번호",
+        "정답률",
+        "변별력지수",
+        "점-이연_상관",
+        "변별력_판정",
+        "챕터",
+        "문제유형",
+        "난이도",
     )
     for c, h in enumerate(headers, start=1):
         ws.cell(1, c, h).font = bold
@@ -208,9 +221,17 @@ def _build_correct_rate_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> 
     ws = wb.create_sheet("4_정답률")
     bold = Font(bold=True)
     headers = (
-        "문항번호", "정답률(%)", "챕터", "문제유형", "출처",
-        "난이도", "예상_난이도", "정답번호", "최다오답번호",
-        "최다오답률(%)", "무응답(%)",
+        "문항번호",
+        "정답률(%)",
+        "챕터",
+        "문제유형",
+        "출처",
+        "난이도",
+        "예상_난이도",
+        "정답번호",
+        "최다오답번호",
+        "최다오답률(%)",
+        "무응답(%)",
     )
     for c, h in enumerate(headers, start=1):
         ws.cell(1, c, h).font = bold
@@ -225,7 +246,8 @@ def _build_correct_rate_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> 
         ws.cell(i, 8, it.correct_answer)
         ws.cell(i, 9, it.top_distractor_no)
         ws.cell(
-            i, 10,
+            i,
+            10,
             round(it.top_distractor_rate * 100, 2) if it.top_distractor_rate is not None else None,
         )
         ws.cell(i, 11, round(it.omit_rate * 100, 2))
@@ -235,8 +257,13 @@ def _build_distractor_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> No
     ws = wb.create_sheet("5_오답분석")
     bold = Font(bold=True)
     headers = (
-        "문항번호", "정답률(%)", "변별력지수", "무응답률(%)",
-        "최다오답번호", "최다오답률(%)", "인접_distractor",
+        "문항번호",
+        "정답률(%)",
+        "변별력지수",
+        "무응답률(%)",
+        "최다오답번호",
+        "최다오답률(%)",
+        "인접_distractor",
         "distractor_label",
     )
     for c, h in enumerate(headers, start=1):
@@ -248,7 +275,8 @@ def _build_distractor_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> No
         ws.cell(i, 4, round(it.omit_rate * 100, 2))
         ws.cell(i, 5, it.top_distractor_no)
         ws.cell(
-            i, 6,
+            i,
+            6,
             round(it.top_distractor_rate * 100, 2) if it.top_distractor_rate is not None else None,
         )
         ws.cell(i, 7, "yes" if it.is_top_distractor_adjacent else "no")
@@ -262,16 +290,21 @@ def _build_distractor_sheet(wb: Workbook, items: Sequence[ItemStatistics]) -> No
         _ = cell_d, cell_label  # references retained for clarity
 
 
-def _build_student_score_sheet(
-    wb: Workbook, metrics: Sequence[StudentExamMetrics]
-) -> None:
+def _build_student_score_sheet(wb: Workbook, metrics: Sequence[StudentExamMetrics]) -> None:
     """Build the 7th sheet `학생성적` per contracts/xlsx_sheets.md §7."""
     ws = wb.create_sheet("학생성적")
     bold = Font(bold=True)
 
     fixed_headers = [
-        "학번", "이름", "분반", "응시여부", "총점",
-        "100점환산", "분반_백분위", "전체_백분위", "z_score",
+        "학번",
+        "이름",
+        "분반",
+        "응시여부",
+        "총점",
+        "100점환산",
+        "분반_백분위",
+        "전체_백분위",
+        "z_score",
     ]
 
     # Collect dynamic header lists across all takers so absent students

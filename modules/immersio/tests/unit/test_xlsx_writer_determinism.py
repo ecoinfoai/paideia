@@ -17,14 +17,13 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from immersio.report.xlsx_writer import write_analysis_xlsx
 from openpyxl import load_workbook
 from paideia_shared.schemas import (
     HistogramBin,
     ItemStatistics,
     MetadataAggregate,
 )
-
-from immersio.report.xlsx_writer import write_analysis_xlsx
 
 EXPECTED_SHEETS = (
     "전체요약",
@@ -89,7 +88,9 @@ def _stub_metadata() -> list[MetadataAggregate]:
     ]
 
 
-def _stub_item(item_no: int, *, correct_rate: float = 0.7, label: str = "특이사항 없음") -> ItemStatistics:
+def _stub_item(
+    item_no: int, *, correct_rate: float = 0.7, label: str = "특이사항 없음"
+) -> ItemStatistics:
     remaining = max(0.0, 1.0 - correct_rate)
     top_d = min(0.20, remaining)
     other = max(0.0, remaining - top_d) / 3.0
@@ -215,8 +216,15 @@ def test_metadata_sheet_columns_match_contract(tmp_path: Path, call_writer) -> N
     assert header_row_idx is not None
     headers = [ws.cell(header_row_idx, c).value for c in range(1, 10)]
     assert headers == [
-        "metadata_kind", "metadata_value", "n", "mean", "sd",
-        "test_kind", "test_p_value", "levene_p_value", "note",
+        "metadata_kind",
+        "metadata_value",
+        "n",
+        "mean",
+        "sd",
+        "test_kind",
+        "test_p_value",
+        "levene_p_value",
+        "note",
     ]
 
 

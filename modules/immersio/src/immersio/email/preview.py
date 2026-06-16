@@ -30,8 +30,7 @@ def write_eml_preview_files(
     """
     if not isinstance(preview_dir, Path):
         raise TypeError(
-            f"write_eml_preview_files: preview_dir must be Path, got "
-            f"{type(preview_dir).__name__}"
+            f"write_eml_preview_files: preview_dir must be Path, got {type(preview_dir).__name__}"
         )
     preview_dir.mkdir(parents=True, exist_ok=True)
 

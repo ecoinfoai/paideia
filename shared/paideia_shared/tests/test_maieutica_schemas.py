@@ -60,20 +60,20 @@ def _base_leap_explanation(**overrides: object) -> dict:
 
 # 30–50 char options (all exactly 35 chars with spaces counted)
 _GOOD_OPTIONS = [
-    "인지질 이중층이 세포막의 주요 성분이다",       # ≥30 chars
-    "단백질은 세포막에서 수송 역할을 한다",          # ≥30 chars
-    "콜레스테롤은 막 유동성을 조절한다",             # ≥30 chars
-    "탄수화물은 당사슬 형태로 극소량 존재한다",      # ≥30 chars
-    "핵산은 세포막 구성 성분이 아니다고 알려짐",     # ≥30 chars
+    "인지질 이중층이 세포막의 주요 성분이다",  # ≥30 chars
+    "단백질은 세포막에서 수송 역할을 한다",  # ≥30 chars
+    "콜레스테롤은 막 유동성을 조절한다",  # ≥30 chars
+    "탄수화물은 당사슬 형태로 극소량 존재한다",  # ≥30 chars
+    "핵산은 세포막 구성 성분이 아니다고 알려짐",  # ≥30 chars
 ]
 
 # Each option is short (25 chars) to trigger option_length_ok=False
 _SHORT_OPTIONS = [
-    "인지질 이중층 세포막 구성",    # < 30 chars
-    "단백질 수송 역할 존재함",      # < 30 chars
-    "콜레스테롤 막 유동성 조절",    # < 30 chars
-    "탄수화물 당사슬 극소량만",     # < 30 chars
-    "핵산 세포막 성분 아니다",      # < 30 chars
+    "인지질 이중층 세포막 구성",  # < 30 chars
+    "단백질 수송 역할 존재함",  # < 30 chars
+    "콜레스테롤 막 유동성 조절",  # < 30 chars
+    "탄수화물 당사슬 극소량만",  # < 30 chars
+    "핵산 세포막 성분 아니다",  # < 30 chars
 ]
 
 _WRONG_EXPL_OK = "오답을 선택한 학생들은 세포막 구성 성분을 혼동하였습니다. 인지질이 핵심입니다."
@@ -476,16 +476,16 @@ class TestQuizItemCandidate:
         from paideia_shared.schemas.maieutica.quiz_item_candidate import QuizItemCandidate
 
         with pytest.raises(ValidationError):
-            QuizItemCandidate(**_base_quiz_item(option_evidence=["근거1", "근거2", "근거3", "근거4"]))
+            QuizItemCandidate(
+                **_base_quiz_item(option_evidence=["근거1", "근거2", "근거3", "근거4"])
+            )
 
     def test_negative_answer_explanation_combined_mismatch(self) -> None:
         """answer_explanation_combined != folded form → ValidationError."""
         from paideia_shared.schemas.maieutica.quiz_item_candidate import QuizItemCandidate
 
         with pytest.raises(ValidationError):
-            QuizItemCandidate(
-                **_base_quiz_item(answer_explanation_combined="잘못된 결합 텍스트")
-            )
+            QuizItemCandidate(**_base_quiz_item(answer_explanation_combined="잘못된 결합 텍스트"))
 
     def test_negative_invalid_adoption_status(self) -> None:
         """adoption_status='draft' → ValidationError."""
@@ -608,7 +608,9 @@ class TestMaieuticaManifest:
         """option_length_violations and explanation_length_violations are ints."""
         from paideia_shared.schemas.maieutica.maieutica_manifest import MaieuticaManifest
 
-        m = MaieuticaManifest(**_base_manifest(option_length_violations=3, explanation_length_violations=1))
+        m = MaieuticaManifest(
+            **_base_manifest(option_length_violations=3, explanation_length_violations=1)
+        )
         assert m.option_length_violations == 3
         assert m.explanation_length_violations == 1
 

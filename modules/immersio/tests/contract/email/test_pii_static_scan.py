@@ -59,7 +59,7 @@ def test_example_yaml_pass_no_pii(rel_path: str) -> None:
             # Placeholder convention: <...> wrapped → not a real value
             line_start = text.rfind("\n", 0, m.start()) + 1
             line_end = text.find("\n", m.end())
-            line = text[line_start:line_end if line_end != -1 else None]
+            line = text[line_start : line_end if line_end != -1 else None]
             if "<" in line and ">" in line:
                 continue
             if line.lstrip().startswith("#"):

@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-
 _FULL_REQUIRED = (
     "digital_efficacy",
     "motivation",

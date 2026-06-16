@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from pathlib import Path
-
-import pytest
 
 from immersio.email.dummy_fixture import generate_dummy_pdfs
 

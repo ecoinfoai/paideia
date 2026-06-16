@@ -11,10 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd  # noqa: F401  # imported for fixture / type clarity
-import pytest
-from openpyxl import Workbook
-
 # Import ``immersio.ingest`` first to break the io ↔ ingest circular import.
 # Both ``io.attendance`` (this module's target) and ``ingest.pipeline`` cross-
 # reference each other; loading ``immersio.ingest`` up-front populates
@@ -23,8 +19,10 @@ from openpyxl import Workbook
 # ``io/__init__``. This mirrors how the existing integration tests succeed
 # (they import ingest before io transitively).
 import immersio.ingest  # noqa: F401  # required-for: io ↔ ingest import order
-
+import pandas as pd  # noqa: F401  # imported for fixture / type clarity
+import pytest
 from immersio.io import parse_attendance_xlsx
+from openpyxl import Workbook
 
 
 def _build_w01_w16_attendance(target: Path) -> None:

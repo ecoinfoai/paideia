@@ -40,12 +40,7 @@ def build(target: Path) -> None:
 
 
 if __name__ == "__main__":
-    out = (
-        Path(__file__).parent
-        / "bronze_minimal"
-        / "출석"
-        / "출석부.xlsx"
-    )
+    out = Path(__file__).parent / "bronze_minimal" / "출석" / "출석부.xlsx"
     out.parent.mkdir(parents=True, exist_ok=True)
     build(out)
     print(f"wrote {out}")

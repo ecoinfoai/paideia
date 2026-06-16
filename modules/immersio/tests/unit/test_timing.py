@@ -12,16 +12,13 @@ from __future__ import annotations
 import re
 
 import pytest
-
 from immersio.analyze.timing import resolve_created_at_utc
 
 ISO8601_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
 def test_resolve_created_at_utc_override_takes_precedence() -> None:
-    out = resolve_created_at_utc(
-        inputs_sha256="0" * 64, override="2026-04-28T10:00:00Z"
-    )
+    out = resolve_created_at_utc(inputs_sha256="0" * 64, override="2026-04-28T10:00:00Z")
     assert out == "2026-04-28T10:00:00Z"
 
 
