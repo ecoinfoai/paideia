@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: ruff (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Pin ruff to the version the repo's rules were validated against so a
+      # newer release introducing rules cannot turn CI red without a deliberate bump.
+      - name: Ruff lint
+        run: uvx ruff@0.15.11 check .
+
+      - name: Ruff format check
+        run: uvx ruff@0.15.11 format --check .
+
+  test:
+    name: pytest (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: examen
+            path: modules/examen/tests
+          - package: immersio
+            path: modules/immersio/tests
+          - package: maieutica
+            path: modules/maieutica/tests
+          - package: needs-map
+            path: modules/needs-map/tests
+          - package: retro-mester
+            path: modules/retro-mester/tests
+          - package: paideia_shared
+            path: shared/paideia_shared/tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # immersio/needs-map fail fast unless NanumGothic Regular + Bold resolve via
+      # fc-match (PDF/figure rendering). fonts-nanum provides both faces.
+      - name: Install Korean fonts (NanumGothic)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-nanum
+          sudo fc-cache -f
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      # Single venv for the whole workspace; the optional `roberta` extra (torch)
+      # is intentionally left out — needs-map sentiment tests self-skip without it.
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      # Per-package invocation: each module ships its own top-level `tests`
+      # package, so collecting all of them at once collides — scope by package.
+      - name: Run tests
+        run: uv run --package ${{ matrix.package }} pytest ${{ matrix.path }}
