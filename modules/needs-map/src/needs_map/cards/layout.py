@@ -22,6 +22,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as canvas_module
 
+from ..determinism import iso_utc_to_epoch, pin_source_date_epoch
 from ..fonts import register_for_reportlab, resolve_korean_font_paths
 
 _PRODUCER = "paideia/needs-map/0.1.0"
@@ -75,17 +76,15 @@ def render_card_pdf(
     """
     font = _register_korean_font()
     buf = io.BytesIO()
-    c = canvas_module.Canvas(buf, pagesize=A4)
-
-    # Determinism axis 4 — fixed metadata
+    # Determinism axis 4 — reportlab captures its CreationDate/ModDate timestamp
+    # at Canvas construction from SOURCE_DATE_EPOCH (else the host wall clock),
+    # so pin it to created_at_utc for the construction to stay byte-reproducible.
+    with pin_source_date_epoch(iso_utc_to_epoch(created_at_utc)):
+        c = canvas_module.Canvas(buf, pagesize=A4)
     c.setProducer(_PRODUCER)
     c.setCreator(_PRODUCER)
     c.setTitle(f"needs-map card {student_id}")
     c.setSubject(f"{semester} {course_name_kr}")
-    # reportlab needs a 'D:YYYYMMDDHHmmSS' format — derive from created_at_utc
-    pdf_date = "D:" + created_at_utc.replace("-", "").replace(":", "").rstrip("Z") + "Z"
-    c._doc.info.creationDate = pdf_date  # type: ignore[attr-defined]
-    c._doc.info.modDate = pdf_date  # type: ignore[attr-defined]
 
     # Page geometry (per contracts/needs_map_card.layout.md)
     page_w = 210 * mm

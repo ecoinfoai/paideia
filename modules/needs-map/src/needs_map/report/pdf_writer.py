@@ -32,6 +32,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as canvas_module
 
+from ..determinism import iso_utc_to_epoch, pin_source_date_epoch
 from ..fonts import (
     register_for_matplotlib,
     register_for_reportlab,
@@ -88,13 +89,13 @@ def render_group_distribution_pdf(
         semester / course_name_kr: header text.
     """
     font = _register_korean_font()
-    c = canvas_module.Canvas(str(output_path), pagesize=A4)
+    # Pin reportlab's CreationDate/ModDate (captured at Canvas construction from
+    # SOURCE_DATE_EPOCH, else the host wall clock) to created_at_utc for FR-022.
+    with pin_source_date_epoch(iso_utc_to_epoch(created_at_utc)):
+        c = canvas_module.Canvas(str(output_path), pagesize=A4)
     c.setProducer(_PRODUCER)
     c.setCreator(_PRODUCER)
     c.setTitle(f"needs-map group distribution {semester} {course_name_kr}")
-    pdf_date = "D:" + created_at_utc.replace("-", "").replace(":", "").rstrip("Z") + "Z"
-    c._doc.info.creationDate = pdf_date  # type: ignore[attr-defined]
-    c._doc.info.modDate = pdf_date  # type: ignore[attr-defined]
 
     page_h = 297 * mm
     left = 15 * mm

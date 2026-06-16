@@ -34,6 +34,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from ..determinism import iso_utc_to_epoch, pin_source_date_epoch
 from ..fonts import register_for_reportlab, resolve_korean_font_paths
 
 _PRODUCER = "paideia/needs-map/0.1.1"
@@ -257,19 +258,18 @@ def render_manual_pdf(
     )
 
     # Pin the PDF metadata to deterministic values so two runs match
-    # byte-for-byte. SimpleDocTemplate honours ``producer`` / ``creator`` /
-    # etc. above; CreationDate is set on the canvas via onFirstPage.
+    # byte-for-byte. SimpleDocTemplate honours ``producer`` / ``creator`` / etc.
+    # above; Producer/Creator/Title are re-asserted on the canvas here, while the
+    # CreationDate/ModDate timestamp is pinned via SOURCE_DATE_EPOCH around the
+    # build (reportlab captures it when build() constructs the canvas).
     def _on_first_page(canvas, _doc) -> None:  # noqa: ANN001
         canvas.setProducer(_PRODUCER)
         canvas.setCreator(_CREATOR)
         canvas.setTitle("needs-map 운영자 매뉴얼")
         canvas.setSubject(f"{semester} {course_name_kr}")
-        # ISO8601 → reportlab D:YYYYMMDDHHmmSSZ
-        pdf_date = "D:" + created_at_utc.replace("-", "").replace(":", "").rstrip("Z") + "Z"
-        canvas._doc.info.creationDate = pdf_date  # type: ignore[attr-defined]
-        canvas._doc.info.modDate = pdf_date  # type: ignore[attr-defined]
 
-    doc.build(story, onFirstPage=_on_first_page, onLaterPages=_on_first_page)
+    with pin_source_date_epoch(iso_utc_to_epoch(created_at_utc)):
+        doc.build(story, onFirstPage=_on_first_page, onLaterPages=_on_first_page)
 
 
 __all__ = ["render_manual_pdf"]
