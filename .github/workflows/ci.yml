@@ -35,24 +35,19 @@ jobs:
         run: uvx ruff@0.15.11 format --check .
 
   test:
-    name: pytest (${{ matrix.package }})
+    name: pytest ${{ matrix.python-version }} (${{ matrix.package }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - package: examen
-            path: modules/examen/tests
-          - package: immersio
-            path: modules/immersio/tests
-          - package: maieutica
-            path: modules/maieutica/tests
-          - package: needs-map
-            path: modules/needs-map/tests
-          - package: retro-mester
-            path: modules/retro-mester/tests
-          - package: paideia_shared
-            path: shared/paideia_shared/tests
+        python-version: ["3.11", "3.12", "3.13"]
+        package:
+          - examen
+          - immersio
+          - maieutica
+          - needs-map
+          - retro-mester
+          - paideia_shared
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,7 +64,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       # Single venv for the whole workspace; the optional `roberta` extra (torch)
       # is intentionally left out — needs-map sentiment tests self-skip without it.
@@ -78,5 +73,12 @@ jobs:
 
       # Per-package invocation: each module ships its own top-level `tests`
       # package, so collecting all of them at once collides — scope by package.
+      # paideia_shared lives under shared/; the modules under modules/.
       - name: Run tests
-        run: uv run --package ${{ matrix.package }} pytest ${{ matrix.path }}
+        run: |
+          if [ "${{ matrix.package }}" = "paideia_shared" ]; then
+            path="shared/paideia_shared/tests"
+          else
+            path="modules/${{ matrix.package }}/tests"
+          fi
+          uv run --package ${{ matrix.package }} pytest "$path"
