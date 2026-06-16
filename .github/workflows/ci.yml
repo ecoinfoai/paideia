@@ -71,8 +71,11 @@ jobs:
       - name: Sync workspace
         run: uv sync --all-packages
 
-      # Per-package invocation: each module ships its own top-level `tests`
-      # package, so collecting all of them at once collides — scope by package.
+      # Scope pytest to one package's test tree (each module ships its own
+      # top-level `tests` package, so collecting all at once collides).
+      # `--no-sync` runs against the full --all-packages venv above; a
+      # `uv run --package <x>` would re-resolve to that package's closure and
+      # can yield a different (broken) dependency set than the verified full env.
       # paideia_shared lives under shared/; the modules under modules/.
       - name: Run tests
         run: |
@@ -81,4 +84,4 @@ jobs:
           else
             path="modules/${{ matrix.package }}/tests"
           fi
-          uv run --package ${{ matrix.package }} pytest "$path"
+          uv run --no-sync pytest "$path"
