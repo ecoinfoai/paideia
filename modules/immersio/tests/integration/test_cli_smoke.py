@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -12,13 +13,16 @@ MAPPING = FIXTURES / "mappings" / "anatomy.diagnostic.yaml"
 
 def test_cli_smoke(tmp_path: Path) -> None:
     out = tmp_path / "silver"
-    completed = subprocess.run(  # noqa: S603
-        [  # noqa: S607
-            "uv",
-            "run",
-            "--python",
-            "3.11",
-            "immersio",
+    # Invoke the ``immersio`` console script from the *current* environment.
+    # An earlier version shelled out to ``uv run --python 3.11 immersio``, which
+    # re-synced the shared project venv to Python 3.11 mid-session — corrupting
+    # pyarrow/parquet (and pytest itself) for the rest of the suite whenever the
+    # tests run under 3.12/3.13. Using ``sys.executable``'s sibling script keeps
+    # the subprocess on the same interpreter and never mutates the venv.
+    immersio_bin = Path(sys.executable).parent / "immersio"
+    completed = subprocess.run(
+        [
+            str(immersio_bin),
             "ingest",
             "--bronze-dir",
             str(BRONZE),
@@ -33,7 +37,6 @@ def test_cli_smoke(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         timeout=60,
-        cwd=str(Path(__file__).resolve().parents[3]),
     )
     assert completed.returncode == 0, (
         f"CLI exit {completed.returncode}\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
