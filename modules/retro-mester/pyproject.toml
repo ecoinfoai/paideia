@@ -1,6 +1,6 @@
 [project]
 name = "retro-mester"
-version = "0.1.0"
+version = "0.1.1"
 description = "학기 회고(retrospective) 분석 파이프라인 — paideia 모듈"
 requires-python = ">=3.11"
 dependencies = [

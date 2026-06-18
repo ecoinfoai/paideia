@@ -22,8 +22,8 @@ _WHEN_ISO = "2025-06-15T09:30:00Z"
 def _sample_kwargs() -> dict:
     """Minimal valid kwargs for build_manifest."""
     return {
-        "module_version": "0.1.0",
-        "schema_version": "0.1.0",
+        "module_version": "0.1.1",
+        "schema_version": "0.1.1",
         "semester": "2026-1",
         "course_slug": "anatomy",
         "inputs": {"examen_gold": "data/gold/examen/2026-1-anatomy/draft.xlsx"},
@@ -54,8 +54,8 @@ def test_build_manifest_fields() -> None:
     kwargs = _sample_kwargs()
     result = build_manifest(when=_WHEN, **kwargs)
 
-    assert result.module_version == "0.1.0"
-    assert result.schema_version == "0.1.0"
+    assert result.module_version == "0.1.1"
+    assert result.schema_version == "0.1.1"
     assert result.semester == "2026-1"
     assert result.course_slug == "anatomy"
     assert result.thresholds == {"pass_rate_min": 0.6, "gap_score_max": 30.0}
@@ -86,7 +86,7 @@ def test_write_manifest_valid_json(tmp_path: Path) -> None:
 
     payload = json.loads(dest.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
-    assert payload["module_version"] == "0.1.0"
+    assert payload["module_version"] == "0.1.1"
     assert payload["generated_at_utc"] == _WHEN_ISO
 
 

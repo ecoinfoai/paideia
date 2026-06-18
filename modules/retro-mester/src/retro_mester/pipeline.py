@@ -75,8 +75,8 @@ _REPAIR_PRESCRIPTION = "문항 재검토·교체 — 학습 처방 보류"
 # Module / schema versions
 # ---------------------------------------------------------------------------
 
-_MODULE_VERSION = "0.1.0"
-_SCHEMA_VERSION = "0.1.0"
+_MODULE_VERSION = "0.1.1"
+_SCHEMA_VERSION = "0.1.1"
 
 # ---------------------------------------------------------------------------
 # DETERMINISTIC_EPOCH — matches examen/pipeline.py ``_PINNED_WHEN``.

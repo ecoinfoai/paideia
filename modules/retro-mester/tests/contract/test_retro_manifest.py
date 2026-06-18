@@ -17,8 +17,8 @@ from pydantic import ValidationError
 
 def _valid_kwargs() -> dict:
     return {
-        "module_version": "0.1.0",
-        "schema_version": "0.1.0",
+        "module_version": "0.1.1",
+        "schema_version": "0.1.1",
         "semester": "2026-1",
         "course_slug": "anatomy",
         "inputs": {
@@ -52,7 +52,7 @@ def _valid_kwargs() -> dict:
 def test_valid_construction() -> None:
     """A fully specified RetroManifest is accepted."""
     manifest = RetroManifest(**_valid_kwargs())
-    assert manifest.module_version == "0.1.0"
+    assert manifest.module_version == "0.1.1"
     assert manifest.semester == "2026-1"
     assert manifest.counts["unit_gaps"] == 12.0
 
