@@ -4,6 +4,12 @@ Implements ``detect_gaps``: for each chapter × segment combination, computes
 whether the segment's mean correct rate falls below ``config.gap_threshold``
 and, if so, emits a ``UnitGap`` with pre-computed impact metrics.
 
+No-silent-omission (H1): a chapter present in the items/data universe but with
+ZERO answer-data students across the ENTIRE cohort emits an
+``InsufficientEvidenceUnit`` per (chapter, segment) instead of being silently
+dropped.  ``detect_gaps`` returns a ``(gaps, insufficient)`` two-tuple so the
+근거부족 단원 surface honestly in every downstream artefact.
+
 Provisional US1 defaults (overwritten by later US):
 - ``is_structural``: ``False`` — US2 (T032) adds structural escalation logic.
 - ``cohort_failing_item_types``: ``[]`` — US4 computes item-type breakdown.
@@ -14,6 +20,7 @@ from __future__ import annotations
 
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
+    InsufficientEvidenceUnit,
     ItemStatistics,
     RetroMesterConfig,
     UnitGap,
@@ -27,8 +34,8 @@ def detect_gaps(
     rows: list[CombinedAnalysisRow],
     items: list[ItemStatistics],
     config: RetroMesterConfig,
-) -> list[UnitGap]:
-    """Detect learning gaps per chapter × segment combination.
+) -> tuple[list[UnitGap], list[InsufficientEvidenceUnit]]:
+    """Detect learning gaps and 근거부족 units per chapter × segment combination.
 
     For each (chapter, segment) pair found in the data:
     1. Compute ``segment_mean_rate`` and ``evidence_n`` (students with valid data).
@@ -36,6 +43,13 @@ def detect_gaps(
        AND ``evidence_n >= 1``.
     3. Compute ``n_below``, ``pct_segment``, ``pct_cohort``, and impact fields.
     4. Assign provisional defaults for US2/US4/US5 fields.
+
+    No-silent-omission (H1): when a chapter has ZERO answer-data students across
+    the ENTIRE cohort (``total_cohort_n == 0``), emit one
+    ``InsufficientEvidenceUnit`` per segment bucket so the chapter surfaces as
+    근거부족 rather than vanishing.  A chapter covered by only one segment is NOT
+    근거부족 (its cohort evidence is nonzero) and emits no insufficient unit —
+    this keeps ``uncovered_ratio`` byte-identical on data-sufficient runs (FR-015).
 
     Students not in ``config.group_roster`` are excluded via ``assign_segments``.
 
@@ -48,10 +62,12 @@ def detect_gaps(
         config: Active ``RetroMesterConfig``; provides threshold, roster, weights.
 
     Returns:
-        List of ``UnitGap`` instances, one per (chapter, segment) pair where the
-        segment mean rate is strictly below ``config.gap_threshold`` and at least
-        one student has valid data.  Order is not specified (sorted downstream by
-        ``rank_changes``).
+        A two-tuple ``(gaps, insufficient)`` where ``gaps`` is a list of
+        ``UnitGap`` instances (one per below-threshold (chapter, segment) pair
+        with at least one student) and ``insufficient`` is a list of
+        ``InsufficientEvidenceUnit`` instances (one per (chapter, segment) for
+        chapters with zero cohort evidence).  Order is not specified (sorted
+        downstream).
     """
     buckets, _ = assign_segments(rows, config)
 
@@ -67,6 +83,7 @@ def detect_gaps(
 
     threshold = config.gap_threshold
     gaps: list[UnitGap] = []
+    insufficient: list[InsufficientEvidenceUnit] = []
 
     for chapter in sorted(all_chapters):  # sorted for deterministic order
         # Total students (all segments) with data for this chapter — cohort denominator.
@@ -84,7 +101,21 @@ def detect_gaps(
             ]
             evidence_n = len(students_with_data)
             if evidence_n < 1:
-                continue  # no data for this chapter in this segment → skip
+                # No data for this chapter in this segment.  Emit a 근거부족 unit
+                # ONLY when the WHOLE cohort has zero evidence for the chapter;
+                # an empty segment of an otherwise-covered chapter is not 근거부족.
+                if total_cohort_n == 0:
+                    insufficient.append(
+                        InsufficientEvidenceUnit(
+                            semester=config.semester,
+                            course_slug=config.course_slug,
+                            chapter=chapter,
+                            segment=segment,
+                            evidence_n=0,
+                            reason="근거부족-자료없음",
+                        )
+                    )
+                continue
 
             rates = [row.chapter_correct_rates[chapter] for row in students_with_data]
             segment_mean_rate = sum(rates) / len(rates)
@@ -127,7 +158,7 @@ def detect_gaps(
                 )
             )
 
-    return gaps
+    return gaps, insufficient
 
 
 __all__ = ["detect_gaps"]

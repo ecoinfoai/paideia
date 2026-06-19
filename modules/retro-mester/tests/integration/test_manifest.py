@@ -120,8 +120,21 @@ def _build_and_run(
     data_root: Path,
     prior_yaml_path: str | None = None,
     group_roster: dict | None = None,
+    item_chapter_override: str | None = None,
 ) -> dict:
-    """Build fixture, run pipeline, return parsed manifest dict."""
+    """Build fixture, run pipeline, return parsed manifest dict.
+
+    Args:
+        data_root: Test data root.
+        prior_yaml_path: Optional prior 차년도방향.yaml path for provenance.
+        group_roster: Optional roster override.
+        item_chapter_override: When set, the second item's chapter is written
+            with this (mismatched) name so the items↔combined chapter sets
+            differ in both directions, exercising the warnings path.
+
+    Returns:
+        Parsed manifest dict (read from the Silver tier).
+    """
     silver_im = data_root / "silver" / "immersio" / _KEY
     silver_im.mkdir(parents=True, exist_ok=True)
 
@@ -140,7 +153,8 @@ def _build_and_run(
         _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
     ]
     pd.DataFrame(combined).to_parquet(silver_im / "진단×시험결합.parquet", index=False)
-    pd.DataFrame([_item_row(1, _CHAPTER_A), _item_row(2, _CHAPTER_B)]).to_parquet(
+    second_item_chapter = item_chapter_override if item_chapter_override else _CHAPTER_B
+    pd.DataFrame([_item_row(1, _CHAPTER_A), _item_row(2, second_item_chapter)]).to_parquet(
         silver_im / "문항통계.parquet", index=False
     )
 
@@ -213,8 +227,9 @@ def _build_and_run(
     )
     assert code == 0, f"Pipeline failed: exit {code}"
 
+    # FR-012: the manifest lives under the Silver tier (not Gold).
     return json.loads(
-        (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+        (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
             encoding="utf-8"
         )
     )
@@ -321,3 +336,90 @@ class TestManifestCounts:
         assert ratio is None or isinstance(ratio, (int, float)), (
             f"uncovered_ratio must be numeric or null, got {type(ratio)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# T011: chapter-name mismatch → manifest.warnings
+# ---------------------------------------------------------------------------
+
+
+class TestManifestWarnings:
+    """items↔combined chapter mismatch must be recorded in manifest.warnings."""
+
+    def test_no_mismatch_no_chapter_warnings(self, tmp_path: Path) -> None:
+        """When item and combined chapters agree, no chapter-mismatch warning.
+
+        The cohort interest/aversion-absence warning (audit M2) may still
+        appear when the fixture carries no interest/aversion responses; only
+        chapter-mismatch warnings must be absent here.
+        """
+        manifest = _build_and_run(tmp_path / "data")
+        warnings = manifest.get("warnings", [])
+        assert not any("문항통계" in w or "진단×시험결합" in w for w in warnings), (
+            f"unexpected chapter-mismatch warning: {warnings}"
+        )
+
+    def test_both_direction_mismatch_recorded(self, tmp_path: Path) -> None:
+        """items↔combined mismatch → both-direction set difference in warnings."""
+        # Second item uses a chapter name absent from combined; combined's
+        # _CHAPTER_B is then absent from items → both directions mismatch.
+        mismatched = "2장. 세포 (오타)"
+        manifest = _build_and_run(tmp_path / "data", item_chapter_override=mismatched)
+
+        warnings = manifest["warnings"]
+        assert isinstance(warnings, list)
+        joined = "\n".join(warnings)
+        # The item-only chapter and the combined-only chapter both appear.
+        assert mismatched in joined, f"item-only chapter missing from warnings: {warnings}"
+        assert _CHAPTER_B in joined, f"combined-only chapter missing from warnings: {warnings}"
+
+    def test_warnings_sorted_deterministic(self, tmp_path: Path) -> None:
+        """warnings list is deterministic (stable across two runs)."""
+        mismatched = "2장. 세포 (오타)"
+        m1 = _build_and_run(tmp_path / "d1", item_chapter_override=mismatched)
+        m2 = _build_and_run(tmp_path / "d2", item_chapter_override=mismatched)
+        assert m1["warnings"] == m2["warnings"]
+
+
+# ---------------------------------------------------------------------------
+# T012: prior_year provenance + manifest in Silver
+# ---------------------------------------------------------------------------
+
+
+class TestManifestPriorYearAndLocation:
+    """prior_year provenance recorded; manifest written under Silver."""
+
+    def _write_prior_yaml(self, tmp_path: Path) -> Path:
+        from tests.fixtures.factories import write_prior_forward_yaml
+
+        return write_prior_forward_yaml(tmp_path / "prior")
+
+    def test_manifest_in_silver_not_gold(self, tmp_path: Path) -> None:
+        """manifest_retro.json lives in Silver, not Gold (FR-012)."""
+        data_root = tmp_path / "data"
+        _build_and_run(data_root)
+        silver_manifest = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
+        gold_manifest = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        assert silver_manifest.exists(), "manifest must be in Silver"
+        assert not gold_manifest.exists(), "manifest must NOT be in Gold"
+
+    def test_prior_year_provenance_recorded(self, tmp_path: Path) -> None:
+        """inputs.prior_year carries {path, sha256} when a prior yaml is given."""
+        prior = self._write_prior_yaml(tmp_path)
+        manifest = _build_and_run(tmp_path / "data", prior_yaml_path=str(prior))
+
+        assert "prior_year" in manifest["inputs"], "inputs missing prior_year"
+        prov = manifest["inputs"]["prior_year"]
+        assert prov["path"] == str(prior)
+        assert isinstance(prov["sha256"], str) and len(prov["sha256"]) == 64
+
+    def test_no_prior_year_when_absent(self, tmp_path: Path) -> None:
+        """inputs.prior_year is absent when no prior yaml is supplied."""
+        manifest = _build_and_run(tmp_path / "data")
+        assert "prior_year" not in manifest["inputs"]
+
+    def test_insufficient_count_recorded(self, tmp_path: Path) -> None:
+        """counts.insufficient_evidence_units is present and numeric."""
+        manifest = _build_and_run(tmp_path / "data")
+        assert "insufficient_evidence_units" in manifest["counts"]
+        assert isinstance(manifest["counts"]["insufficient_evidence_units"], (int, float))

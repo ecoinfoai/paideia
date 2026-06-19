@@ -13,6 +13,7 @@ import math
 
 from paideia_shared.schemas import (
     CombinedAnalysisRow,
+    InsufficientEvidenceUnit,
     ItemStatistics,
     RetroMesterConfig,
     UnitGap,
@@ -256,7 +257,7 @@ class TestDetectGaps:
     def test_below_threshold_emits_gap(self) -> None:
         """segment_mean_rate < gap_threshold → UnitGap emitted."""
         rows, items, config = self._two_segment_setup(seg1_rate=0.4, seg2_rate=0.7)
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         chapters = {g.chapter for g in gaps}
         segments = {g.segment for g in gaps}
@@ -266,14 +267,14 @@ class TestDetectGaps:
     def test_above_threshold_no_gap(self) -> None:
         """segment_mean_rate >= gap_threshold → no UnitGap for that segment."""
         rows, items, config = self._two_segment_setup(seg1_rate=0.8, seg2_rate=0.9)
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 0
 
     def test_at_threshold_no_gap(self) -> None:
         """segment_mean_rate == gap_threshold exactly → no gap (strict < required)."""
         rows, items, config = self._two_segment_setup(seg1_rate=0.6, seg2_rate=0.9)
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert all(g.segment != "학령기" for g in gaps)
 
@@ -290,7 +291,7 @@ class TestDetectGaps:
             roster={"2026000001": "학령기", "2026000002": "학령기", "2026000003": "학령기"},
             unit_importance={"8장": "중"},
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 1
         gap = gaps[0]
@@ -312,7 +313,7 @@ class TestDetectGaps:
                 "2026000003": "학령기",
             },
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 1
         gap = gaps[0]
@@ -330,7 +331,7 @@ class TestDetectGaps:
             roster={"2026000001": "학령기", "2026000002": "학령기"},
             unit_importance={"8장": "상"},
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 1
         gap = gaps[0]
@@ -353,7 +354,7 @@ class TestDetectGaps:
                 "2026000003": "만학도",
             },
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         학령기_gap = next(g for g in gaps if g.segment == "학령기")
         # pct_segment = 2/2 = 1.0
@@ -371,7 +372,7 @@ class TestDetectGaps:
         config = _make_config(
             roster={"2026000001": "학령기", "2026000002": "만학도"},
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         segments_with_gap = {g.segment for g in gaps}
         assert "학령기" in segments_with_gap
@@ -385,7 +386,7 @@ class TestDetectGaps:
         ]
         items = [_make_item("8장")]
         config = _make_config(roster={"2026000001": "학령기"})
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         # Only student 001 counted; n_below=1, evidence_n=1
         assert len(gaps) == 1
@@ -401,7 +402,7 @@ class TestDetectGaps:
             roster={"2026000001": "학령기"},
             unit_importance={},  # no entry for 9장
         )
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 1
         gap = gaps[0]
@@ -413,7 +414,7 @@ class TestDetectGaps:
         rows = [_make_row("2026000001", {"8장": 0.3})]
         items = [_make_item("8장")]
         config = _make_config(roster={"2026000001": "학령기"})
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         gap = gaps[0]
         assert gap.is_structural is False
@@ -425,17 +426,17 @@ class TestDetectGaps:
         rows = [_make_row("2026000001", {"8장": 0.3})]
         items: list[ItemStatistics] = []
         config = _make_config(roster={"2026000001": "학령기"})
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert len(gaps) == 1
         assert gaps[0].cause == "미상"
 
     def test_returns_unit_gap_instances(self) -> None:
-        """detect_gaps returns a list of UnitGap objects."""
+        """detect_gaps returns a 2-tuple whose first element is UnitGap objects."""
         rows = [_make_row("2026000001", {"8장": 0.3})]
         items = [_make_item("8장")]
         config = _make_config(roster={"2026000001": "학령기"})
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         assert all(isinstance(g, UnitGap) for g in gaps)
 
@@ -446,7 +447,88 @@ class TestDetectGaps:
         ]
         items = [_make_item("8장")]
         config = _make_config(roster={"2026000001": "학령기"})
-        gaps = detect_gaps(rows, items, config)
+        gaps, _insufficient = detect_gaps(rows, items, config)
 
         # evidence_n = 0 → skipped (not emitted)
         assert len(gaps) == 0
+
+
+# ===========================================================================
+# T008: InsufficientEvidenceUnit emission (no-silent-omission, H1)
+# ===========================================================================
+
+
+class TestInsufficientEvidence:
+    """Tests for the 근거부족 (insufficient-evidence) emission in detect_gaps.
+
+    Emit condition: a chapter present in the items/data universe but with ZERO
+    answer-data students across the ENTIRE cohort (``total_cohort_n == 0``).
+    A chapter taken by only one segment must NOT produce insufficient units.
+    """
+
+    def test_returns_two_tuple(self) -> None:
+        """detect_gaps returns (gaps, insufficient) where insufficient is a list."""
+        rows = [_make_row("2026000001", {"8장": 0.3})]
+        items = [_make_item("8장")]
+        config = _make_config(roster={"2026000001": "학령기"})
+        result = detect_gaps(rows, items, config)
+
+        assert isinstance(result, tuple)
+        gaps, insufficient = result
+        assert isinstance(gaps, list)
+        assert isinstance(insufficient, list)
+
+    def test_fully_empty_chapter_emits_insufficient(self) -> None:
+        """A chapter with zero answer-data in ANY segment → InsufficientEvidenceUnit.
+
+        '9장' is only present via items (no student reports it), so the whole
+        cohort has zero evidence for it.  It must surface as an insufficient
+        unit per (chapter, segment), NOT be silently dropped, and must NOT
+        appear in gaps.
+        """
+        rows = [
+            _make_row("2026000001", {"8장": 0.3}),  # 학령기, has 8장 only
+            _make_row("2026000002", {"8장": 0.4}),  # 만학도, has 8장 only
+        ]
+        # '9장' has items but no student answer data anywhere.
+        items = [_make_item("8장"), _make_item("9장")]
+        config = _make_config(
+            roster={"2026000001": "학령기", "2026000002": "만학도"},
+        )
+        gaps, insufficient = detect_gaps(rows, items, config)
+
+        # 9장 must not be in gaps (no evidence to compute a rate).
+        assert all(g.chapter != "9장" for g in gaps)
+
+        # 9장 must be in insufficient, one unit per segment bucket.
+        nine = [u for u in insufficient if u.chapter == "9장"]
+        assert len(nine) == 2, f"expected one 9장 unit per segment, got {len(nine)}"
+        assert {u.segment for u in nine} == {"학령기", "만학도"}
+        for u in nine:
+            assert isinstance(u, InsufficientEvidenceUnit)
+            assert u.evidence_n == 0
+            assert u.reason == "근거부족-자료없음"
+            assert u.semester == "2026-1"
+            assert u.course_slug == "anatomy"
+
+    def test_single_segment_covered_chapter_no_insufficient(self) -> None:
+        """A chapter covered by only ONE segment yields NO insufficient unit.
+
+        '8장' is answered only by the 학령기 student; the 만학도 student has
+        no 8장 entry.  total_cohort_n > 0, so the empty 만학도 segment must NOT
+        emit an insufficient unit (that would distort uncovered_ratio, FR-015).
+        """
+        rows = [
+            _make_row("2026000001", {"8장": 0.3}),  # 학령기 covers 8장
+            _make_row("2026000002", {}),  # 만학도 covers nothing
+        ]
+        items = [_make_item("8장")]
+        config = _make_config(
+            roster={"2026000001": "학령기", "2026000002": "만학도"},
+        )
+        gaps, insufficient = detect_gaps(rows, items, config)
+
+        # 8장 has cohort evidence (학령기) → no insufficient unit at all.
+        assert insufficient == []
+        # The 학령기 gap is still detected.
+        assert any(g.chapter == "8장" and g.segment == "학령기" for g in gaps)

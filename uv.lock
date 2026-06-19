@@ -2942,7 +2942,7 @@ wheels = [
 
 [[package]]
 name = "retro-mester"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "modules/retro-mester" }
 dependencies = [
     { name = "anthropic" },

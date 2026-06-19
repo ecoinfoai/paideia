@@ -20,7 +20,7 @@ import datetime
 import json
 from pathlib import Path
 
-from paideia_shared.schemas import RetroManifest
+from paideia_shared.schemas import InputProvenance, RetroManifest
 
 from retro_mester.output.manager import atomic_write_text
 
@@ -32,10 +32,11 @@ def build_manifest(
     schema_version: str,
     semester: str,
     course_slug: str,
-    inputs: dict[str, str],
+    inputs: dict[str, InputProvenance],
     thresholds: dict[str, float],
     counts: dict[str, float],
     degrade: dict[str, bool | str],
+    warnings: list[str] | None = None,
 ) -> RetroManifest:
     """Construct a ``RetroManifest`` for one pipeline run.
 
@@ -45,10 +46,11 @@ def build_manifest(
         schema_version: paideia_shared schema version in use.
         semester: Semester code, e.g. ``"2026-1"``.
         course_slug: Kebab-case course identifier, e.g. ``"anatomy"``.
-        inputs: Map of input artefact role → resolved file path.
+        inputs: Map of input artefact role → ``InputProvenance`` (path + sha256).
         thresholds: Active threshold values from ``RetroMesterConfig``.
         counts: Row/item counts for key pipeline outputs.
         degrade: Degradation flags keyed by pipeline stage.
+        warnings: Optional list of non-fatal diagnostic messages (defaults to []).
 
     Returns:
         Frozen ``RetroManifest`` instance.
@@ -63,6 +65,7 @@ def build_manifest(
         thresholds=thresholds,
         counts=counts,
         degrade=degrade,
+        warnings=warnings if warnings is not None else [],
         generated_at_utc=generated_at_utc,
     )
 
@@ -73,18 +76,18 @@ def write_manifest(path: Path, manifest: RetroManifest, when: datetime.datetime)
     Properties:
     - ``sort_keys=True`` — alphabetical key order.
     - ``ensure_ascii=False`` — Korean/Unicode characters written as-is.
-    - ``generated_at_utc`` is the ONLY field that reflects ``when``; all
-      other fields are taken verbatim from ``manifest`` so the output is
-      byte-identical given the same inputs and the same ``when``.
+    - All fields are taken verbatim from ``manifest`` (whose
+      ``generated_at_utc`` was already fixed at ``build_manifest`` time), so
+      the output is byte-identical given an identical ``manifest``.
     - Written atomically (temp-file + rename) — ``path`` never appears
       partially written.
 
     Args:
         path: Destination file path.  Parent directory must exist.
         manifest: The ``RetroManifest`` to serialise.
-        when: Explicit run timestamp (used only if ``manifest`` was built
-            with a different ``when`` — in normal use pass the same value
-            as given to ``build_manifest``).
+        when: Run timestamp. Not used by this function — ``generated_at_utc``
+            is already baked into ``manifest``; accepted for call-site
+            symmetry with ``build_manifest``.
     """
     # model_dump() returns a plain dict; generated_at_utc is already set
     # inside the manifest from build_manifest, so we just serialise as-is.

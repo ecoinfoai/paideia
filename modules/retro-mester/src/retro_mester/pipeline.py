@@ -32,6 +32,8 @@ import datetime
 import hashlib
 from pathlib import Path
 
+from paideia_shared.schemas import InputProvenance
+
 from retro_mester.align.alignment import build_alignment
 from retro_mester.align.cliff import chapter_item_type_rates, detect_cliff, dominant_failing_level
 from retro_mester.align.interest_gap import interest_aversion_findings
@@ -43,6 +45,7 @@ from retro_mester.forward.next_items import propose_next_items, write_next_items
 from retro_mester.forward.write import next_year, write_forward
 from retro_mester.gaps.detect import detect_gaps
 from retro_mester.gaps.escalate import escalate_structural
+from retro_mester.llm import client as _llm_client
 from retro_mester.llm.cache import InputHashCache
 from retro_mester.llm.insight import LLMRequiredError, build_insight
 from retro_mester.load import (
@@ -75,8 +78,8 @@ _REPAIR_PRESCRIPTION = "문항 재검토·교체 — 학습 처방 보류"
 # Module / schema versions
 # ---------------------------------------------------------------------------
 
-_MODULE_VERSION = "0.1.0"
-_SCHEMA_VERSION = "0.1.0"
+_MODULE_VERSION = "0.1.1"
+_SCHEMA_VERSION = "0.1.1"
 
 # ---------------------------------------------------------------------------
 # DETERMINISTIC_EPOCH — matches examen/pipeline.py ``_PINNED_WHEN``.
@@ -97,6 +100,71 @@ def _file_sha256(path: Path) -> str:
     """Return ``sha256:<hex>`` digest for ``path``."""
     data = path.read_bytes()
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _guard_semester_course(
+    rows: list,
+    request_semester: str,
+    request_course: str,
+    config_semester: str,
+    config_course: str,
+) -> None:
+    """Fail fast unless request, config, and data agree on (semester, course).
+
+    Enforces two invariants before any analysis or output:
+
+    1. Data singularity — when ``rows`` is non-empty, every row must share a
+       single ``semester`` and a single ``course_slug`` (no mixed-cohort data).
+    2. Three-way agreement — the request, the config, and (when present) the
+       data must all carry the same ``(semester, course_slug)`` pair.
+
+    Args:
+        rows: Loaded ``CombinedAnalysisRow`` instances for the current run.
+        request_semester: Semester from the CLI request.
+        request_course: Course slug from the CLI request.
+        config_semester: ``semester`` from the loaded config.
+        config_course: ``course_slug`` from the loaded config.
+
+    Raises:
+        InputError: If the data mixes cohorts, or if any of request, config,
+            or data disagree on the semester or course slug.
+    """
+    # Invariant 2a: request vs config (always checked, even with empty rows).
+    if config_semester != request_semester:
+        raise InputError(
+            f"config semester disagrees with request — "
+            f"request={request_semester!r} but config={config_semester!r}"
+        )
+    if config_course != request_course:
+        raise InputError(
+            f"config course disagrees with request — "
+            f"request={request_course!r} but config={config_course!r}"
+        )
+
+    # Invariants 1 + 2b: data singularity and data vs request (rows-only).
+    if rows:
+        data_semesters = sorted({row.semester for row in rows})
+        data_courses = sorted({row.course_slug for row in rows})
+        if len(data_semesters) > 1:
+            raise InputError(
+                f"data mixes multiple semesters — single cohort required: {data_semesters}"
+            )
+        if len(data_courses) > 1:
+            raise InputError(
+                f"data mixes multiple courses — single cohort required: {data_courses}"
+            )
+        data_semester = data_semesters[0]
+        data_course = data_courses[0]
+        if data_semester != request_semester:
+            raise InputError(
+                f"data semester disagrees with request — "
+                f"request={request_semester!r} but data={data_semester!r}"
+            )
+        if data_course != request_course:
+            raise InputError(
+                f"data course disagrees with request — "
+                f"request={request_course!r} but data={data_course!r}"
+            )
 
 
 def _resolve_immersio_silver(semester: str, course: str, data_root: Path) -> tuple[Path, Path]:
@@ -245,7 +313,22 @@ def _run(
     for row in rows:
         combined_chapters.update(row.chapter_correct_rates.keys())
 
-    items, _mismatch = load_items(items_path, combined_chapters=combined_chapters)
+    items, mismatch = load_items(items_path, combined_chapters=combined_chapters)
+
+    # M3 / no-silent-omission: record items↔combined chapter-set mismatches as
+    # manifest warnings (both directions) so they never vanish.  Lists from
+    # load_items are already sorted → deterministic.
+    manifest_warnings: list[str] = []
+    for ch in mismatch["items_not_in_combined"]:
+        manifest_warnings.append(
+            f"Chapter '{ch}' appears in 문항통계 but not in 진단×시험결합 — "
+            "no student answer data for it."
+        )
+    for ch in mismatch["combined_not_in_items"]:
+        manifest_warnings.append(
+            f"Chapter '{ch}' appears in 진단×시험결합 but not in 문항통계 — "
+            "no item statistics for it."
+        )
 
     blueprint, curriculum = load_exam_spec(bp_path, cm_path, semester, course)
     config = load_config(cfg_path)
@@ -259,12 +342,20 @@ def _run(
     reconcile_config(config, chapters, student_ids)
 
     # ------------------------------------------------------------------
+    # Step 2b: semester/course 3-way fail-fast guard (audit M4, FR-008)
+    # ------------------------------------------------------------------
+    # Reject mixed-cohort data and any disagreement between the CLI request,
+    # the config, and the loaded data.  A clean InputError here maps to exit 2
+    # and produces no output (dirs are created only after this passes).
+    _guard_semester_course(rows, semester, course, config.semester, config.course_slug)
+
+    # ------------------------------------------------------------------
     # Step 3: Detect gaps → escalate structural → compute prescriptions
     #         → cluster vocab → rank changes (US1/US2 T032-T036)
     # ------------------------------------------------------------------
     # Assign segments to capture unclassified count for manifest (T060).
     _segment_buckets, _unclassified = assign_segments(rows, config)
-    gaps = detect_gaps(rows, items, config)
+    gaps, insufficient = detect_gaps(rows, items, config)
 
     # US2 T032: escalate chapters where baseline is also below threshold.
     gaps = escalate_structural(gaps, rows, config)
@@ -289,7 +380,7 @@ def _run(
     # US2 T034: cluster vocabulary per segment.
     vocab = segment_cluster_vocab(rows, config)
 
-    recs, uncovered_ratio = rank_changes(gaps, config)
+    recs, uncovered_ratio = rank_changes(gaps, config, insufficient_count=len(insufficient))
 
     # US2 T035: patch prescription_key and cluster_vocab onto recommendations.
     patched_recs = []
@@ -328,8 +419,15 @@ def _run(
     # Build AlignmentFinding list for output.
     alignment_findings = build_alignment(items, curriculum, blueprint, rows, config)
 
-    # Compute interest/aversion gap (FR-022) — attached to findings where applicable.
-    _interest_gap_data = interest_aversion_findings(rows)
+    # Compute the cohort-level interest/aversion achievement gap (audit M2,
+    # FR-022).  This is a single cohort value (means of per-student averages);
+    # it cannot be decomposed per chapter, so per-unit AlignmentFinding slots
+    # stay None.  Flowed to the report summary and the manifest below.
+    interest_gap = interest_aversion_findings(rows)
+    if interest_gap["gap"] is None:
+        # No-silent-omission: record the absence in the manifest.  Appended
+        # after the deterministic chapter-mismatch warnings → fixed order.
+        manifest_warnings.append("관심·기피 응답 데이터 부족 — 코호트 격차 미산출")
 
     # ------------------------------------------------------------------
     # Step 3d: US5 T049/T050 — psychometric validity gate
@@ -423,7 +521,7 @@ def _run(
         for r in recs
         if r.is_covered
     ]
-    _alignment_flag_strs = list({f.flag for f in alignment_findings if f.flag})
+    _alignment_flag_strs = sorted({f.flag for f in alignment_findings if f.flag})
     _forward_summary = f"개선 서약 {len(ledger)}건" if ledger else "개선 서약 없음"
     insight_facts: dict = {
         "top_changes": _top_changes,
@@ -437,7 +535,11 @@ def _run(
     # (FR-025 reproducibility: same input → same cached response).
     _key = output_key(semester, course)
     _cache_dir = data_root / "silver" / ".llm_cache" / "retro-mester" / _key
-    _llm_cache = InputHashCache(_cache_dir) if llm_mode != "off" else None
+    _llm_cache = (
+        InputHashCache(_cache_dir, model=_llm_client._MODEL, mode=llm_mode)
+        if llm_mode != "off"
+        else None
+    )
 
     # build_insight raises LLMRequiredError if require_llm=True and
     # backend fails — propagates to run_retro which returns exit 5.
@@ -478,7 +580,7 @@ def _run(
     # ------------------------------------------------------------------
 
     # Silver
-    write_silver(gaps, recs, silver_out)
+    write_silver(gaps, recs, insufficient, silver_out)
 
     # Gold — figures (US4 T047: alignment PNGs, deterministic)
     figs_dir = gold_out / "figs"
@@ -497,6 +599,8 @@ def _run(
         forward_ledger=ledger,
         forward_audit=forward_audit,
         alignment_findings=alignment_findings,
+        insufficient=insufficient,
+        interest_gap=interest_gap,
     )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
@@ -512,6 +616,7 @@ def _run(
         prescriptions=prescriptions,
         alignment_findings=alignment_findings,
         validity_table=validity_table,
+        insufficient=insufficient,
     )
 
     # Gold — 차년도방향.yaml (US3 T039)
@@ -528,20 +633,28 @@ def _run(
     # Gold — 차년도진단문항제안.md (US3 T041)
     write_next_items_md(gold_out / "차년도진단문항제안.md", proposals)
 
-    # Gold — manifest (uses real now_utc for generated_at_utc)
-    inputs: dict[str, str] = {
-        "combined": str(combined_path),
-        "items": str(items_path),
-        "config": str(cfg_path),
-        "blueprint": str(bp_path),
-        "curriculum_map": str(cm_path),
+    # Silver — manifest (uses real now_utc for generated_at_utc); FR-012.
+    _input_paths: dict[str, Path] = {
+        "combined": combined_path,
+        "items": items_path,
+        "config": cfg_path,
+        "blueprint": bp_path,
+        "curriculum_map": cm_path,
     }
-    # Add SHA-256 fingerprints for existing input files
-    input_hashes: dict[str, str] = {}
-    for role, path_str in inputs.items():
-        p = Path(path_str)
-        if p.exists():
-            input_hashes[role] = _file_sha256(p)
+    # M5 provenance: record the prior-year forward yaml when one was supplied
+    # and the file exists, so its path + content hash are auditable.
+    if prior_yaml_path is not None:
+        _prior_path = Path(prior_yaml_path)
+        if _prior_path.exists():
+            _input_paths["prior_year"] = _prior_path
+
+    # Build InputProvenance objects for each existing input file.
+    # _file_sha256 returns "sha256:<hex>"; strip the prefix to get the bare hex.
+    input_provenances: dict[str, InputProvenance] = {
+        role: InputProvenance(path=str(p), sha256=_file_sha256(p).removeprefix("sha256:"))
+        for role, p in _input_paths.items()
+        if p.exists()
+    }
 
     thresholds: dict[str, float] = {
         "gap_threshold": config.gap_threshold,
@@ -557,7 +670,18 @@ def _run(
         "covered": float(sum(1 for r in recs if r.is_covered)),
         "uncovered_ratio": uncovered_ratio,
         "unclassified_students": float(len(_unclassified)),
+        "insufficient_evidence_units": float(len(insufficient)),
+        # Audit M2: cohort interest/aversion response counts are ALWAYS recorded
+        # (cast to float; counts is dict[str, float], no None).
+        "n_interest": float(interest_gap["n_interest"]),
+        "n_aversion": float(interest_gap["n_aversion"]),
     }
+    # Cohort means/gap are added ONLY when available, so counts stays float-only
+    # (the absence is recorded as a manifest warning instead of a None value).
+    if interest_gap["gap"] is not None:
+        counts["interest_mean"] = float(interest_gap["interest_mean"])
+        counts["aversion_mean"] = float(interest_gap["aversion_mean"])
+        counts["interest_aversion_gap"] = float(interest_gap["gap"])
 
     degrade: dict[str, bool | str] = {
         "llm_used": llm_used,
@@ -571,12 +695,15 @@ def _run(
         schema_version=_SCHEMA_VERSION,
         semester=semester,
         course_slug=course,
-        inputs=input_hashes,
+        inputs=input_provenances,
         thresholds=thresholds,
         counts=counts,
         degrade=degrade,
+        warnings=manifest_warnings,
     )
-    write_manifest(gold_out / "manifest_retro.json", manifest, now_utc)
+    # FR-012: the manifest is a Silver-layer artefact (RetroManifest docstring),
+    # so it is written under the Silver dir, not Gold.
+    write_manifest(silver_out / "manifest_retro.json", manifest, now_utc)
 
     return 0
 

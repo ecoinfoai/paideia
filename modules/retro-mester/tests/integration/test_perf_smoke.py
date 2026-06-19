@@ -241,7 +241,10 @@ class TestPerfSmoke:
         for artefact in [
             "CQI회고보고서.md",
             "회고분석.xlsx",
-            "manifest_retro.json",
             "차년도방향.yaml",
         ]:
             assert (gold / artefact).exists(), f"Missing: {artefact}"
+        # FR-012: the manifest is a Silver-layer artefact.
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists(), (
+            "Missing: manifest_retro.json"
+        )

@@ -264,12 +264,14 @@ class TestUS1E2E:
         assert (gold / "CQI회고보고서.md").exists(), "Missing CQI회고보고서.md"
         assert (gold / "CQI회고보고서.pdf").exists(), "Missing CQI회고보고서.pdf"
         assert (gold / "회고분석.xlsx").exists(), "Missing 회고분석.xlsx"
-        assert (gold / "manifest_retro.json").exists(), "Missing manifest_retro.json"
 
-        # Silver outputs
+        # Silver outputs (FR-012: manifest is a Silver-layer artefact)
         silver = data_root / "silver" / "retro-mester" / _KEY
         assert (silver / "빈틈표.parquet").exists(), "Missing 빈틈표.parquet"
         assert (silver / "변경권고.parquet").exists(), "Missing 변경권고.parquet"
+        assert (silver / "근거부족단원.parquet").exists(), "Missing 근거부족단원.parquet"
+        assert (silver / "manifest_retro.json").exists(), "Missing manifest_retro.json"
+        assert not (gold / "manifest_retro.json").exists(), "manifest must not be in Gold"
 
     def test_md_contains_ranked_changes_and_uncovered_ratio(self, tmp_path: Path) -> None:
         """The generated MD report has a ranked changes table and uncovered ratio."""
@@ -310,7 +312,7 @@ class TestUS1E2E:
         _build_fixture_tree(data_root)
         run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(data_root))
 
-        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        manifest_path = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         required_keys = {
@@ -358,3 +360,203 @@ class TestUS1E2E:
         code = run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(data_root))
 
         assert code == 2, f"Expected exit 2 for missing config, got {code}"
+
+
+# ---------------------------------------------------------------------------
+# T013 — US1 no-silent-omission end-to-end (all six quickstart checks)
+# ---------------------------------------------------------------------------
+
+_CHAPTER_C = "9장. 신경계통"  # in blueprint/curriculum/items but ZERO cohort data
+_STUDENT_IDS = ["2026000001", "2026000002", "2026000003", "2026000004"]
+
+
+def _build_omission_fixture(data_root: Path, prior_yaml: Path) -> None:
+    """Build a fixture exercising all six US1 no-silent-omission checks.
+
+    - ``_CHAPTER_C`` is present in blueprint/curriculum/items but absent from
+      every student's ``chapter_correct_rates`` → zero cohort evidence
+      (insufficient unit) AND an items↔combined chapter-set mismatch.
+    - A prior-year yaml is supplied for provenance.
+
+    Args:
+        data_root: Test data root.
+        prior_yaml: Path to an existing prior 차년도방향.yaml.
+    """
+    key = _KEY
+    silver_dir = data_root / "silver" / "immersio" / key
+    silver_dir.mkdir(parents=True, exist_ok=True)
+
+    # Students cover A and B (below threshold → gaps); none cover C.
+    combined_rows = [
+        _combined_row("2026000001", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.3}),
+        _combined_row("2026000002", {_CHAPTER_A: 0.5, _CHAPTER_B: 0.35}),
+        _combined_row("2026000003", {_CHAPTER_A: 0.45, _CHAPTER_B: 0.25}),
+        _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
+    ]
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
+
+    # Items include C → items_not_in_combined mismatch + insufficient chapter.
+    item_rows = [
+        _item_row(1, _CHAPTER_A),
+        _item_row(2, _CHAPTER_B),
+        _item_row(3, _CHAPTER_C),
+    ]
+    pd.DataFrame(item_rows).to_parquet(silver_dir / "문항통계.parquet", index=False)
+
+    bronze_dir = data_root / "bronze" / "retro-mester" / key
+    bronze_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg = _retro_config()
+    cfg["unit_importance"][_CHAPTER_C] = "중"
+    cfg["effort_ratings"][_CHAPTER_C] = "중"
+    bp = _blueprint()
+    bp["chapters"] = [_CHAPTER_A, _CHAPTER_B, _CHAPTER_C]
+    cur = _curriculum()
+    cur["entries"].append(
+        {
+            "week": 3,
+            "chapter": _CHAPTER_C,
+            "chapter_no": 3,
+            "subtopic": None,
+            "sections": ["3.1 신경계 개요"],
+        }
+    )
+
+    (bronze_dir / "retro_config.yaml").write_text(
+        yaml.dump(cfg, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze_dir / "blueprint.yaml").write_text(yaml.dump(bp, allow_unicode=True), encoding="utf-8")
+    (bronze_dir / "curriculum_map.yaml").write_text(
+        yaml.dump(cur, allow_unicode=True), encoding="utf-8"
+    )
+
+    # prior-year yaml already written by caller at `prior_yaml`.
+    _ = prior_yaml
+
+
+class TestUS1NoSilentOmissionE2E:
+    """T013: every US1 quickstart check holds end-to-end (no silent omission)."""
+
+    def _run(self, tmp_path: Path) -> tuple[Path, dict]:
+        """Run the omission fixture; return (data_root, parsed manifest)."""
+        from retro_mester.pipeline import run_retro
+
+        from tests.fixtures.factories import write_prior_forward_yaml
+
+        data_root = tmp_path / "data"
+        prior_yaml = write_prior_forward_yaml(tmp_path / "prior")
+        _build_omission_fixture(data_root, prior_yaml)
+
+        code = run_retro(
+            semester=_SEMESTER,
+            course=_COURSE,
+            data_root=str(data_root),
+            llm_mode="off",
+            prior_yaml_path=str(prior_yaml),
+        )
+        assert code == 0, f"Pipeline failed: exit {code}"
+
+        manifest = json.loads(
+            (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return data_root, manifest
+
+    def test_check1_insufficient_parquet_has_unit(self, tmp_path: Path) -> None:
+        """(1) 근거부족단원.parquet carries the unit with the right reason."""
+        data_root, _ = self._run(tmp_path)
+        silver = data_root / "silver" / "retro-mester" / _KEY
+        df = pd.read_parquet(silver / "근거부족단원.parquet")
+        assert len(df) >= 1
+        c_rows = df[df["chapter"] == _CHAPTER_C]
+        assert len(c_rows) >= 1, f"{_CHAPTER_C} missing from insufficient parquet"
+        assert set(c_rows["reason"]) == {"근거부족-자료없음"}
+
+    def test_check2_md_and_xlsx_show_insufficient(self, tmp_path: Path) -> None:
+        """(2) report md and xlsx 빈틈 sheet show '근거 부족'."""
+        from openpyxl import load_workbook
+
+        data_root, _ = self._run(tmp_path)
+        gold = data_root / "gold" / "retro-mester" / _KEY
+
+        md_text = (gold / "CQI회고보고서.md").read_text(encoding="utf-8")
+        assert "근거 부족" in md_text
+        assert _CHAPTER_C in md_text
+
+        wb = load_workbook(gold / "회고분석.xlsx", read_only=True)
+        ws = wb["빈틈"]
+        values = [str(cell.value) for row in ws.iter_rows() for cell in row if cell.value]
+        assert any("근거 부족" in v for v in values)
+        assert any(_CHAPTER_C in v for v in values)
+
+    def test_check3_uncovered_ratio_includes_insufficient(self, tmp_path: Path) -> None:
+        """(3) uncovered_ratio denominator includes insufficient units."""
+        data_root, manifest = self._run(tmp_path)
+        counts = manifest["counts"]
+        gaps_n = counts["gaps"]
+        insuf_n = counts["insufficient_evidence_units"]
+        covered_n = counts["covered"]
+        ratio = counts["uncovered_ratio"]
+
+        assert insuf_n >= 1, "expected at least one insufficient unit"
+        # Honest denominator: total = gaps + insufficient.
+        expected = ((gaps_n - covered_n) + insuf_n) / (gaps_n + insuf_n)
+        assert abs(ratio - expected) < 1e-9
+        # Coverage is strictly lower than if insufficient were excluded.
+        ratio_excluding = (gaps_n - covered_n) / gaps_n if gaps_n else 0.0
+        assert ratio > ratio_excluding
+
+    def test_check4_warnings_has_chapter_mismatch(self, tmp_path: Path) -> None:
+        """(4) manifest.warnings carries the chapter-mismatch warning."""
+        _, manifest = self._run(tmp_path)
+        warnings = manifest["warnings"]
+        assert isinstance(warnings, list) and warnings
+        assert any(_CHAPTER_C in w for w in warnings)
+
+    def test_check5_prior_year_provenance(self, tmp_path: Path) -> None:
+        """(5) manifest.inputs.prior_year has {path, sha256}."""
+        _, manifest = self._run(tmp_path)
+        assert "prior_year" in manifest["inputs"]
+        prov = manifest["inputs"]["prior_year"]
+        assert "path" in prov and prov["path"]
+        assert isinstance(prov["sha256"], str) and len(prov["sha256"]) == 64
+
+    def test_check6_manifest_in_silver(self, tmp_path: Path) -> None:
+        """(6) manifest lives in the Silver dir, not Gold."""
+        data_root, _ = self._run(tmp_path)
+        silver_m = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
+        gold_m = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        assert silver_m.exists()
+        assert not gold_m.exists()
+
+    def test_no_individual_student_rows_in_outputs(self, tmp_path: Path) -> None:
+        """Constitution IV: no individual-student row appears in any output."""
+        from openpyxl import load_workbook
+
+        data_root, manifest = self._run(tmp_path)
+        gold = data_root / "gold" / "retro-mester" / _KEY
+        silver = data_root / "silver" / "retro-mester" / _KEY
+
+        md_text = (gold / "CQI회고보고서.md").read_text(encoding="utf-8")
+        manifest_text = (silver / "manifest_retro.json").read_text(encoding="utf-8")
+
+        for sid in _STUDENT_IDS:
+            assert sid not in md_text, f"Student ID {sid} leaked into MD"
+            assert sid not in manifest_text, f"Student ID {sid} leaked into manifest"
+
+        # Parquet group-level tables must not carry a student_id column.
+        for name in ("빈틈표.parquet", "변경권고.parquet", "근거부족단원.parquet"):
+            df = pd.read_parquet(silver / name)
+            assert "student_id" not in df.columns, f"{name} carries student_id"
+
+        # xlsx cells must not contain any student ID.
+        wb = load_workbook(gold / "회고분석.xlsx", read_only=True)
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    val = str(cell.value)
+                    for sid in _STUDENT_IDS:
+                        assert sid not in val, f"Student ID {sid} in xlsx sheet {ws.title}"

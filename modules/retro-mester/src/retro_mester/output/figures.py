@@ -168,8 +168,8 @@ def render_cliff_bar(
         ax.set_ylim(0, 1.0)
         ax.set_ylabel("정답률")
         ax.set_title("인지수준별 정답률 — 단원 비교")
-        ax.legend(loc="upper right", fontsize=8)
         ax.axhline(0.6, color="red", linestyle="--", linewidth=0.8, label="기준선(0.6)")
+        ax.legend(loc="upper right", fontsize=8)
         fig.tight_layout()
         _save_png(fig, path)
 

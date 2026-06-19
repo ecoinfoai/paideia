@@ -1,11 +1,13 @@
-"""T053 — SHA-256 content-addressed cache for LLM responses.
+"""T053 / T025 — SHA-256 content-addressed cache for LLM responses.
 
 ``InputHashCache`` persists LLM response text keyed by SHA-256 of the
-(prompt, facts) pair under the Silver ``cache/`` directory.  Same input →
-same cache file → reproducible outputs (FR-025).
+(prompt, facts, model, mode) tuple under the Silver ``cache/`` directory.
+Same input + same model + same mode → same cache file → reproducible
+outputs (FR-025).  Different model or mode → different cache slot → no
+stale cross-model reuse (FR-010).
 
 Design:
-- Key = SHA-256(prompt + canonical JSON of facts).
+- Key = SHA-256(prompt + canonical JSON of facts + model + mode).
 - Storage = one ``.txt`` file per key under ``cache_dir/``.
 - Thread-safe writes via atomic temp-file + rename.
 - No expiry; invalidation is manual (delete the cache dir).
@@ -21,15 +23,28 @@ from pathlib import Path
 
 
 class InputHashCache:
-    """File-based LLM response cache keyed by SHA-256 of (prompt, facts).
+    """File-based LLM response cache keyed by SHA-256 of (prompt, facts, model, mode).
 
     Args:
         cache_dir: Directory under which cache files are stored.  Created
             automatically on first ``put`` if it does not exist.
+        model: LLM model identifier (e.g. ``"claude-sonnet-4-6"``).  Different
+            models produce different cache slots so stale responses from one
+            model are never served to another (FR-010).
+        mode: LLM backend mode (``"subscription"`` or ``"api"``).  Different
+            modes also produce different slots.
     """
 
-    def __init__(self, cache_dir: Path) -> None:
+    def __init__(
+        self,
+        cache_dir: Path,
+        *,
+        model: str = "",
+        mode: str = "",
+    ) -> None:
         self._dir = cache_dir
+        self._model = model
+        self._mode = mode
 
     # ------------------------------------------------------------------
     # Public API
@@ -85,7 +100,11 @@ class InputHashCache:
     # ------------------------------------------------------------------
 
     def _cache_key(self, prompt: str, facts: dict) -> str:
-        """Compute the SHA-256 hex digest for ``(prompt, facts)``.
+        """Compute the SHA-256 hex digest for ``(prompt, facts, model, mode)``.
+
+        Model and mode are folded into the payload so that the same prompt and
+        facts yield different cache slots for different models or backend modes
+        (FR-010).
 
         Args:
             prompt: Prompt string.
@@ -96,7 +115,7 @@ class InputHashCache:
             64-character lowercase hex digest string.
         """
         facts_json = json.dumps(facts, sort_keys=True, ensure_ascii=False)
-        payload = prompt + "\x00" + facts_json
+        payload = prompt + "\x00" + facts_json + "\x00" + self._model + "\x00" + self._mode
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _key_path(self, prompt: str, facts: dict) -> Path:

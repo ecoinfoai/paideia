@@ -1,6 +1,8 @@
-"""T053 — RED tests for ``retro_mester.llm.cache.InputHashCache``.
+"""T053 / T025 — Unit tests for ``retro_mester.llm.cache.InputHashCache``.
 
-Tests must FAIL until the implementation is in place.
+T053 covers baseline hit/miss/atomicity behaviour.
+T025 (FR-010) covers model+mode cache isolation: same (prompt, facts) under
+different model or mode must NOT share a cache slot.
 """
 
 from __future__ import annotations
@@ -95,8 +97,9 @@ class TestInputHashCache:
     def test_cache_hit_avoids_backend_call(self, tmp_path: Path) -> None:
         """Cache hit: backend callable is NOT invoked on second call.
 
-        Simulates the pattern: first call writes to cache; second call
-        with same inputs should return cached value without calling the backend.
+        First call is a miss → backend invoked once and result stored.
+        Second call with same inputs must be a hit: get() returns the stored
+        value without invoking the backend again.
         """
         from retro_mester.llm.cache import InputHashCache
 
@@ -113,15 +116,103 @@ class TestInputHashCache:
 
         # First call — cache miss → backend invoked → stored
         result1 = cache.get(prompt, facts)
-        if result1 is None:
-            result1 = stub_backend(prompt, facts)
-            cache.put(prompt, facts, result1)
+        assert result1 is None, "Fresh cache must miss on first lookup"
+        result1 = stub_backend(prompt, facts)
+        cache.put(prompt, facts, result1)
 
-        # Second call — cache hit → backend NOT invoked
+        # Second call — must be a hit; backend must NOT be invoked again
         result2 = cache.get(prompt, facts)
-        if result2 is None:
-            result2 = stub_backend(prompt, facts)
-            cache.put(prompt, facts, result2)
-
+        assert result2 is not None, "Second get() must return cached value (not None)"
+        assert result2 == result1, "Cached value must equal the stored result"
         assert call_count == 1, "Backend must be called exactly once (cache hit on 2nd)"
-        assert result1 == result2 == "backend result"
+
+
+class TestInputHashCacheModelMode:
+    """T025 (FR-010): model+mode must be part of the cache key.
+
+    Same (prompt, facts) under different model or mode must NOT share a
+    cache slot.  Same model+mode must hit the previously stored entry.
+    """
+
+    def test_different_model_is_cache_miss(self, tmp_path: Path) -> None:
+        """put() with model='m1' then get() with model='m2' → miss (None).
+
+        Args:
+            tmp_path: pytest-provided temporary directory.
+        """
+        from retro_mester.llm.cache import InputHashCache
+
+        cache_dir = tmp_path / "cache"
+        facts = _make_facts()
+        prompt = "요약:"
+
+        c1 = InputHashCache(cache_dir, model="m1", mode="subscription")
+        c1.put(prompt, facts, "result for m1")
+
+        c2 = InputHashCache(cache_dir, model="m2", mode="subscription")
+        result = c2.get(prompt, facts)
+        assert result is None, "Different model must produce a different cache key (miss expected)"
+
+    def test_different_mode_is_cache_miss(self, tmp_path: Path) -> None:
+        """put() with mode='subscription' then get() with mode='api' → miss (None).
+
+        Args:
+            tmp_path: pytest-provided temporary directory.
+        """
+        from retro_mester.llm.cache import InputHashCache
+
+        cache_dir = tmp_path / "cache"
+        facts = _make_facts()
+        prompt = "요약:"
+
+        c1 = InputHashCache(cache_dir, model="claude-sonnet-4-6", mode="subscription")
+        c1.put(prompt, facts, "subscription result")
+
+        c2 = InputHashCache(cache_dir, model="claude-sonnet-4-6", mode="api")
+        result = c2.get(prompt, facts)
+        assert result is None, "Different mode must produce a different cache key (miss expected)"
+
+    def test_same_model_and_mode_is_cache_hit(self, tmp_path: Path) -> None:
+        """put() then get() with same model+mode on same (prompt, facts) → hit.
+
+        Args:
+            tmp_path: pytest-provided temporary directory.
+        """
+        from retro_mester.llm.cache import InputHashCache
+
+        cache_dir = tmp_path / "cache"
+        facts = _make_facts()
+        prompt = "요약:"
+
+        c1 = InputHashCache(cache_dir, model="claude-sonnet-4-6", mode="subscription")
+        c1.put(prompt, facts, "cached value")
+
+        c2 = InputHashCache(cache_dir, model="claude-sonnet-4-6", mode="subscription")
+        result = c2.get(prompt, facts)
+        assert result == "cached value", (
+            "Same model+mode must hit the previously stored cache entry"
+        )
+
+    def test_default_model_mode_are_empty_strings(self, tmp_path: Path) -> None:
+        """Default model='' and mode='' are stable (backward-compat cache slot).
+
+        A cache written without explicit model/mode must still be readable by
+        another instance without model/mode (defaults to empty strings).
+
+        Args:
+            tmp_path: pytest-provided temporary directory.
+        """
+        from retro_mester.llm.cache import InputHashCache
+
+        cache_dir = tmp_path / "cache"
+        facts = _make_facts()
+        prompt = "요약:"
+
+        c1 = InputHashCache(cache_dir)
+        c1.put(prompt, facts, "legacy value")
+
+        c2 = InputHashCache(cache_dir)
+        result = c2.get(prompt, facts)
+        assert result == "legacy value", (
+            "Default (no model/mode) must still be cache-compatible with itself"
+        )

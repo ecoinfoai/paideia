@@ -93,7 +93,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help=(
             "Pipeline config YAML "
-            "(default: <data-root>/bronze/retro-mester/<semester>-<course>/config.yaml)"
+            "(default: <data-root>/bronze/retro-mester/<semester>-<course>/retro_config.yaml)"
         ),
     )
     run_p.add_argument(

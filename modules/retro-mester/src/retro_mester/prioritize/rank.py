@@ -18,12 +18,17 @@ Coverage rules:
     ``N = min(len(gaps), 5)``.
   - When len(gaps) < 3, all gaps are still covered (no padding).
   - Remaining gaps: ``is_covered=False``, ``rank=None``.
-  - ``uncovered_ratio = uncovered_count / total_gaps``; 0.0 when all covered.
+  - 근거부족 (insufficient-evidence) units count as permanently-uncovered in the
+    coverage denominator (H1 / FR-002): ``total = len(gaps) + insufficient_count``
+    and ``uncovered_count = (len(gaps) - cover_count) + insufficient_count``.
+  - ``uncovered_ratio = uncovered_count / total``; ``0.0`` when ``total == 0``.
+    With no gaps but ``insufficient_count > 0`` the ratio is ``1.0`` (every
+    known unit is uncovered), not ``0.0``.
 
-Provisional US1 defaults (later US overwrite):
-  - ``target_cognitive_level``: ``"미상"`` — US4 (T044) maps dominant item_type.
-  - ``cluster_vocab``: ``None`` — US2 cluster vocab assignment deferred.
-  - ``prescription_key``: ``f"{cause}/{segment}"`` — US2 refines via catalogue.
+Provisional defaults set here and finalized during pipeline enrichment:
+  - ``target_cognitive_level``: ``"미상"`` — enriched by the cognitive-cliff step.
+  - ``cluster_vocab``: ``None`` — populated via prescription catalogue + cluster vocab.
+  - ``prescription_key``: ``f"{cause}/{segment}"`` — patched by prescription catalogue lookup.
 """
 
 from __future__ import annotations
@@ -87,6 +92,8 @@ def _assign_quadrant(
 def rank_changes(
     gaps: list[UnitGap],
     config: RetroMesterConfig,
+    *,
+    insufficient_count: int = 0,
 ) -> tuple[list[ChangeRecommendation], float]:
     """Convert detected gaps to ranked ``ChangeRecommendation`` instances.
 
@@ -94,30 +101,40 @@ def rank_changes(
     ``min(len(gaps), 5)`` as covered (``is_covered=True``, ``rank=1..N``).
     All remaining gaps are marked uncovered.
 
-    Provisional fields set here (to be overwritten by later US):
-    - ``target_cognitive_level = "미상"`` (US4 wires dominant item_type)
-    - ``cluster_vocab = None`` (US2 wires cluster vocabulary)
-    - ``prescription_key = f"{cause}/{segment}"`` (US2 wires catalogue lookup)
+    근거부족 (insufficient-evidence) units count as permanently-uncovered in the
+    coverage denominator (H1 / FR-002): the reported ``uncovered_ratio`` is
+    computed over ``len(gaps) + insufficient_count``, so chapters with zero
+    cohort evidence honestly lower the coverage.
+
+    Provisional fields set here and finalized during pipeline enrichment:
+    - ``target_cognitive_level = "미상"`` (enriched by the cognitive-cliff step)
+    - ``cluster_vocab = None`` (populated via cluster vocab + prescription catalogue)
+    - ``prescription_key = f"{cause}/{segment}"`` (patched by prescription catalogue)
 
     Args:
         gaps: List of ``UnitGap`` instances from ``detect_gaps``.
         config: Active ``RetroMesterConfig``; provides effort_ratings.
+        insufficient_count: Number of ``InsufficientEvidenceUnit`` records for
+            this run; added to the denominator as permanently-uncovered units.
 
     Returns:
         A two-tuple ``(recommendations, uncovered_ratio)`` where:
         - ``recommendations``: all gaps as ``ChangeRecommendation`` instances
           (covered + uncovered), in descending impact_score order.
-        - ``uncovered_ratio``: fraction of gaps not covered by any recommendation;
-          ``0.0`` when ``len(gaps) == 0`` or all gaps are covered.
+        - ``uncovered_ratio``: fraction of all known units (gaps + insufficient)
+          not covered by any recommendation; ``0.0`` when the denominator is
+          ``0``, and ``1.0`` when there are no gaps but ``insufficient_count > 0``.
     """
     if not gaps:
-        return [], 0.0
+        total = insufficient_count
+        ratio = (insufficient_count / total) if total > 0 else 0.0
+        return [], ratio
 
     # Sort descending by impact_score; stable sort preserves insertion order for ties.
     sorted_gaps = sorted(gaps, key=lambda g: g.impact_score, reverse=True)
 
     cover_count = min(len(sorted_gaps), 5)
-    total = len(sorted_gaps)
+    total = len(sorted_gaps) + insufficient_count
 
     # Median impact for quadrant threshold.
     median_impact = statistics.median(g.impact_score for g in sorted_gaps)
@@ -157,7 +174,7 @@ def rank_changes(
             )
         )
 
-    uncovered_count = total - cover_count
+    uncovered_count = (len(sorted_gaps) - cover_count) + insufficient_count
     uncovered_ratio = uncovered_count / total
 
     return recs, uncovered_ratio

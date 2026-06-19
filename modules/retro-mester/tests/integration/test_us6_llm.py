@@ -254,7 +254,7 @@ class TestUS6LLM:
             llm_mode="off",
         )
 
-        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        manifest_path = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is False
 
@@ -301,7 +301,7 @@ class TestUS6LLM:
                 require_llm=False,
             )
 
-        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        manifest_path = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is False, "llm_used must be false on fallback"
 
@@ -378,7 +378,7 @@ class TestUS6LLM:
                 require_llm=False,
             )
 
-        manifest_path = data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json"
+        manifest_path = data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["degrade"]["llm_used"] is True
 

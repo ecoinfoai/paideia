@@ -15,18 +15,27 @@ import datetime
 import json
 from pathlib import Path
 
+from paideia_shared.schemas import InputProvenance
+
 _WHEN = datetime.datetime(2025, 6, 15, 9, 30, 0, tzinfo=datetime.UTC)
 _WHEN_ISO = "2025-06-15T09:30:00Z"
+
+_SHA = "a" * 64  # placeholder 64-char lowercase hex for tests
 
 
 def _sample_kwargs() -> dict:
     """Minimal valid kwargs for build_manifest."""
     return {
-        "module_version": "0.1.0",
-        "schema_version": "0.1.0",
+        "module_version": "0.1.1",
+        "schema_version": "0.1.1",
         "semester": "2026-1",
         "course_slug": "anatomy",
-        "inputs": {"examen_gold": "data/gold/examen/2026-1-anatomy/draft.xlsx"},
+        "inputs": {
+            "examen_gold": InputProvenance(
+                path="data/gold/examen/2026-1-anatomy/draft.xlsx",
+                sha256=_SHA,
+            )
+        },
         "thresholds": {"pass_rate_min": 0.6, "gap_score_max": 30.0},
         "counts": {"total_items": 45.0, "gap_items": 3.0},
         "degrade": {"llm": False, "load": False},
@@ -54,8 +63,8 @@ def test_build_manifest_fields() -> None:
     kwargs = _sample_kwargs()
     result = build_manifest(when=_WHEN, **kwargs)
 
-    assert result.module_version == "0.1.0"
-    assert result.schema_version == "0.1.0"
+    assert result.module_version == "0.1.1"
+    assert result.schema_version == "0.1.1"
     assert result.semester == "2026-1"
     assert result.course_slug == "anatomy"
     assert result.thresholds == {"pass_rate_min": 0.6, "gap_score_max": 30.0}
@@ -86,7 +95,7 @@ def test_write_manifest_valid_json(tmp_path: Path) -> None:
 
     payload = json.loads(dest.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
-    assert payload["module_version"] == "0.1.0"
+    assert payload["module_version"] == "0.1.1"
     assert payload["generated_at_utc"] == _WHEN_ISO
 
 
@@ -110,7 +119,7 @@ def test_write_manifest_unicode_not_escaped(tmp_path: Path) -> None:
     from retro_mester.output.manifest import build_manifest, write_manifest
 
     kwargs = _sample_kwargs()
-    kwargs["inputs"]["교재"] = "data/bronze/textbook.pdf"
+    kwargs["inputs"]["교재"] = InputProvenance(path="data/bronze/textbook.pdf", sha256="b" * 64)
     manifest = build_manifest(when=_WHEN, **kwargs)
     dest = tmp_path / "manifest_retro.json"
     write_manifest(dest, manifest, _WHEN)

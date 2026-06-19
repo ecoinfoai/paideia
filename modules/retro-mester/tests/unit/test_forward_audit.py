@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 from paideia_shared.schemas import BaselineSnapshotRow
+from retro_mester.load.errors import InputError
+
+from tests.fixtures.factories import write_prior_forward_yaml
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -204,3 +208,68 @@ class TestAuditPrior:
         met_map = {r["entry_id"]: r["met"] for r in result["results"]}
         assert met_map["e1"] is True
         assert met_map["e2"] is False
+
+
+class TestAuditPriorBoundary:
+    """T023: audit_prior fail-fast at the prior-year file boundary (FR-008)."""
+
+    def test_missing_file_raises_input_error(self, tmp_path: Path) -> None:
+        """A non-existent prior yaml path raises InputError naming the path."""
+        from retro_mester.forward.audit import audit_prior
+
+        missing = tmp_path / "no-such-차년도방향.yaml"
+        with pytest.raises(InputError) as exc_info:
+            audit_prior(missing, [])
+        assert str(missing) in str(exc_info.value)
+
+    def test_corrupt_yaml_raises_input_error(self, tmp_path: Path) -> None:
+        """Malformed YAML raises InputError whose message names the path."""
+        from retro_mester.forward.audit import audit_prior
+
+        prior_path = write_prior_forward_yaml(tmp_path, corrupt=True)
+        with pytest.raises(InputError) as exc_info:
+            audit_prior(prior_path, [])
+        assert str(prior_path) in str(exc_info.value)
+
+    def test_non_mapping_top_level_raises_input_error(self, tmp_path: Path) -> None:
+        """A YAML whose top level is a list (not a mapping) raises InputError."""
+        from retro_mester.forward.audit import audit_prior
+
+        prior_path = tmp_path / "list_차년도방향.yaml"
+        prior_path.write_text("- a\n- b\n", encoding="utf-8")
+        with pytest.raises(InputError) as exc_info:
+            audit_prior(prior_path, [])
+        assert str(prior_path) in str(exc_info.value)
+
+    def test_missing_required_key_raises_input_error(self, tmp_path: Path) -> None:
+        """A prior yaml missing a required top-level key raises InputError."""
+        from retro_mester.forward.audit import audit_prior
+
+        prior_path = write_prior_forward_yaml(tmp_path, missing_key="semester")
+        with pytest.raises(InputError) as exc_info:
+            audit_prior(prior_path, [])
+        assert str(prior_path) in str(exc_info.value)
+
+    def test_extra_key_raises_input_error(self, tmp_path: Path) -> None:
+        """An unexpected extra top-level key raises InputError (extra=forbid)."""
+        from retro_mester.forward.audit import audit_prior
+
+        prior_path = write_prior_forward_yaml(tmp_path)
+        data = yaml.safe_load(prior_path.read_text(encoding="utf-8"))
+        data["unexpected_key"] = "boom"
+        prior_path.write_text(yaml.dump(data, allow_unicode=True, sort_keys=True), encoding="utf-8")
+        with pytest.raises(InputError):
+            audit_prior(prior_path, [])
+
+    def test_healthy_prior_still_audits(self, tmp_path: Path) -> None:
+        """A healthy prior yaml audits without raising (regression)."""
+        from retro_mester.forward.audit import audit_prior
+
+        prior_path = write_prior_forward_yaml(tmp_path)
+        # Fixture ledger entry has segment="전체", which never matches a valid
+        # BaselineSnapshotRow segment → met=False with a note, but no raise.
+        result = audit_prior(prior_path, [])
+        assert result["prior_year"] == "2025-1"
+        assert len(result["results"]) == 1
+        assert result["results"][0]["met"] is False
+        assert "note" in result["results"][0]

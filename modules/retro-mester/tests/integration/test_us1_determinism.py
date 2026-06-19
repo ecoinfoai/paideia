@@ -7,6 +7,9 @@ because it carries ``generated_at_utc`` (a real wall-clock timestamp).
 
 SC-009 compliance: the deterministic core is {빈틈표.parquet,
 변경권고.parquet, CQI회고보고서.md, 회고분석.xlsx, CQI회고보고서.pdf}.
+
+T024 (audit M1): alignment_flags in insight_facts must be sorted so the
+LLM prompt is deterministic across runs on the same inputs.
 """
 
 from __future__ import annotations
@@ -197,6 +200,104 @@ def _write_fixture_tree(data_root: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Fixture variant that produces two distinct alignment flags
+# ---------------------------------------------------------------------------
+
+
+def _write_fixture_tree_multi_flags(data_root: Path) -> None:
+    """Write a fixture that yields two distinct AlignmentFlag values.
+
+    Chapter layout (3 chapters, 10 items, 4 taught weeks):
+    - _CHAPTER_A: 3 taught weeks, 3 tested items → share ~= 75%/30%
+      → taught_share 0.75 - tested_share 0.30 = 0.45 > 0.10  → 과다교수-과소평가
+    - _CHAPTER_B: 1 taught week,  7 tested items → share ~= 25%/70%
+      → tested_share 0.70 - taught_share 0.25 = 0.45 > 0.10  → 과소교수-과다평가
+
+    Two distinct flags → list(set(...)) is nondeterministic; sorted must fix it.
+    """
+    silver_dir = data_root / "silver" / "immersio" / _KEY
+    silver_dir.mkdir(parents=True, exist_ok=True)
+
+    combined_rows = [
+        _combined_row("2026000001", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.3}),
+        _combined_row("2026000002", {_CHAPTER_A: 0.5, _CHAPTER_B: 0.35}),
+        _combined_row("2026000003", {_CHAPTER_A: 0.45, _CHAPTER_B: 0.25}),
+        _combined_row("2026000004", {_CHAPTER_A: 0.4, _CHAPTER_B: 0.2}),
+    ]
+    # 3 items for CHAPTER_A, 7 for CHAPTER_B → creates flag asymmetry
+    items = [_item_row(i, _CHAPTER_A) for i in range(1, 4)] + [
+        _item_row(i, _CHAPTER_B) for i in range(4, 11)
+    ]
+    pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
+    pd.DataFrame(items).to_parquet(silver_dir / "문항통계.parquet", index=False)
+
+    bronze_dir = data_root / "bronze" / "retro-mester" / _KEY
+    bronze_dir.mkdir(parents=True, exist_ok=True)
+
+    retro_cfg = {
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "group_roster": {
+            "2026000001": "학령기",
+            "2026000002": "학령기",
+            "2026000003": "만학도",
+            "2026000004": "만학도",
+        },
+        "unit_importance": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
+        "gap_threshold": 0.6,
+        "baseline_segment": "만학도",
+        "low_discrimination_threshold": 0.2,
+        "cognitive_cliff_drop": 0.15,
+        "effort_ratings": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
+    }
+    # 3 weeks for CHAPTER_A, 1 week for CHAPTER_B
+    curriculum = {
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "entries": [
+            {
+                "week": w,
+                "chapter": _CHAPTER_A,
+                "chapter_no": 1,
+                "subtopic": None,
+                "sections": ["1.1 인체의 조직"],
+            }
+            for w in range(1, 4)
+        ]
+        + [
+            {
+                "week": 4,
+                "chapter": _CHAPTER_B,
+                "chapter_no": 2,
+                "subtopic": None,
+                "sections": ["2.1 세포의 구조"],
+            }
+        ],
+    }
+    blueprint = {
+        "semester": _SEMESTER,
+        "course_slug": _COURSE,
+        "exam_name": "2026-1학기 기말고사",
+        "total_items": 40,
+        "chapters": [_CHAPTER_A, _CHAPTER_B],
+        "difficulty_targets": {"easy": 0.45, "medium": 0.35, "hard": 0.20},
+        "source_mix": {"formative": 18, "quiz": 12, "textbook": 10},
+        "quiz_target": 12,
+        "answer_key_balance": True,
+    }
+
+    (bronze_dir / "retro_config.yaml").write_text(
+        yaml.dump(retro_cfg, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze_dir / "blueprint.yaml").write_text(
+        yaml.dump(blueprint, allow_unicode=True), encoding="utf-8"
+    )
+    (bronze_dir / "curriculum_map.yaml").write_text(
+        yaml.dump(curriculum, allow_unicode=True), encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Determinism test
 # ---------------------------------------------------------------------------
 
@@ -259,10 +360,10 @@ class TestUS1Determinism:
         run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(root2))
 
         m1 = json.loads(
-            (root1 / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
+            (root1 / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
         )
         m2 = json.loads(
-            (root2 / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
+            (root2 / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
         )
 
         # Non-timestamp fields must be identical
@@ -276,3 +377,62 @@ class TestUS1Determinism:
             "degrade",
         ):
             assert m1[key] == m2[key], f"Manifest field '{key}' differs between runs"
+
+
+class TestAlignmentFlagsSorted:
+    """T024 (audit M1): insight_facts alignment_flags must be deterministically sorted.
+
+    ``list({f.flag ...})`` iterates a set whose order is nondeterministic.
+    After the fix the flags must arrive in ``sorted()`` order so the LLM
+    prompt hash is stable across interpreter restarts.
+    """
+
+    def test_alignment_flags_are_sorted_in_insight_facts(self, tmp_path: Path) -> None:
+        """alignment_flags in insight_facts must equal sorted(unique_flags).
+
+        Strategy: build a fixture that produces two distinct alignment flags
+        (one aligned chapter + one under-taught/over-tested chapter), then
+        monkey-patch ``build_insight`` on the ``retro_mester.pipeline``
+        module namespace to capture the ``facts`` dict.  Assert that
+        ``alignment_flags`` list equals ``sorted(alignment_flags)``.
+        """
+        import retro_mester.pipeline as pipeline_mod
+        from retro_mester.llm.insight import build_insight as original_build
+        from retro_mester.pipeline import run_retro
+
+        captured_facts: list[dict] = []
+
+        def capturing_build(
+            facts: dict,
+            *,
+            llm_mode: str,
+            require_llm: bool,
+            cache: object,
+        ) -> tuple[str, bool]:
+            captured_facts.append(dict(facts))
+            return original_build(
+                facts,
+                llm_mode=llm_mode,
+                require_llm=require_llm,
+                cache=cache,
+            )
+
+        root = tmp_path / "data"
+        _write_fixture_tree_multi_flags(root)
+
+        pipeline_mod.build_insight = capturing_build  # type: ignore[attr-defined]
+        try:
+            code = run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(root))
+        finally:
+            pipeline_mod.build_insight = original_build  # type: ignore[attr-defined]
+
+        assert code == 0, f"run_retro failed with code {code}"
+        assert captured_facts, "build_insight was not called — pipeline changed"
+
+        flags = captured_facts[0]["alignment_flags"]
+        assert len(flags) >= 2, (
+            f"Fixture must yield at least 2 distinct flags to test order; got {flags!r}"
+        )
+        assert flags == sorted(flags), (
+            f"alignment_flags must be sorted; got {flags!r}, expected {sorted(flags)!r}"
+        )

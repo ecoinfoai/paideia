@@ -262,7 +262,7 @@ class TestEmptyChapter:
 
         gold = data_root / "gold" / "retro-mester" / _KEY
         assert (gold / "CQI회고보고서.md").exists()
-        assert (gold / "manifest_retro.json").exists()
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ class TestFewerThanThreeGaps:
         import json as _json
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+            (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -396,7 +396,7 @@ class TestTinySampleSegment:
         _run(data_root)
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+            (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -456,7 +456,7 @@ class TestChapterLabelMismatch:
 
         gold = data_root / "gold" / "retro-mester" / _KEY
         assert (gold / "CQI회고보고서.md").exists()
-        assert (gold / "manifest_retro.json").exists()
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +499,7 @@ class TestColdStart:
         _run(data_root, prior_yaml_path=None)
 
         manifest = _json.loads(
-            (data_root / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
+            (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text(
                 encoding="utf-8"
             )
         )

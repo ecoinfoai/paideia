@@ -44,6 +44,7 @@ def test_valid_construction_with_defaults() -> None:
     assert cfg.baseline_segment == "만학도"
     assert cfg.importance_weights == {"상": 3.0, "중": 2.0, "하": 1.0}
     assert cfg.effort_ratings == {}
+    assert cfg.prior_readiness_low_labels == []
 
 
 def test_valid_construction_explicit_overrides() -> None:
@@ -56,10 +57,21 @@ def test_valid_construction_explicit_overrides() -> None:
         low_discrimination_threshold=0.3,
         cognitive_cliff_drop=0.2,
         effort_ratings={"8장 호흡계통": "상"},
+        prior_readiness_low_labels=["낮음", "매우낮음"],
     )
     assert cfg.gap_threshold == 0.75
     assert cfg.baseline_segment == "학령기"
     assert cfg.effort_ratings == {"8장 호흡계통": "상"}
+    assert cfg.prior_readiness_low_labels == ["낮음", "매우낮음"]
+
+
+def test_prior_readiness_low_labels_default_is_empty_and_isolated() -> None:
+    """prior_readiness_low_labels defaults to [] and is not shared across instances."""
+    cfg_a = RetroMesterConfig(**_valid_kwargs())
+    cfg_b = RetroMesterConfig(**_valid_kwargs())
+    assert cfg_a.prior_readiness_low_labels == []
+    # default_factory must yield a distinct list per instance (no shared mutable).
+    assert cfg_a.prior_readiness_low_labels is not cfg_b.prior_readiness_low_labels
 
 
 # ---------------------------------------------------------------------------

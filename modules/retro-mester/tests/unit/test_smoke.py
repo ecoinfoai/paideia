@@ -9,10 +9,10 @@ def test_import_retro_mester() -> None:
 
 
 def test_version() -> None:
-    """Assert that ``retro_mester.__version__`` equals '0.1.0'."""
+    """Assert that ``retro_mester.__version__`` equals '0.1.1'."""
     import retro_mester
 
-    assert retro_mester.__version__ == "0.1.0"
+    assert retro_mester.__version__ == "0.1.1"
 
 
 def test_cli_run_help_exits_zero() -> None:

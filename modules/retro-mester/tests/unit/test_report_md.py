@@ -9,9 +9,24 @@ Tests for ``retro_mester.output.report_md.build_report_md``.
 
 from __future__ import annotations
 
+from paideia_shared.schemas import InsufficientEvidenceUnit
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 from retro_mester.output.report_md import build_report_md
+
+
+def _make_insufficient() -> list[InsufficientEvidenceUnit]:
+    return [
+        InsufficientEvidenceUnit(
+            semester="2026-1",
+            course_slug="anatomy",
+            chapter="9장 신경",
+            segment="학령기",
+            evidence_n=0,
+            reason="근거부족-자료없음",
+        ),
+    ]
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -138,3 +153,97 @@ class TestBuildReportMd:
         """Table contains a rank (순위) column header."""
         md = build_report_md(_make_recs(), 0.0, _make_gaps(), "2026-1", "anatomy")
         assert "순위" in md
+
+
+class TestReportMdInsufficient:
+    """T010: report md must surface 근거 부족 units, not omit them."""
+
+    def test_insufficient_section_lists_unit(self) -> None:
+        """근거 부족 section names the (chapter, segment) explicitly."""
+        md = build_report_md(
+            _make_recs(),
+            0.5,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            insufficient=_make_insufficient(),
+        )
+        assert "근거 부족" in md
+        assert "9장 신경" in md
+        assert "학령기" in md
+
+    def test_no_insufficient_states_none(self) -> None:
+        """With an empty insufficient list, the section states none explicitly."""
+        md = build_report_md(
+            _make_recs(),
+            0.0,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            insufficient=[],
+        )
+        assert "근거 부족" in md
+
+
+_BIAS_MARKER = "자가응답 편향"
+
+
+def _make_interest_gap(*, available: bool) -> dict:
+    """Build an interest_aversion_findings()-shaped dict for tests."""
+    if available:
+        return {
+            "interest_mean": 0.70,
+            "aversion_mean": 0.45,
+            "gap": 0.25,
+            "n_interest": 12,
+            "n_aversion": 8,
+            "bias_note": f"{_BIAS_MARKER}(self-report bias) 주의: 보수적으로 해석.",
+        }
+    return {
+        "interest_mean": None,
+        "aversion_mean": None,
+        "gap": None,
+        "n_interest": 0,
+        "n_aversion": 0,
+        "bias_note": f"{_BIAS_MARKER}(self-report bias) 주의: 보수적으로 해석.",
+    }
+
+
+class TestReportMdInterestGap:
+    """T018 / T020 — cohort interest/aversion achievement gap (audit M2)."""
+
+    def test_none_omits_section(self) -> None:
+        """interest_gap=None omits the section entirely (sibling idiom)."""
+        md = build_report_md(_make_recs(), 0.0, _make_gaps(), "2026-1", "anatomy")
+        assert "관심·기피 단원 성취 격차" not in md
+
+    def test_section_heading_and_values_rendered(self) -> None:
+        """T018: available gap renders means, gap, counts, and bias_note."""
+        md = build_report_md(
+            _make_recs(),
+            0.0,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            interest_gap=_make_interest_gap(available=True),
+        )
+        assert "관심·기피 단원 성취 격차 (자가응답 편향 주의)" in md
+        assert "0.70" in md  # interest_mean
+        assert "0.45" in md  # aversion_mean
+        assert "0.25" in md  # gap
+        assert "12" in md  # n_interest
+        assert "8" in md  # n_aversion
+        assert _BIAS_MARKER in md  # bias_note always present
+
+    def test_gap_none_renders_insufficient_message(self) -> None:
+        """T020: gap=None renders explicit 데이터 부족 line, not a blank."""
+        md = build_report_md(
+            _make_recs(),
+            0.0,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            interest_gap=_make_interest_gap(available=False),
+        )
+        assert "관심·기피 응답 데이터 부족" in md
+        assert _BIAS_MARKER in md  # bias_note still renders
