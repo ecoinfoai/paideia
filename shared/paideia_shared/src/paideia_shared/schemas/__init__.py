@@ -74,6 +74,14 @@ from .maieutica import (
     MaieuticaTextbookEvidence,
     QuizItemCandidate,
 )
+from .metric_codex import (
+    AdvisorBundleSummary,
+    CodexEntry,
+    EntryKind,
+    MetricCodexManifest,
+    PseudonymMapEntry,
+    SourceRecord,
+)
 from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .needs_map_manifest import (
@@ -227,4 +235,11 @@ __all__ = [
     # spec 012 retro-mester v0.1.1 audit-fix — 2 new models (T005-T006)
     "InsufficientEvidenceUnit",
     "InputProvenance",
+    # spec 013 metric-codex v0.1.0 — 5 new models + 1 enum (T005/T007/T009/T011)
+    "CodexEntry",
+    "EntryKind",
+    "SourceRecord",
+    "PseudonymMapEntry",
+    "AdvisorBundleSummary",
+    "MetricCodexManifest",
 ]
