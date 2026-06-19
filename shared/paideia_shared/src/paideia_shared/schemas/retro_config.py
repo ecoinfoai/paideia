@@ -72,6 +72,13 @@ class RetroMesterConfig(BaseModel):
         default_factory=dict,
         description="Optional per-chapter effort rating; keys need not cover all chapters.",
     )
+    prior_readiness_low_labels: list[str] = Field(
+        default_factory=list,
+        description="Course-supplied prior-readiness ordinal labels that mark a student as"
+        " low-readiness for cause classification. Empty (default) means no readiness-driven"
+        " signal — the labels are unconstrained free-form text from an external diagnostic,"
+        " so no ordering is fabricated when this is empty.",
+    )
 
     # ------------------------------------------------------------------
     # Model validators
