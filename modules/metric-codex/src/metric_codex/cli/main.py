@@ -328,10 +328,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="CodexEntry 완결성·근거·PII 경계 검증",
         description=(
             "Silver CodexEntry 의 완결성(필수 필드), 근거 추적 가능성,\n"
-            "PII 경계(가명화 준수) 를 검증한다."
+            "PII 경계(가명화 준수) 를 검증한다.\n"
+            "종료 코드: 0 모든 불변식 통과 · 2 입력 오류 · 3 불변식 위반"
         ),
     )
     _add_common_args(verify_p)
+    verify_p.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
+    verify_p.add_argument(
+        "--roster",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
+    )
 
     # ------------------------------------------------------------------
     # build
@@ -1007,8 +1022,43 @@ def _run_distribute(args: argparse.Namespace) -> int:
 
 
 def _run_verify(args: argparse.Namespace) -> int:
-    """Stub handler for ``verify``. Completeness/PII verification TBD."""
-    raise NotImplementedError("verify pipeline not yet implemented")
+    """Handle the ``verify`` subcommand: post-hoc invariant enforcement.
+
+    Runs every applicable check from ``metric_codex.verify.checks``.  If any
+    violation is found, prints each located violation to stderr and exits 3.
+    On a clean pass, prints a confirmation to stdout and exits 0.
+
+    The check is READ-ONLY — it never writes Gold/Silver.
+
+    Args:
+        args: Parsed CLI arguments for the ``verify`` subcommand.
+
+    Returns:
+        ``0`` all invariants pass; ``3`` one or more violations detected.
+    """
+    from metric_codex.verify.checks import run_all_checks
+
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+    question_set_path: Path | None = getattr(args, "question_set", None)
+    roster_path: Path | None = getattr(args, "roster", None)
+
+    violations = run_all_checks(
+        data_root=data_root,
+        semester=semester,
+        course_slug=course,
+        question_set_path=question_set_path,
+        roster_path=roster_path,
+    )
+
+    if violations:
+        for v in violations:
+            print(str(v), file=sys.stderr)
+        return 3
+
+    print("verify: all invariants pass")
+    return 0
 
 
 def _run_build(args: argparse.Namespace) -> int:

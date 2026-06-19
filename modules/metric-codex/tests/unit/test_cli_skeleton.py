@@ -11,9 +11,11 @@ Tests (RED first, per TDD mandate):
 
 Updated in T041/T042/T045: query, dry-run, and generate are now wired.
 Updated in T052: distribute is now wired (no longer a stub).
+Updated in T054: verify is now wired (no longer a stub).
 - query requires --student; skeleton test passes dummy --student.
 - dry-run is wired and may fail on missing Silver files (not NotImplementedError).
 - distribute is wired and may fail on missing roster file (not NotImplementedError).
+- verify is wired and exits 0/2/3 depending on artifact state (not NotImplementedError).
 """
 
 from __future__ import annotations
@@ -22,8 +24,8 @@ import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
 # Subcommands still backed by a NotImplementedError stub.
-# query, dry-run, generate, and distribute are now wired (T041/T042/T045/T052).
-_STUB_SUBCOMMANDS = ["verify", "build"]
+# query, dry-run, generate, distribute, and verify are now wired (T041/T042/T045/T052/T054).
+_STUB_SUBCOMMANDS = ["build"]
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +142,9 @@ def test_subcommand_help_exits_zero(subcommand: str) -> None:
 def test_app_stub_handler_returns_three() -> None:
     """app() catches a stub handler's NotImplementedError and returns exit 3.
 
-    Uses 'verify' which is still a stub (query/dry-run/generate/distribute are wired).
+    Uses 'build' which is still a stub (query/dry-run/generate/distribute/verify are wired).
     """
     from metric_codex.cli.main import app
 
-    result = app(["verify", "--semester", "2026-1", "--course", "x"])
+    result = app(["build", "--semester", "2026-1", "--course", "x"])
     assert result == 3
