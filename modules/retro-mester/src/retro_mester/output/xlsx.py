@@ -29,6 +29,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from paideia_shared.schemas import InsufficientEvidenceUnit
 from paideia_shared.schemas.alignment_finding import AlignmentFinding
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
@@ -105,7 +106,27 @@ _REC_COLUMNS: list[str] = [
 ]
 
 
-def _build_gap_sheet(wb: Workbook, gaps: list[UnitGap]) -> None:
+_INSUFFICIENT_BLOCK_LABEL = "근거 부족 단원 (코호트 전체 응답 데이터 없음)"
+_INSUFFICIENT_BLOCK_COLUMNS: list[str] = ["chapter", "segment", "evidence_n", "reason"]
+
+
+def _build_gap_sheet(
+    wb: Workbook,
+    gaps: list[UnitGap],
+    insufficient: list[InsufficientEvidenceUnit],
+) -> None:
+    """Build the 빈틈 sheet with an adjacent 근거 부족 단원 block (H1).
+
+    The gap rows are written first; below them (separated by a blank row) a
+    labeled block lists the insufficient (zero-cohort-evidence) units so they
+    are visibly "근거 부족", never silently absent.  The block is omitted only
+    its header when no insufficient units exist (the label still renders).
+
+    Args:
+        wb: Target workbook.
+        gaps: All UnitGap records.
+        insufficient: InsufficientEvidenceUnit records to surface below the gaps.
+    """
     ws = wb.create_sheet("빈틈")
     bold = Font(bold=True)
 
@@ -115,6 +136,7 @@ def _build_gap_sheet(wb: Workbook, gaps: list[UnitGap]) -> None:
 
     # Sort gaps: chapter ASC, segment ASC
     sorted_gaps = sorted(gaps, key=lambda g: (g.chapter, g.segment))
+    last_row = 1
     for r, gap in enumerate(sorted_gaps, start=2):
         row_dict = gap.model_dump()
         for c, col in enumerate(_GAP_COLUMNS, start=1):
@@ -123,6 +145,20 @@ def _build_gap_sheet(wb: Workbook, gaps: list[UnitGap]) -> None:
             if isinstance(value, (list, dict)):
                 value = str(value)
             ws.cell(r, c, value)
+        last_row = r
+
+    # 근거 부족 단원 block — blank separator row, label, header, then units.
+    label_row = last_row + 2
+    ws.cell(label_row, 1, _INSUFFICIENT_BLOCK_LABEL).font = bold
+    header_row = label_row + 1
+    for c, col in enumerate(_INSUFFICIENT_BLOCK_COLUMNS, start=1):
+        ws.cell(header_row, c, col).font = bold
+
+    sorted_insuf = sorted(insufficient, key=lambda u: (u.chapter, u.segment))
+    for r, unit in enumerate(sorted_insuf, start=header_row + 1):
+        row_dict = unit.model_dump()
+        for c, col in enumerate(_INSUFFICIENT_BLOCK_COLUMNS, start=1):
+            ws.cell(r, c, row_dict[col])
 
 
 def _build_rec_sheet(wb: Workbook, recs: list[ChangeRecommendation]) -> None:
@@ -259,6 +295,7 @@ def write_xlsx(
     prescriptions: dict[tuple[str, str], str] | None = None,
     alignment_findings: list[AlignmentFinding] | None = None,
     validity_table: list[dict] | None = None,
+    insufficient: list[InsufficientEvidenceUnit] | None = None,
 ) -> None:
     """Write ``빈틈``, ``변경권고``, ``집단대비``, ``정렬``, ``타당도`` sheets.
 
@@ -283,6 +320,9 @@ def write_xlsx(
             ``chapter``, ``verdict``, ``mean_discrimination``,
             ``low_disc_share``, ``bad_distractor_share``.  When ``None``,
             the sheet is written with only the header row.
+        insufficient: Optional list of ``InsufficientEvidenceUnit`` surfaced as a
+            labeled 근거 부족 단원 block inside the 빈틈 sheet (H1).  When ``None``,
+            an empty block is rendered (label only).
 
     Raises:
         FileNotFoundError: When ``xlsx_path.parent`` does not exist.
@@ -297,7 +337,7 @@ def write_xlsx(
     if default is not None:
         wb.remove(default)
 
-    _build_gap_sheet(wb, gaps)
+    _build_gap_sheet(wb, gaps, insufficient or [])
     _build_rec_sheet(wb, recs)
     _build_contrast_sheet(wb, gaps, prescriptions or {})
     _build_align_sheet(wb, alignment_findings or [])

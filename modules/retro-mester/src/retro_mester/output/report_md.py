@@ -23,6 +23,7 @@ No individual student names or IDs appear.
 
 from __future__ import annotations
 
+from paideia_shared.schemas import InsufficientEvidenceUnit
 from paideia_shared.schemas.alignment_finding import AlignmentFinding
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.retro_forward import ImprovementLedgerEntry
@@ -319,6 +320,45 @@ def _build_alignment_section(
     return lines
 
 
+def _build_insufficient_section(
+    insufficient: list[InsufficientEvidenceUnit],
+) -> list[str]:
+    """Build the 근거 부족 section listing zero-cohort-evidence units (H1).
+
+    Lists each (chapter, segment) unit explicitly so 근거부족 단원이 보고서에서
+    조용히 사라지지 않는다.  When the list is empty, states that none were found.
+
+    Args:
+        insufficient: List of ``InsufficientEvidenceUnit`` records.
+
+    Returns:
+        List of Markdown line strings.
+    """
+    lines: list[str] = []
+    lines.append("## 근거 부족 단원")
+    lines.append("")
+    lines.append(
+        "아래 단원은 코호트 전체에서 응답 데이터가 전혀 없어 빈틈을 판정할 수 "
+        "없습니다 (조용히 누락하지 않고 명시합니다)."
+    )
+    lines.append("")
+
+    if not insufficient:
+        lines.append("근거 부족 단원이 없습니다.")
+        lines.append("")
+        return lines
+
+    headers = ("단원", "집단", "사유")
+    sep = "| " + " | ".join("---" for _ in headers) + " |"
+    lines.append(_md_table_row(headers))
+    lines.append(sep)
+    for unit in sorted(insufficient, key=lambda u: (u.chapter, u.segment)):
+        lines.append(_md_table_row((unit.chapter, unit.segment, unit.reason)))
+    lines.append("")
+
+    return lines
+
+
 def build_report_md(
     recs: list[ChangeRecommendation],
     uncovered_ratio: float,
@@ -331,6 +371,7 @@ def build_report_md(
     forward_ledger: list[ImprovementLedgerEntry] | None = None,
     forward_audit: dict | None = None,
     alignment_findings: list[AlignmentFinding] | None = None,
+    insufficient: list[InsufficientEvidenceUnit] | None = None,
 ) -> str:
     """Build the Markdown retrospective report (US1 + US2 + US3 sections).
 
@@ -365,6 +406,9 @@ def build_report_md(
             ``forward_ledger`` is ``None``.
         alignment_findings: Optional list of ``AlignmentFinding`` for section
             (D) 인지수준·정렬 (US4 T047).  When ``None``, section (D) is omitted.
+        insufficient: Optional list of ``InsufficientEvidenceUnit`` for the
+            근거 부족 단원 section (H1).  When ``None``, the section is omitted;
+            when an empty list, the section states that none were found.
 
     Returns:
         Deterministic Markdown string ready to be written to ``.md`` or
@@ -405,6 +449,11 @@ def build_report_md(
         f" ({total_gaps}개 빈틈 중 {round(uncovered_ratio * total_gaps)}개 미처리)"
     )
     lines.append("")
+
+    # 근거 부족 단원 (H1) — emitted right after the gap summary so zero-evidence
+    # chapters are visible alongside the coverage line, never silently dropped.
+    if insufficient is not None:
+        lines.extend(_build_insufficient_section(insufficient))
 
     # Section (B): 내년 준비 예견 (US3 T042)
     if forward_ledger is not None:

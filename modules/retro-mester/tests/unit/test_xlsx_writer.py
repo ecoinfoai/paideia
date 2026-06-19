@@ -12,11 +12,25 @@ import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
+from paideia_shared.schemas import InsufficientEvidenceUnit
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 from retro_mester.output.xlsx import write_xlsx
 
 _WHEN = datetime.datetime(2026, 6, 15, 9, 0, 0)
+
+
+def _make_insufficient() -> list[InsufficientEvidenceUnit]:
+    return [
+        InsufficientEvidenceUnit(
+            semester="2026-1",
+            course_slug="anatomy",
+            chapter="9장 신경",
+            segment="학령기",
+            evidence_n=0,
+            reason="근거부족-자료없음",
+        ),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +164,39 @@ class TestWriteXlsx:
                 assert isinstance(val, (int, float)), (
                     f"impact_score should be numeric, got {type(val)}"
                 )
+
+
+class TestWriteXlsxInsufficient:
+    """T010: insufficient (근거 부족) units must be visible in the 빈틈 sheet."""
+
+    def _cells(self, ws) -> list:  # type: ignore[no-untyped-def]
+        out = []
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is not None:
+                    out.append(cell.value)
+        return out
+
+    def test_insufficient_label_and_unit_visible(self, tmp_path: Path) -> None:
+        """The 빈틈 sheet surfaces a '근거 부족' label and the unit's chapter."""
+        out = tmp_path / "retro.xlsx"
+        write_xlsx(
+            _make_gaps(),
+            _make_recs(),
+            out,
+            _WHEN,
+            insufficient=_make_insufficient(),
+        )
+        wb = load_workbook(out, read_only=True)
+        values = [str(v) for v in self._cells(wb["빈틈"])]
+        assert any("근거 부족" in v for v in values), "Missing '근거 부족' label"
+        assert any("9장 신경" in v for v in values), "Missing insufficient chapter"
+
+    def test_byte_identical_with_insufficient(self, tmp_path: Path) -> None:
+        """Two writes with the same insufficient list are byte-identical."""
+        out1 = tmp_path / "a.xlsx"
+        out2 = tmp_path / "b.xlsx"
+        insuf = _make_insufficient()
+        write_xlsx(_make_gaps(), _make_recs(), out1, _WHEN, insufficient=insuf)
+        write_xlsx(_make_gaps(), _make_recs(), out2, _WHEN, insufficient=insuf)
+        assert out1.read_bytes() == out2.read_bytes()

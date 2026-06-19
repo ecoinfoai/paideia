@@ -9,9 +9,23 @@ Tests for ``retro_mester.output.report_md.build_report_md``.
 
 from __future__ import annotations
 
+from paideia_shared.schemas import InsufficientEvidenceUnit
 from paideia_shared.schemas.change_recommendation import ChangeRecommendation
 from paideia_shared.schemas.unit_gap import UnitGap
 from retro_mester.output.report_md import build_report_md
+
+
+def _make_insufficient() -> list[InsufficientEvidenceUnit]:
+    return [
+        InsufficientEvidenceUnit(
+            semester="2026-1",
+            course_slug="anatomy",
+            chapter="9장 신경",
+            segment="학령기",
+            evidence_n=0,
+            reason="근거부족-자료없음",
+        ),
+    ]
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -138,3 +152,33 @@ class TestBuildReportMd:
         """Table contains a rank (순위) column header."""
         md = build_report_md(_make_recs(), 0.0, _make_gaps(), "2026-1", "anatomy")
         assert "순위" in md
+
+
+class TestReportMdInsufficient:
+    """T010: report md must surface 근거 부족 units, not omit them."""
+
+    def test_insufficient_section_lists_unit(self) -> None:
+        """근거 부족 section names the (chapter, segment) explicitly."""
+        md = build_report_md(
+            _make_recs(),
+            0.5,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            insufficient=_make_insufficient(),
+        )
+        assert "근거 부족" in md
+        assert "9장 신경" in md
+        assert "학령기" in md
+
+    def test_no_insufficient_states_none(self) -> None:
+        """With an empty insufficient list, the section states none explicitly."""
+        md = build_report_md(
+            _make_recs(),
+            0.0,
+            _make_gaps(),
+            "2026-1",
+            "anatomy",
+            insufficient=[],
+        )
+        assert "근거 부족" in md
