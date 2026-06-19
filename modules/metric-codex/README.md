@@ -125,3 +125,35 @@ LD_LIBRARY_PATH=/run/current-system/sw/share/nix-ld/lib \
 LD_LIBRARY_PATH=/run/current-system/sw/share/nix-ld/lib \
   uv run ruff check modules/metric-codex
 ```
+
+---
+
+## Testing
+
+The workspace test suite must be run **per `--package`**, not as a bare
+`pytest modules shared` invocation.  The bare form hits a pre-existing
+cross-module `tests` package-name collision (top-level `tests/` in each
+module resolves ambiguously under a flat pytest scan) — this is unrelated
+to metric-codex.
+
+### Per-package commands
+
+```bash
+export LD_LIBRARY_PATH=/run/current-system/sw/share/nix-ld/lib
+
+# metric-codex (includes end-to-end Scenarios A–E in tests/integration/test_quickstart_e2e.py)
+uv run --package metric-codex pytest modules/metric-codex -q
+
+# paideia_shared contracts (schemas, including metric_codex schemas)
+uv run pytest shared -q
+
+# Peer modules — zero regression expected from metric-codex shared-schema additions
+uv run --package immersio     pytest modules/immersio -q
+uv run --package needs-map    pytest modules/needs-map -q
+uv run --package examen       pytest modules/examen -q
+uv run --package retro-mester pytest modules/retro-mester -q
+uv run --package maieutica    pytest modules/maieutica -q
+```
+
+`needs-map` roberta/torch-marked tests auto-skip when `torch` is not
+installed — these are expected skips, not failures.
