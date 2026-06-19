@@ -27,7 +27,23 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+from paideia_shared.schemas import AdvisorBundleSummary
+
+from metric_codex.ingest.bronze_copies import (
+    load_blueprint,
+    load_curriculum_map,
+    load_school_excel_map,
+)
+from metric_codex.ingest.paideia_sources import read_paideia_sources
+from metric_codex.ingest.school_excel import read_school_excel
+from metric_codex.output.manifest import build_manifest, write_manifest
+from metric_codex.output.paths import bronze_dir, silver_dir
+from metric_codex.output.sha256 import compute_sha256
+from metric_codex.store.codex import accumulate, read_existing_store, write_store
+from metric_codex.store.pseudonym import build_pseudonym_map, write_pseudonym_map
 
 # ---------------------------------------------------------------------------
 # Argument parser builder
@@ -95,6 +111,44 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(ingest_p)
+    ingest_p.add_argument(
+        "--school-excel",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="학교 성적·출석 xlsx 경로 (기본: Bronze '성적출석.xlsx')",
+    )
+    ingest_p.add_argument(
+        "--school-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="성적출석_map.yaml 경로 (기본: Bronze '성적출석_map.yaml')",
+    )
+    ingest_p.add_argument(
+        "--blueprint",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) examen blueprint.yaml — provenance 기록 전용",
+    )
+    ingest_p.add_argument(
+        "--curriculum-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) curriculum_map.yaml — provenance 기록 전용",
+    )
+    ingest_p.add_argument(
+        "--now",
+        type=str,
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "ingested_at/generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
+            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # query
@@ -184,8 +238,110 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_ingest(args: argparse.Namespace) -> int:
-    """Stub handler for ``ingest``. Real Bronze→Silver pipeline TBD."""
-    raise NotImplementedError("ingest pipeline not yet implemented")
+    """Consolidate all sources into the per-student Silver store (Scenario A).
+
+    Reads the school Excel (minimal layer) plus any immersio/needs-map Silver
+    (rich layer), accumulates them into ``codex_entry.parquet`` /
+    ``source_ledger.parquet`` (idempotent across runs), writes the local-only
+    pseudonym map, and emits the run manifest.  Missing optional upstream Silver
+    degrades gracefully (fewer entries), never errors.
+
+    Args:
+        args: Parsed CLI arguments for the ``ingest`` subcommand.
+
+    Returns:
+        ``0`` on success.
+
+    Raises:
+        LocatedInputError: On any boundary failure (caught by ``app`` → exit 2).
+    """
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+
+    # ``--now`` is the ONLY non-deterministic injection point.  When omitted we
+    # fall back to wall-clock time; the resulting manifest/ledger timestamps are
+    # then non-deterministic (documented in --help).
+    now: str = args.now or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    own_bronze = bronze_dir(semester, course, data_root=data_root)
+    school_excel: Path = args.school_excel or (own_bronze / "성적출석.xlsx")
+    school_map: Path = args.school_map or (own_bronze / "성적출석_map.yaml")
+
+    own_silver = silver_dir(semester, course, data_root=data_root)
+    immersio_silver = data_root / "silver" / "immersio" / f"{semester}-{course}"
+    needsmap_silver = data_root / "silver" / "needs-map" / f"{semester}-{course}"
+
+    # 1) School Excel (minimal layer) — fail-fast on a missing/malformed file.
+    excel_map = load_school_excel_map(school_map)
+    school_result = read_school_excel(
+        school_excel,
+        excel_map,
+        ingested_at=now,
+        source_path=str(school_excel.relative_to(data_root)),
+    )
+
+    # 2) Upstream paideia Silver (rich layer) — missing dirs degrade silently.
+    paideia_results = read_paideia_sources(
+        immersio_silver_dir=immersio_silver if immersio_silver.is_dir() else None,
+        needsmap_silver_dir=needsmap_silver if needsmap_silver.is_dir() else None,
+        semester=semester,
+        data_root=data_root,
+        ingested_at=now,
+    )
+
+    results = [school_result, *paideia_results]
+
+    # 3) Optional provenance: validate blueprint/curriculum (fail-fast) and
+    #    record their digests only — they are not used for entry construction.
+    config_ids: dict[str, str] = {school_map.name: compute_sha256(school_map)}
+    if args.blueprint is not None:
+        load_blueprint(args.blueprint)
+        config_ids[args.blueprint.name] = compute_sha256(args.blueprint)
+    if args.curriculum_map is not None:
+        load_curriculum_map(args.curriculum_map)
+        config_ids[args.curriculum_map.name] = compute_sha256(args.curriculum_map)
+
+    # 4) Accumulate into the (possibly pre-existing) Silver store.
+    existing_entries, existing_records = read_existing_store(own_silver)
+    entries, records = accumulate(results, existing_entries, existing_records)
+    write_store(own_silver, entries, records)
+
+    # 5) Local-only pseudonym map over the union of all observed identities.
+    identities: dict[str, str | None] = {}
+    for result in results:
+        for student_id, name_kr in result.identities.items():
+            # Keep a non-None name if any source supplies one.
+            if name_kr is not None or student_id not in identities:
+                identities[student_id] = name_kr
+    write_pseudonym_map(own_silver / "pseudonym_map.parquet", build_pseudonym_map(identities))
+
+    # 6) Manifest — pre-distribution bundle snapshot (distribute overwrites later).
+    student_ids = sorted({e.student_id for e in entries})
+    student_count = len(student_ids)
+    bundle_summary = AdvisorBundleSummary(
+        total_students_with_codex=student_count,
+        assigned_count=0,
+        unassigned_sids=student_ids,
+        advisor_count=0,
+        per_advisor_counts={},
+    )
+    manifest = build_manifest(
+        semester=semester,
+        course_slug=course,
+        input_hashes={r.source_record.source_id: r.source_record.sha256 for r in results},
+        config_ids=config_ids,
+        generated_at=now,
+        llm_backend="none(template)",
+        llm_model=None,
+        cache_hit_rate=None,
+        student_count=student_count,
+        entry_count=len(entries),
+        bundle_summary=bundle_summary,
+    )
+    write_manifest(own_silver / "manifest_metric-codex.json", manifest)
+
+    return 0
 
 
 def _run_query(args: argparse.Namespace) -> int:

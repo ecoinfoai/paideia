@@ -15,6 +15,8 @@ from __future__ import annotations
 import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
+# Subcommands still backed by a NotImplementedError stub (ingest is now wired).
+_STUB_SUBCOMMANDS = ["query", "dry-run", "generate", "distribute", "verify", "build"]
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +94,7 @@ def test_common_flags_parse_without_error(subcommand: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("subcommand", _ALL_SUBCOMMANDS)
+@pytest.mark.parametrize("subcommand", _STUB_SUBCOMMANDS)
 def test_stub_handlers_raise_not_implemented(subcommand: str) -> None:
     """Each stub handler raises NotImplementedError (wired in later units)."""
     from metric_codex.cli.main import _COMMAND_HANDLERS, _build_parser
@@ -131,5 +133,5 @@ def test_app_stub_handler_returns_three() -> None:
     """
     from metric_codex.cli.main import app
 
-    result = app(["ingest", "--semester", "2026-1", "--course", "x"])
+    result = app(["query", "--semester", "2026-1", "--course", "x"])
     assert result == 3
