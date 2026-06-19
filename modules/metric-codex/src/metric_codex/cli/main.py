@@ -32,18 +32,24 @@ from pathlib import Path
 
 from paideia_shared.schemas import AdvisorBundleSummary
 
+from metric_codex.errors import LocatedInputError
 from metric_codex.ingest.bronze_copies import (
     load_blueprint,
     load_curriculum_map,
     load_school_excel_map,
 )
 from metric_codex.ingest.paideia_sources import read_paideia_sources
+from metric_codex.ingest.result import SourceReadResult
 from metric_codex.ingest.school_excel import read_school_excel
 from metric_codex.output.manifest import build_manifest, write_manifest
 from metric_codex.output.paths import bronze_dir, silver_dir
 from metric_codex.output.sha256 import compute_sha256
 from metric_codex.store.codex import accumulate, read_existing_store, write_store
-from metric_codex.store.pseudonym import build_pseudonym_map, write_pseudonym_map
+from metric_codex.store.pseudonym import (
+    build_pseudonym_map,
+    read_pseudonym_map,
+    write_pseudonym_map,
+)
 
 # ---------------------------------------------------------------------------
 # Argument parser builder
@@ -237,6 +243,31 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _relative_source_path(path: Path, data_root: Path) -> str:
+    """Return ``path`` relative to ``data_root`` for a deterministic source_path.
+
+    Args:
+        path: A real filesystem path under ``data_root``.
+        data_root: The ``--data-root`` directory.
+
+    Returns:
+        The repo-relative path string (independent of cwd / machine).
+
+    Raises:
+        LocatedInputError: If ``path`` is not inside ``data_root`` (would yield a
+            non-deterministic, machine-specific source_path).
+    """
+    try:
+        return str(path.relative_to(data_root))
+    except ValueError as exc:
+        raise LocatedInputError(
+            "--school-excel path must be inside --data-root for a deterministic source_path",
+            file=str(path),
+            expected=f"path under {data_root}",
+            actual=str(path),
+        ) from exc
+
+
 def _run_ingest(args: argparse.Namespace) -> int:
     """Consolidate all sources into the per-student Silver store (Scenario A).
 
@@ -272,14 +303,26 @@ def _run_ingest(args: argparse.Namespace) -> int:
     immersio_silver = data_root / "silver" / "immersio" / f"{semester}-{course}"
     needsmap_silver = data_root / "silver" / "needs-map" / f"{semester}-{course}"
 
-    # 1) School Excel (minimal layer) — fail-fast on a missing/malformed file.
-    excel_map = load_school_excel_map(school_map)
-    school_result = read_school_excel(
-        school_excel,
-        excel_map,
-        ingested_at=now,
-        source_path=str(school_excel.relative_to(data_root)),
-    )
+    # 1) School Excel (minimal layer).  The store accumulates across runs, so a
+    #    later (e.g. immersio-only) run may legitimately omit the school Excel:
+    #    when neither the workbook nor its map exists, the minimal layer simply
+    #    degrades (like the upstream Silver sources).  An explicitly supplied or
+    #    half-present source still fails fast.
+    results: list[SourceReadResult] = []
+    config_ids: dict[str, str] = {}
+    school_explicit = args.school_excel is not None or args.school_map is not None
+    if school_explicit or school_map.is_file() or school_excel.is_file():
+        excel_map = load_school_excel_map(school_map)
+        school_source_path = _relative_source_path(school_excel, data_root)
+        results.append(
+            read_school_excel(
+                school_excel,
+                excel_map,
+                ingested_at=now,
+                source_path=school_source_path,
+            )
+        )
+        config_ids[school_map.name] = compute_sha256(school_map)
 
     # 2) Upstream paideia Silver (rich layer) — missing dirs degrade silently.
     paideia_results = read_paideia_sources(
@@ -289,12 +332,10 @@ def _run_ingest(args: argparse.Namespace) -> int:
         data_root=data_root,
         ingested_at=now,
     )
-
-    results = [school_result, *paideia_results]
+    results.extend(paideia_results)
 
     # 3) Optional provenance: validate blueprint/curriculum (fail-fast) and
     #    record their digests only — they are not used for entry construction.
-    config_ids: dict[str, str] = {school_map.name: compute_sha256(school_map)}
     if args.blueprint is not None:
         load_blueprint(args.blueprint)
         config_ids[args.blueprint.name] = compute_sha256(args.blueprint)
@@ -307,14 +348,25 @@ def _run_ingest(args: argparse.Namespace) -> int:
     entries, records = accumulate(results, existing_entries, existing_records)
     write_store(own_silver, entries, records)
 
-    # 5) Local-only pseudonym map over the union of all observed identities.
+    # 5) Local-only pseudonym map over the FULL accumulated student set.  The
+    #    store accumulates across runs, so the map must cover every student with
+    #    a CodexEntry — not just this run's — and must preserve names established
+    #    by earlier runs (a run that omits a student must not drop them).
+    pseudonym_path = own_silver / "pseudonym_map.parquet"
     identities: dict[str, str | None] = {}
+    # Seed with names recovered from the prior map.
+    if pseudonym_path.is_file():
+        for prior in read_pseudonym_map(pseudonym_path):
+            identities[prior.student_id] = prior.name_kr
+    # Overlay this run's identities — a non-None name always wins.
     for result in results:
         for student_id, name_kr in result.identities.items():
-            # Keep a non-None name if any source supplies one.
-            if name_kr is not None or student_id not in identities:
+            if name_kr is not None or identities.get(student_id) is None:
                 identities[student_id] = name_kr
-    write_pseudonym_map(own_silver / "pseudonym_map.parquet", build_pseudonym_map(identities))
+    # Ensure every accumulated student is present (name unknown → None).
+    for entry in entries:
+        identities.setdefault(entry.student_id, None)
+    write_pseudonym_map(pseudonym_path, build_pseudonym_map(identities))
 
     # 6) Manifest — pre-distribution bundle snapshot (distribute overwrites later).
     student_ids = sorted({e.student_id for e in entries})

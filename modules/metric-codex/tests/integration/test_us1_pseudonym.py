@@ -14,7 +14,20 @@ from metric_codex.cli.main import app
 from metric_codex.output.paths import silver_dir
 from metric_codex.store.pseudonym import build_pseudonym_map
 
-from tests.fixtures.scenario_a import COURSE, SEMESTER, SID_A, SID_B, build_scenario_a
+from tests.fixtures.scenario_a import (
+    COURSE,
+    NAME_A,
+    NAME_B,
+    SEMESTER,
+    SID_A,
+    SID_B,
+    build_scenario_a,
+    make_dirs,
+    write_exam_item,
+    write_exam_result,
+    write_school_excel,
+    write_school_map,
+)
 
 _NOW = "2026-06-19T00:00:00Z"
 
@@ -64,6 +77,40 @@ def test_pseudonym_map_carries_names(tmp_path: Path) -> None:
     by_sid = dict(zip(df["student_id"], df["name_kr"], strict=True))
     assert by_sid[SID_A] == "김철수"
     assert by_sid[SID_B] == "이영희"
+
+
+def test_run2_omitting_a_student_preserves_full_map(tmp_path: Path) -> None:
+    """A later run that omits the school Excel must NOT drop accumulated students.
+
+    Run 1 ingests the school Excel (establishes A and B with names).  Run 2
+    removes the school Excel and instead provides an immersio exam_result source
+    for A only (which carries no name).  The pseudonym map must still contain
+    BOTH A and B, and A's name established in run 1 must be preserved (Important A).
+    """
+    data_root, bronze, immersio, _needsmap = make_dirs(tmp_path)
+
+    # Run 1 — school Excel for A and B (with names).
+    write_school_excel(bronze / "성적출석.xlsx")
+    write_school_map(bronze / "성적출석_map.yaml")
+    assert _ingest(data_root) == 0
+
+    # Run 2 — drop the school Excel; provide an immersio-only source for A (no name).
+    (bronze / "성적출석.xlsx").unlink()
+    (bronze / "성적출석_map.yaml").unlink()
+    write_exam_result(immersio / "exam_result.parquet")
+    write_exam_item(immersio / "exam_item.parquet")
+    assert _ingest(data_root) == 0
+
+    df = _load_map(data_root)
+    by_sid = dict(zip(df["student_id"], df["name_kr"], strict=True))
+    # Both students still present after the school-less run.
+    assert set(by_sid) == {SID_A, SID_B}
+    # A's name (established in run 1) is preserved despite run 2 omitting it.
+    assert by_sid[SID_A] == NAME_A
+    assert by_sid[SID_B] == NAME_B
+    # Pseudonyms remain ascending S001/S002.
+    ordered = df.sort_values("student_id").reset_index(drop=True)
+    assert list(ordered["pseudonym"]) == ["S001", "S002"]
 
 
 def test_build_pseudonym_map_deterministic_unit() -> None:

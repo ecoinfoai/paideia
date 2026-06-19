@@ -104,7 +104,7 @@ def _read_codex(path: Path) -> list[CodexEntry]:
     frame = _safe_read_parquet(path)
     out: list[CodexEntry] = []
     for offset, record in enumerate(frame.to_dict(orient="records")):
-        clean = {k: _none_if_na(v) for k, v in record.items()}
+        clean = {k: none_if_na(v) for k, v in record.items()}
         try:
             out.append(CodexEntry.model_validate(clean))
         except ValueError as exc:
@@ -123,7 +123,7 @@ def _read_ledger(path: Path) -> list[SourceRecord]:
     frame = _safe_read_parquet(path)
     out: list[SourceRecord] = []
     for offset, record in enumerate(frame.to_dict(orient="records")):
-        clean = {k: _none_if_na(v) for k, v in record.items()}
+        clean = {k: none_if_na(v) for k, v in record.items()}
         try:
             out.append(SourceRecord.model_validate(clean))
         except ValueError as exc:
@@ -146,8 +146,19 @@ def _safe_read_parquet(path: Path) -> pd.DataFrame:
         ) from exc
 
 
-def _none_if_na(value: object) -> object:
-    """Map pandas NA/NaN scalars to ``None``; pass everything else through."""
+def none_if_na(value: object) -> object:
+    """Map pandas NA/NaN scalars to ``None``; pass everything else through.
+
+    Shared parquet-read helper: a true Python ``None`` re-emerges from a parquet
+    null column as ``None``, but numeric/float nulls surface as ``NaN``; this
+    normalises both so Pydantic ``model_validate`` sees a clean ``None``.
+
+    Args:
+        value: A raw cell value from ``DataFrame.to_dict``.
+
+    Returns:
+        ``None`` if the value is a pandas NA/NaN scalar, else the value unchanged.
+    """
     try:
         if pd.isna(value):  # type: ignore[arg-type]
             return None
@@ -280,4 +291,4 @@ def _write_ledger(path: Path, records: list[SourceRecord]) -> None:
     atomic_write(path, _write)
 
 
-__all__ = ["read_existing_store", "accumulate", "write_store"]
+__all__ = ["read_existing_store", "accumulate", "write_store", "none_if_na"]

@@ -19,6 +19,7 @@ from paideia_shared.schemas import PseudonymMapEntry
 
 from metric_codex.errors import LocatedInputError
 from metric_codex.output.determinism import atomic_write, parquet_write_options
+from metric_codex.store.codex import none_if_na
 
 # Fixed column order for byte-identical parquet output.
 _COLUMNS: list[str] = ["student_id", "name_kr", "pseudonym"]
@@ -102,9 +103,7 @@ def read_pseudonym_map(path: Path) -> list[PseudonymMapEntry]:
 
     entries: list[PseudonymMapEntry] = []
     for offset, record in enumerate(frame.to_dict(orient="records")):
-        name_kr = record.get("name_kr")
-        if name_kr is not None and pd.isna(name_kr):
-            name_kr = None
+        name_kr = none_if_na(record.get("name_kr"))
         try:
             entries.append(
                 PseudonymMapEntry(

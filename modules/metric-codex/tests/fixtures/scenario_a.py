@@ -22,7 +22,6 @@ from pathlib import Path
 
 import openpyxl
 import pandas as pd
-from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
 
 SEMESTER = "2026-1"
 COURSE = "anatomy"
@@ -37,14 +36,36 @@ NAME_A = "김철수"
 NAME_B = "이영희"
 
 
-def _write_school_excel(path: Path) -> None:
-    """Write a minimal school grade/attendance workbook for A and B."""
+def write_school_excel(
+    path: Path,
+    *,
+    score_total_a: int = 85,
+    rows: list[tuple[str, str, int, float, int]] | None = None,
+) -> None:
+    """Write a minimal school grade/attendance workbook.
+
+    Args:
+        path: Output ``.xlsx`` path.
+        score_total_a: Total score for student A (lets a later run correct it).
+        rows: Optional explicit ``(student_id, name, total, percent, attendance)``
+            rows; defaults to A and B.
+    """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(["학번", "이름", "총점", "환산점수", "출석"])
-    ws.append([int(SID_A), NAME_A, 85, 90.5, 15])
-    ws.append([int(SID_B), NAME_B, 70, 75.0, 12])
+    if rows is None:
+        rows = [
+            (SID_A, NAME_A, score_total_a, 90.5, 15),
+            (SID_B, NAME_B, 70, 75.0, 12),
+        ]
+    for sid, name, total, percent, attendance in rows:
+        ws.append([int(sid), name, total, percent, attendance])
     wb.save(path)
+
+
+def _write_school_excel(path: Path) -> None:
+    """Write the default minimal school workbook for A and B."""
+    write_school_excel(path)
 
 
 def _write_school_map(path: Path) -> None:
@@ -62,6 +83,33 @@ def _write_school_map(path: Path) -> None:
         "  attendance: 출석\n"
     )
     path.write_text(text, encoding="utf-8")
+
+
+# Public alias for composable, multi-run fixtures.
+write_school_map = _write_school_map
+
+
+def make_dirs(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    """Create the Bronze + immersio/needs-map Silver directories.
+
+    Args:
+        tmp_path: pytest tmp directory.
+
+    Returns:
+        ``(data_root, bronze, immersio_silver, needsmap_silver)``.
+    """
+    data_root = tmp_path / "data"
+    bronze = data_root / "bronze" / "metric-codex" / KEY
+    immersio = data_root / "silver" / "immersio" / KEY
+    needsmap = data_root / "silver" / "needs-map" / KEY
+    for d in (bronze, immersio, needsmap):
+        d.mkdir(parents=True)
+    return data_root, bronze, immersio, needsmap
+
+
+def write_student_metrics(path: Path) -> None:
+    """Write immersio 학생지표.parquet — rich value_num percentiles for A (no name)."""
+    _write_student_metrics(path)
 
 
 def _write_student_metrics(path: Path) -> None:
@@ -91,6 +139,47 @@ def _write_student_metrics(path: Path) -> None:
         },
     ]
     pd.DataFrame(rows).to_parquet(path)
+
+
+def write_exam_result(path: Path) -> None:
+    """Write immersio exam_result.parquet for A — item_correct entries, NO name."""
+    rows = [
+        {
+            "student_id": SID_A,
+            "semester": SEMESTER,
+            "course_slug": COURSE,
+            "item_no": 1,
+            "response": "3",
+            "is_correct": True,
+            "score": 1.0,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def write_exam_item(path: Path) -> None:
+    """Write immersio exam_item.parquet (chapter join for item 1)."""
+    rows = [
+        {
+            "semester": SEMESTER,
+            "course_slug": COURSE,
+            "item_no": 1,
+            "chapter": "순환",
+            "source": "textbook",
+            "expected_difficulty": "easy",
+            "bloom": "knowledge",
+            "answer_key": "3",
+            "points": 1.0,
+            "text": None,
+            "distractors": None,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def write_free_text(path: Path) -> None:
+    """Write needs-map free_text_categorization.parquet — value_text for A (no name)."""
+    _write_free_text(path)
 
 
 def _write_free_text(path: Path) -> None:
@@ -134,6 +223,13 @@ def build_scenario_a(tmp_path: Path) -> Path:
 
 __all__ = [
     "build_scenario_a",
+    "make_dirs",
+    "write_school_excel",
+    "write_school_map",
+    "write_student_metrics",
+    "write_exam_result",
+    "write_exam_item",
+    "write_free_text",
     "SEMESTER",
     "COURSE",
     "KEY",
@@ -141,5 +237,4 @@ __all__ = [
     "SID_B",
     "NAME_A",
     "NAME_B",
-    "STANDARD_AXIS_KEYS",
 ]
