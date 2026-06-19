@@ -46,7 +46,7 @@ from metric_codex.ingest.paideia_sources import (
 )
 from metric_codex.ingest.result import SourceReadResult
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
-from paideia_shared.schemas.metric_codex import EntryKind
+from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind
 
 _SEMESTER = "2026-1"
 _COURSE = "anatomy"
@@ -345,7 +345,7 @@ def _write_combined(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _by_kind(entries, kind: EntryKind):
+def _by_kind(entries: list[CodexEntry], kind: EntryKind) -> list[CodexEntry]:
     return [e for e in entries if e.entry_kind == kind]
 
 
@@ -580,6 +580,14 @@ def test_orchestrator_individual_path(tmp_path: Path) -> None:
     # 진단×시험결합 absent → not read.
     assert "immersio:진단×시험결합" not in source_ids
 
+    # Assert real emitted content, not just provenance presence.
+    all_entries = [e for r in results for e in r.entries]
+    assert all_entries  # something was emitted
+    assert all(e.semester == _SEMESTER for e in all_entries)
+    metrics = next(r for r in results if r.source_record.source_id == "immersio:학생지표")
+    sec = _by_kind(metrics.entries, EntryKind.percentile_section)
+    assert [e.value_num for e in sec] == [75.0]
+
 
 def test_orchestrator_combined_preference(tmp_path: Path) -> None:
     data_root, immersio_dir, needsmap_dir = _silver_dirs(tmp_path)
@@ -697,3 +705,310 @@ def test_malformed_parquet_raises_located(tmp_path: Path) -> None:
             source_path=str(path.relative_to(data_root)),
         )
     assert "학생지표.parquet" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# I-1 — _coerce_cell stays inside the located-error boundary
+# ---------------------------------------------------------------------------
+
+
+def test_freetext_braced_category_is_not_json_decoded(tmp_path: Path) -> None:
+    """A matched category that happens to look like ``{health}`` (not valid JSON)
+    must be emitted verbatim, never crash the reader.
+    """
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    path = needsmap_dir / "free_text_categorization.parquet"
+    rows = [
+        {
+            "student_id": _SID_A,
+            "item_id": "q9",
+            "matched_categories": ["{health}"],
+            "match_source": "dictionary",
+            "raw_length": 10,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+    result = read_free_text(
+        path,
+        semester=_SEMESTER,
+        ingested_at=_INGESTED_AT,
+        source_path=str(path.relative_to(data_root)),
+    )
+    entries = _by_kind(result.entries, EntryKind.freetext_category)
+    assert [e.value_text for e in entries] == ["{health}"]
+    assert entries[0].key == "freetext:q9:{health}"
+
+
+def test_corrupted_dict_cell_raises_located(tmp_path: Path) -> None:
+    """A ``chapter_correct_rates`` cell that looks like a dict but is not valid
+    JSON must surface as LocatedInputError (file + row), not a bare
+    json.JSONDecodeError.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "학생지표.parquet"
+    bad = {
+        "student_id": _SID_A,
+        "name_kr": "X",
+        "section": "A",
+        "semester": _SEMESTER,
+        "course_slug": _COURSE_SLUG,
+        "exam_taken": True,
+        "total_score": 80.0,
+        "score_percent": 80.0,
+        "section_percentile": 75.0,
+        "cohort_percentile": 70.0,
+        "z_score": 1.0,
+        "chapter_correct_rates": "{not valid json}",  # corrupted dict cell (braced, bad JSON)
+        "source_correct_rates": json.dumps({}, ensure_ascii=False),
+        "difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+        "expected_difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+        "item_type_correct_rates": json.dumps({}, ensure_ascii=False),
+        "interest_chapters_correct_rate": None,
+        "aversion_chapters_correct_rate": None,
+    }
+    pd.DataFrame([bad]).to_parquet(path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_student_metrics(
+            path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    msg = str(exc.value)
+    assert "학생지표.parquet" in msg
+
+
+# ---------------------------------------------------------------------------
+# I-3 — per-reader malformed-row + sidecar error coverage
+# ---------------------------------------------------------------------------
+
+
+def test_exam_results_malformed_row_raises_located(tmp_path: Path) -> None:
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    res_path = immersio_dir / "exam_result.parquet"
+    item_path = immersio_dir / "exam_item.parquet"
+    _write_exam_item(item_path)
+    # item_no=0 violates ExamResult ge=1.
+    rows = [
+        {
+            "student_id": _SID_A,
+            "semester": _SEMESTER,
+            "course_slug": _COURSE_SLUG,
+            "item_no": 0,
+            "response": "3",
+            "is_correct": True,
+            "score": 1.0,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(res_path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_exam_results(
+            res_path,
+            item_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(res_path.relative_to(data_root)),
+        )
+    assert "exam_result.parquet" in str(exc.value)
+
+
+def test_factor_scores_malformed_row_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    path = needsmap_dir / "factor_scores.parquet"
+    # missing=True but score not None violates FactorScoreRow V2.
+    row = _factor_row(_SID_A, on_roster=True, with_scores=True)
+    row["motivation_missing"] = True  # but motivation score is set → V2 breach
+    pd.DataFrame([row]).to_parquet(path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_factor_scores(
+            path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    assert "factor_scores.parquet" in str(exc.value)
+
+
+def test_free_text_malformed_row_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    path = needsmap_dir / "free_text_categorization.parquet"
+    # match_source='no_response' with non-empty matched_categories → V1 breach.
+    rows = [
+        {
+            "student_id": _SID_A,
+            "item_id": "q9",
+            "matched_categories": ["health"],
+            "match_source": "no_response",
+            "raw_length": 5,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_free_text(
+            path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    assert "free_text_categorization.parquet" in str(exc.value)
+
+
+def test_cluster_assignment_malformed_row_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    assign_path = needsmap_dir / "cluster_assignment.parquet"
+    names_path = needsmap_dir / "cluster_names.json"
+    _write_cluster_names(names_path)
+    # cluster_id=-1 violates ClusterAssignmentRow ge=0.
+    rows = [{"student_id": _SID_A, "cluster_id": -1, "distance_to_centroid": 0.3}]
+    pd.DataFrame(rows).to_parquet(assign_path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_cluster_assignment(
+            assign_path,
+            names_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(assign_path.relative_to(data_root)),
+        )
+    assert "cluster_assignment.parquet" in str(exc.value)
+
+
+def test_cluster_id_absent_from_names_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    assign_path = needsmap_dir / "cluster_assignment.parquet"
+    names_path = needsmap_dir / "cluster_names.json"
+    # names only cover cluster 0; assignment references cluster 5.
+    names_path.write_text(json.dumps({"0": "성실형"}, ensure_ascii=False), encoding="utf-8")
+    rows = [{"student_id": _SID_A, "cluster_id": 5, "distance_to_centroid": 0.3}]
+    pd.DataFrame(rows).to_parquet(assign_path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_cluster_assignment(
+            assign_path,
+            names_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(assign_path.relative_to(data_root)),
+        )
+    msg = str(exc.value)
+    assert "cluster_assignment.parquet" in msg
+    assert "5" in msg
+
+
+def test_cluster_names_non_dict_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    assign_path = needsmap_dir / "cluster_assignment.parquet"
+    names_path = needsmap_dir / "cluster_names.json"
+    _write_cluster_assignment(assign_path)
+    names_path.write_text(json.dumps(["성실형", "도전형"]), encoding="utf-8")  # array, not object
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_cluster_assignment(
+            assign_path,
+            names_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(assign_path.relative_to(data_root)),
+        )
+    assert "cluster_names.json" in str(exc.value)
+
+
+def test_cluster_names_non_int_key_raises_located(tmp_path: Path) -> None:
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
+    assign_path = needsmap_dir / "cluster_assignment.parquet"
+    names_path = needsmap_dir / "cluster_names.json"
+    _write_cluster_assignment(assign_path)
+    names_path.write_text(json.dumps({"abc": "성실형"}, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_cluster_assignment(
+            assign_path,
+            names_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(assign_path.relative_to(data_root)),
+        )
+    assert "cluster_names.json" in str(exc.value)
+
+
+def test_combined_malformed_row_raises_located(tmp_path: Path) -> None:
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "진단×시험결합.parquet"
+    row = _combined_row(_SID_A, exam_taken=True, with_axes=True)
+    row["진단응답"] = False  # contradicts axes present → V5 breach
+    pd.DataFrame([row]).to_parquet(path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_combined_analysis(
+            path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    assert "진단×시험결합.parquet" in str(exc.value)
+
+
+def test_non_parquet_file_raises_located(tmp_path: Path) -> None:
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "학생지표.parquet"
+    path.write_text("this is not a parquet file", encoding="utf-8")
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_student_metrics(
+            path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    assert "학생지표.parquet" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# I-4 — exam_result must not span multiple course_slug values (key collision)
+# ---------------------------------------------------------------------------
+
+
+def test_exam_results_mixed_course_slug_raises_located(tmp_path: Path) -> None:
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    res_path = immersio_dir / "exam_result.parquet"
+    item_path = immersio_dir / "exam_item.parquet"
+    _write_exam_item(item_path)
+    # Two rows sharing item_no=1 but distinct course_slug → key collision risk.
+    rows = [
+        {
+            "student_id": _SID_A,
+            "semester": _SEMESTER,
+            "course_slug": "anatomy",
+            "item_no": 1,
+            "response": "3",
+            "is_correct": True,
+            "score": 1.0,
+        },
+        {
+            "student_id": _SID_A,
+            "semester": _SEMESTER,
+            "course_slug": "physiology",
+            "item_no": 1,
+            "response": "2",
+            "is_correct": False,
+            "score": 0.0,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(res_path)
+
+    with pytest.raises(LocatedInputError) as exc:
+        read_exam_results(
+            res_path,
+            item_path,
+            semester=_SEMESTER,
+            ingested_at=_INGESTED_AT,
+            source_path=str(res_path.relative_to(data_root)),
+        )
+    msg = str(exc.value)
+    assert "exam_result.parquet" in msg
+    assert "course_slug" in msg

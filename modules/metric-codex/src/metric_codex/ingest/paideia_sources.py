@@ -65,9 +65,19 @@ _F_FREE_TEXT = "free_text_categorization.parquet"
 _F_CLUSTER_ASSIGNMENT = "cluster_assignment.parquet"
 _F_CLUSTER_NAMES = "cluster_names.json"
 
-_SORT_KEY = lambda e: (e.student_id, e.entry_kind.value, e.key)  # noqa: E731
-
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def _sort_key(entry: CodexEntry) -> tuple[str, str, str]:
+    """Deterministic sort key for emitted entries.
+
+    Args:
+        entry: A CodexEntry to be ordered.
+
+    Returns:
+        ``(student_id, entry_kind value, key)`` tuple.
+    """
+    return (entry.student_id, entry.entry_kind.value, entry.key)
 
 
 def _read_parquet(path: Path) -> pd.DataFrame:
@@ -115,12 +125,21 @@ def _validate_rows(
     """
     instances: list[_ModelT] = []
     for offset, record in enumerate(df.to_dict(orient="records")):
-        clean = {k: _coerce_cell(v) for k, v in record.items()}
+        # Coercion is part of the located boundary: any decode/normalisation
+        # failure must surface as LocatedInputError naming (file, row), never a
+        # bare json/numpy exception.
         try:
+            clean = {k: _coerce_cell(v) for k, v in record.items()}
             instances.append(model.model_validate(clean))
         except ValidationError as exc:
             raise LocatedInputError(
                 f"row failed {model.__name__} contract: {exc}",
+                file=filename,
+                row=offset + 1,
+            ) from exc
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            raise LocatedInputError(
+                f"failed to decode row cell: {exc}",
                 file=filename,
                 row=offset + 1,
             ) from exc
@@ -130,8 +149,15 @@ def _validate_rows(
 def _coerce_cell(value: object) -> object:
     """Normalise one parquet cell value for Pydantic validation.
 
-    Decodes JSON-string dict columns to native dicts, converts numpy arrays
-    (list columns) to Python lists, and maps pandas NA / NaN to ``None``.
+    Decodes JSON-string dict/list columns to native ``dict``/``list``, converts
+    numpy arrays (list columns) to Python lists, and maps pandas NA / NaN to
+    ``None``.
+
+    A string that *looks* like a JSON container (``{...}`` or ``[...]``) but does
+    not parse is returned unchanged rather than raising — a genuine free-text
+    value such as ``"{health}"`` must pass through verbatim. Downstream Pydantic
+    validation then rejects any container-shaped string that lands in a non-text
+    field, keeping the failure inside the located-error boundary.
 
     Args:
         value: Raw cell value from ``DataFrame.to_dict``.
@@ -139,11 +165,19 @@ def _coerce_cell(value: object) -> object:
     Returns:
         A JSON/Pydantic-friendly Python value.
     """
-    # JSON-encoded dict column (e.g. chapter_correct_rates).
+    # JSON-encoded container column (e.g. chapter_correct_rates dict, list cols).
     if isinstance(value, str):
         stripped = value.strip()
-        if stripped.startswith("{") and stripped.endswith("}"):
-            return json.loads(value)
+        looks_json = (stripped.startswith("{") and stripped.endswith("}")) or (
+            stripped.startswith("[") and stripped.endswith("]")
+        )
+        if looks_json:
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                # Not actually JSON (e.g. a free-text category "{health}"):
+                # return the raw string and let Pydantic decide if it fits.
+                return value
         return value
     # pyarrow list columns surface as numpy arrays / lists.
     if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
@@ -193,7 +227,22 @@ def _source_record(
     source_path: str,
     ingested_at: str,
 ) -> SourceRecord:
-    """Build the provenance record for one read Silver file."""
+    """Build the provenance record for one read Silver file.
+
+    Args:
+        source_id: Logical source identifier (FK referenced by CodexEntry).
+        origin_module: Owning paideia module (``"immersio"`` / ``"needs-map"``).
+        path: Real filesystem path to the source file (hashed for ``sha256``).
+        source_path: Repo-relative path string recorded verbatim for
+            cross-machine-deterministic manifests.
+        ingested_at: ISO-8601 UTC timestamp of ingestion.
+
+    Returns:
+        A ``SourceRecord`` with ``origin_layer="silver"`` and the file's digest.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist (from ``compute_sha256``).
+    """
     return SourceRecord(
         source_id=source_id,
         origin_module=origin_module,  # type: ignore[arg-type]
@@ -360,7 +409,7 @@ def read_student_metrics(
             )
         )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
@@ -409,6 +458,17 @@ def read_exam_results(
     results = _validate_rows(_read_parquet(result_path), ExamResult, filename=result_path.name)
     items = _validate_rows(_read_parquet(item_path), ExamItem, filename=item_path.name)
 
+    # The natural key encodes only ``item_no``; two courses sharing an item_no in
+    # one file would collide. Fail fast rather than silently overwrite.
+    distinct_courses = sorted({r.course_slug for r in results})
+    if len(distinct_courses) > 1:
+        raise LocatedInputError(
+            f"exam_result spans multiple course_slug values: {distinct_courses}",
+            file=result_path.name,
+            expected="a single course_slug per exam_result file",
+            actual=", ".join(distinct_courses),
+        )
+
     # Join key → chapter.
     chapter_by_item: dict[tuple[str, str, int], str | None] = {}
     for it in items:
@@ -439,7 +499,7 @@ def read_exam_results(
             )
         )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
@@ -501,7 +561,7 @@ def read_factor_scores(
             )
         )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
@@ -568,7 +628,7 @@ def read_free_text(
                 )
             )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
@@ -641,7 +701,7 @@ def read_cluster_assignment(
             )
         )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
@@ -770,7 +830,7 @@ def read_combined_analysis(
                 )
             )
 
-    entries.sort(key=_SORT_KEY)
+    entries.sort(key=_sort_key)
     return SourceReadResult(
         entries=entries,
         source_record=_source_record(
