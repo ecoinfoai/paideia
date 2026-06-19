@@ -81,8 +81,7 @@ class RetroManifest(BaseModel):
     warnings: list[str] = Field(
         default_factory=list,
         description=(
-            "Non-fatal diagnostic messages emitted during the run "
-            "(e.g. chapter name mismatches)."
+            "Non-fatal diagnostic messages emitted during the run (e.g. chapter name mismatches)."
         ),
     )
     generated_at_utc: str = Field(

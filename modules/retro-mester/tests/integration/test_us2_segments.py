@@ -483,7 +483,9 @@ class TestUS2Segments:
 
         # CHAPTER_A 학령기 gap → 내용난이도 (content difficulty).
         cause_a, presc_a = rows[(_CHAPTER_A, "학령기")]
-        assert cause_a == "내용난이도", f"CHAPTER_A 학령기 cause expected 내용난이도, got {cause_a!r}"
+        assert cause_a == "내용난이도", (
+            f"CHAPTER_A 학령기 cause expected 내용난이도, got {cause_a!r}"
+        )
         assert presc_a == "난이도 계단식 분해", (
             f"CHAPTER_A 학령기 prescription should be the 내용난이도 strategy, got {presc_a!r}"
         )

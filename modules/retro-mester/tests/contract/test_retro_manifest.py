@@ -24,7 +24,10 @@ _SHA256_A = "a" * 64  # valid 64-char lowercase hex
 
 def _valid_provenance() -> dict:
     """Return kwargs that Pydantic coerces into a valid InputProvenance."""
-    return {"path": "data/silver/immersio/2026-1-anatomy/진단×시험결합.parquet", "sha256": _SHA256_A}
+    return {
+        "path": "data/silver/immersio/2026-1-anatomy/진단×시험결합.parquet",
+        "sha256": _SHA256_A,
+    }
 
 
 def _valid_kwargs() -> dict:

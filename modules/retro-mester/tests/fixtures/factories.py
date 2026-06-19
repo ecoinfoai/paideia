@@ -184,9 +184,7 @@ def make_full_combined_row(
         "chapter_correct_rates": json.dumps(chapter_correct_rates),
         "source_correct_rates": json.dumps({"형성평가": 0.5}),
         "difficulty_correct_rates": json.dumps({"1": 0.7, "2": 0.5, "3": 0.3}),
-        "expected_difficulty_correct_rates": json.dumps(
-            {"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}
-        ),
+        "expected_difficulty_correct_rates": json.dumps({"쉬움": 0.7, "보통": 0.5, "어려움": 0.3}),
         "item_type_correct_rates": json.dumps({"지식축적": 0.6, "이해": 0.5}),
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
@@ -330,7 +328,5 @@ def write_prior_forward_yaml(
     }
     if missing_key is not None:
         data.pop(missing_key, None)
-    path.write_text(
-        yaml.dump(data, allow_unicode=True, sort_keys=True), encoding="utf-8"
-    )
+    path.write_text(yaml.dump(data, allow_unicode=True, sort_keys=True), encoding="utf-8")
     return path
