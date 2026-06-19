@@ -20,7 +20,7 @@ import datetime
 import json
 from pathlib import Path
 
-from paideia_shared.schemas import RetroManifest
+from paideia_shared.schemas import InputProvenance, RetroManifest
 
 from retro_mester.output.manager import atomic_write_text
 
@@ -32,10 +32,11 @@ def build_manifest(
     schema_version: str,
     semester: str,
     course_slug: str,
-    inputs: dict[str, str],
+    inputs: dict[str, InputProvenance],
     thresholds: dict[str, float],
     counts: dict[str, float],
     degrade: dict[str, bool | str],
+    warnings: list[str] | None = None,
 ) -> RetroManifest:
     """Construct a ``RetroManifest`` for one pipeline run.
 
@@ -45,10 +46,11 @@ def build_manifest(
         schema_version: paideia_shared schema version in use.
         semester: Semester code, e.g. ``"2026-1"``.
         course_slug: Kebab-case course identifier, e.g. ``"anatomy"``.
-        inputs: Map of input artefact role → resolved file path.
+        inputs: Map of input artefact role → ``InputProvenance`` (path + sha256).
         thresholds: Active threshold values from ``RetroMesterConfig``.
         counts: Row/item counts for key pipeline outputs.
         degrade: Degradation flags keyed by pipeline stage.
+        warnings: Optional list of non-fatal diagnostic messages (defaults to []).
 
     Returns:
         Frozen ``RetroManifest`` instance.
@@ -63,6 +65,7 @@ def build_manifest(
         thresholds=thresholds,
         counts=counts,
         degrade=degrade,
+        warnings=warnings if warnings is not None else [],
         generated_at_utc=generated_at_utc,
     )
 

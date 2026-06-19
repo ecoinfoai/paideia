@@ -100,7 +100,8 @@ from .retro_common import (
 )
 from .retro_config import RetroMesterConfig
 from .retro_forward import BaselineSnapshotRow, ImprovementLedgerEntry
-from .retro_manifest import RetroManifest
+from .insufficient_evidence_unit import InsufficientEvidenceUnit
+from .retro_manifest import InputProvenance, RetroManifest
 from .scale_reliability import ReliabilityLabel, ScaleReliabilityReport, ScaleReliabilityRow
 from .source_inventory_entry import SourceInventoryEntry
 from .student_exam_metrics import StudentExamMetrics
@@ -223,4 +224,7 @@ __all__ = [
     "ImprovementLedgerEntry",
     "BaselineSnapshotRow",
     "RetroManifest",
+    # spec 012 retro-mester v0.1.1 audit-fix — 2 new models (T005-T006)
+    "InsufficientEvidenceUnit",
+    "InputProvenance",
 ]

@@ -53,6 +53,8 @@ from retro_mester.load import (
     load_items,
     reconcile_config,
 )
+from paideia_shared.schemas import InputProvenance
+
 from retro_mester.output.figures import render_all_figures
 from retro_mester.output.manager import archive_existing, atomic_write_text
 from retro_mester.output.manifest import build_manifest, write_manifest
@@ -529,19 +531,20 @@ def _run(
     write_next_items_md(gold_out / "차년도진단문항제안.md", proposals)
 
     # Gold — manifest (uses real now_utc for generated_at_utc)
-    inputs: dict[str, str] = {
-        "combined": str(combined_path),
-        "items": str(items_path),
-        "config": str(cfg_path),
-        "blueprint": str(bp_path),
-        "curriculum_map": str(cm_path),
+    _input_paths: dict[str, Path] = {
+        "combined": combined_path,
+        "items": items_path,
+        "config": cfg_path,
+        "blueprint": bp_path,
+        "curriculum_map": cm_path,
     }
-    # Add SHA-256 fingerprints for existing input files
-    input_hashes: dict[str, str] = {}
-    for role, path_str in inputs.items():
-        p = Path(path_str)
-        if p.exists():
-            input_hashes[role] = _file_sha256(p)
+    # Build InputProvenance objects for each existing input file.
+    # _file_sha256 returns "sha256:<hex>"; strip the prefix to get the bare hex.
+    input_provenances: dict[str, InputProvenance] = {
+        role: InputProvenance(path=str(p), sha256=_file_sha256(p).removeprefix("sha256:"))
+        for role, p in _input_paths.items()
+        if p.exists()
+    }
 
     thresholds: dict[str, float] = {
         "gap_threshold": config.gap_threshold,
@@ -571,7 +574,7 @@ def _run(
         schema_version=_SCHEMA_VERSION,
         semester=semester,
         course_slug=course,
-        inputs=input_hashes,
+        inputs=input_provenances,
         thresholds=thresholds,
         counts=counts,
         degrade=degrade,
