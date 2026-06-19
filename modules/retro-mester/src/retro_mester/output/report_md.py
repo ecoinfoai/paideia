@@ -407,8 +407,11 @@ def build_report_md(
         alignment_findings: Optional list of ``AlignmentFinding`` for section
             (D) 인지수준·정렬 (US4 T047).  When ``None``, section (D) is omitted.
         insufficient: Optional list of ``InsufficientEvidenceUnit`` for the
-            근거 부족 단원 section (H1).  When ``None``, the section is omitted;
-            when an empty list, the section states that none were found.
+            근거 부족 단원 section (H1).  Note the None-vs-[] asymmetry: ``None``
+            omits the section entirely (backward-compatible, matching the
+            ``forward_ledger``/``alignment_findings`` idiom), whereas an empty
+            list ``[]`` renders the section with an explicit "없음" message.
+            (``write_xlsx`` differs — it coerces ``None`` to ``[]``.)
 
     Returns:
         Deterministic Markdown string ready to be written to ``.md`` or

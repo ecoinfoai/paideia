@@ -119,8 +119,8 @@ def _build_gap_sheet(
 
     The gap rows are written first; below them (separated by a blank row) a
     labeled block lists the insufficient (zero-cohort-evidence) units so they
-    are visibly "근거 부족", never silently absent.  The block is omitted only
-    its header when no insufficient units exist (the label still renders).
+    are visibly "근거 부족", never silently absent.  The label and header rows
+    always render; only the data rows are absent when ``insufficient`` is empty.
 
     Args:
         wb: Target workbook.
