@@ -948,6 +948,8 @@ def read_paideia_sources(
                 )
             assignment = needsmap_silver_dir / _F_CLUSTER_ASSIGNMENT
             names = needsmap_silver_dir / _F_CLUSTER_NAMES
+            # SPEC-GAP-001: needs-map does not write cluster_names.json in production;
+            # cluster_label degrades when absent.
             if assignment.is_file() and names.is_file():
                 results.append(
                     read_cluster_assignment(

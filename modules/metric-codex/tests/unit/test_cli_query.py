@@ -528,3 +528,79 @@ class TestDryRunHandler:
         captured = capsys.readouterr()
         # Some indication of count or path should appear
         assert "staging" in captured.out or "S001" in captured.out or "2" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# F3: query plain-text stdout must include available_layers line
+# ---------------------------------------------------------------------------
+
+
+class TestQueryAvailableLayers:
+    """F3: plain-text query output must include a '가용 층:' line with available layers."""
+
+    def test_both_layers_student_shows_minimal_and_rich(self, tmp_path, capsys):
+        """Both-layers student (school Excel + immersio) shows 'minimal, rich' in output."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+        ])
+        captured = capsys.readouterr()
+        # Must contain the available-layers header line
+        assert "가용 층:" in captured.out, (
+            f"Expected '가용 층:' line in stdout; got:\n{captured.out!r}"
+        )
+        # Both layers must be listed (sorted, comma-joined)
+        assert "minimal" in captured.out
+        assert "rich" in captured.out
+
+    def test_minimal_only_student_shows_only_minimal(self, tmp_path, capsys):
+        """Minimal-only student (school Excel only) shows only 'minimal' in the layers line."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_MIN,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+        ])
+        captured = capsys.readouterr()
+        assert "가용 층:" in captured.out, (
+            f"Expected '가용 층:' line in stdout; got:\n{captured.out!r}"
+        )
+        assert "minimal" in captured.out
+        # rich must NOT appear in the layers line for a minimal-only student
+        lines = [ln for ln in captured.out.splitlines() if "가용 층:" in ln]
+        assert lines, "no '가용 층:' line found"
+        assert "rich" not in lines[0], (
+            f"'rich' must not appear in the layers line for a minimal-only student; "
+            f"got: {lines[0]!r}"
+        )
+
+    def test_json_path_still_works_without_interference(self, tmp_path, capsys):
+        """--json path must not break and must still carry available_layers."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        json_out = tmp_path / "qa.json"
+        rc = app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+            "--json", str(json_out),
+        ])
+        assert rc == 0
+        data = json.loads(json_out.read_text(encoding="utf-8"))
+        assert "available_layers" in data

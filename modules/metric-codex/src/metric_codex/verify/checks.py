@@ -286,7 +286,7 @@ def check_evidence_grounding(
     pseudonym_map: list[PseudonymMapEntry],
     question_set: QuestionSet,
     *,
-    llm_backend: str,
+    llm_backend: str | None,
 ) -> list[Violation]:
     """Check evidence grounding for per-student Gold narratives (EVID-01/02/03).
 
@@ -396,9 +396,10 @@ def check_evidence_grounding(
                     )
                 )
         else:
-            # LLM prose: skip byte-match.  The staging bundle PII check is
-            # handled independently by check_priv01_no_staging_pii, which
-            # runs on the silver/staging/ directory directly.
+            # LLM prose or None (corrupt/absent manifest): skip byte-match.
+            # For LLM prose the staging bundle PII check covers EVID-03 via
+            # check_priv01_no_staging_pii.  For None (M-001), run_all_checks
+            # guards against reaching here, so this branch is a safety net.
             pass
 
         # EVID-02: every no_evidence question → "근거 없음" in the md.
@@ -681,7 +682,10 @@ def run_all_checks(
             )
 
     # Load manifest (if present) — needed by SKIP-02 and MANIFEST checks.
-    llm_backend: str = "none(template)"
+    # M-001: use None sentinel when manifest fails to load.  check_evidence_grounding
+    # skips the byte-match when llm_backend is None to avoid false EVID-01 noise
+    # that would mask the real manifest failure (SKIP-02/MANIFEST already report it).
+    llm_backend: str | None = None
     if manifest_path.is_file():
         try:
             manifest = read_manifest(manifest_path)
@@ -724,7 +728,9 @@ def run_all_checks(
         violations += check_skip02_count_invariant(manifest_path)
         violations += check_manifest_hashes(manifest_path)
 
-    if question_set is not None and pseudonym_map:
+    # M-001: skip the byte-match when llm_backend is None (corrupt/absent manifest).
+    # The manifest failure is already reported by SKIP-02/MANIFEST checks above.
+    if question_set is not None and pseudonym_map and llm_backend is not None:
         violations += check_evidence_grounding(
             own_gold,
             codex_entries,

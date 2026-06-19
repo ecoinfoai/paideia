@@ -504,14 +504,31 @@ def _run_ingest(args: argparse.Namespace) -> int:
         config_ids[school_map.name] = compute_sha256(school_map)
 
     # 2) Upstream paideia Silver (rich layer) — missing dirs degrade silently.
+    immersio_dir_arg = immersio_silver if immersio_silver.is_dir() else None
+    needsmap_dir_arg = needsmap_silver if needsmap_silver.is_dir() else None
     paideia_results = read_paideia_sources(
-        immersio_silver_dir=immersio_silver if immersio_silver.is_dir() else None,
-        needsmap_silver_dir=needsmap_silver if needsmap_silver.is_dir() else None,
+        immersio_silver_dir=immersio_dir_arg,
+        needsmap_silver_dir=needsmap_dir_arg,
         semester=semester,
         data_root=data_root,
         ingested_at=now,
     )
     results.extend(paideia_results)
+
+    # F1/F2 transparency: report which upstream sources were found vs absent so
+    # operators can detect silent degrade without inspecting the manifest.
+    _school_status = "found" if (
+        school_explicit or school_map.is_file() or school_excel.is_file()
+    ) else "absent"
+    _immersio_status = "found" if immersio_dir_arg is not None else "absent"
+    _needsmap_status = "found" if needsmap_dir_arg is not None else "absent"
+    print(
+        f"ingest: sources — "
+        f"school_excel={_school_status} "
+        f"immersio={_immersio_status} "
+        f"needs-map={_needsmap_status}",
+        file=sys.stderr,
+    )
 
     # 3) Optional provenance: validate blueprint/curriculum (fail-fast) and
     #    record their digests only — they are not used for entry construction.
@@ -730,6 +747,9 @@ def _run_query(args: argparse.Namespace) -> int:
         print(f"name_kr: {name_kr or '(unknown)'}")
 
     print(f"pseudonym: {pseudonym}")
+    # F3: available_layers must appear in plain-text output (contracts/cli.md).
+    layers_str = ", ".join(sorted(qa.available_layers))
+    print(f"가용 층: {layers_str}")
 
     if qa.no_evidence:
         print("근거 없음")
@@ -912,6 +932,11 @@ def _run_generate(args: argparse.Namespace) -> int:
                 cache = None
                 narrative = facts
             else:
+                # PRIV defense-in-depth: scan raw_text for 10-digit ids and emails
+                # BEFORE re-identifying or writing Gold.  The model never receives
+                # names (prompt carries only pseudonymized facts), so known_names
+                # is omitted here.  A hit → LocatedInputError (exit 2), no Gold written.
+                assert_no_pii(response.raw_text)
                 narrative = response.raw_text
                 llm_used = True
 
