@@ -162,10 +162,6 @@ real_student_id: "2026194023"
 counseling_marker: "상담기록 가정환경"
 """
 
-_REAL_ID_FIXTURE = """\
-student_id: "2025987654"
-"""
-
 _COUNSELING_FIXTURE = """\
 field: "생활기록부 및 징계 내역"
 """

@@ -15,7 +15,7 @@ Run with `metric-codex <subcommand> --semester SEMESTER --course COURSE [options
 | `ingest` | Bronze→Silver: parse school Excel + consume immersio/needs-map Silver into `codex_entry.parquet` | `--school-excel`, `--school-map`, `--blueprint`, `--curriculum-map`, `--now` |
 | `query` | Evidence retrieval in pseudonym space for a single student | `--student` (ID or S001), `--question-id` or `--text`, `--question-set`, `--reveal`, `--json` |
 | `dry-run` | Deterministic staging bundle generation; no LLM call, no PII output (constitution §I) | `--question-set` |
-| `generate` | Render per-student narrative (template or LLM polish) | `--backend` (`none`/`subscription`/`api`), `--model`, `--require-llm`, `--responses-dir`, `--now` |
+| `generate` | Render per-student narrative (template or LLM polish) | `--backend` (`none`/`subscription`/`api`), `--model`, `--question-set`, `--require-llm`, `--responses-dir`, `--now` |
 | `distribute` | Group Gold student files by advisor; write per-advisor bundles and unassigned report | `--roster`, `--now` |
 | `verify` | Read-only post-hoc invariant check (completeness, provenance, PII boundary) | `--question-set`, `--roster` |
 | `build` | Full pipeline: `ingest` → `generate` → `distribute` → `verify` in one shot | all flags of the four stages combined |
