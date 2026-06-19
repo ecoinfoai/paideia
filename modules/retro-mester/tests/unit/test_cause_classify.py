@@ -40,6 +40,8 @@ _AXIS_Z = {f"{ax}_z": None for ax in _AXES}
 def _make_row(
     student_id: str,
     chapter_rates: dict[str, float],
+    prior_readiness_q5: str | None = None,
+    prior_readiness_q6: str | None = None,
 ) -> CombinedAnalysisRow:
     base = {
         "student_id": student_id,
@@ -61,8 +63,8 @@ def _make_row(
         "item_type_correct_rates": {},
         "interest_chapters_correct_rate": None,
         "aversion_chapters_correct_rate": None,
-        "prior_readiness_q5": None,
-        "prior_readiness_q6": None,
+        "prior_readiness_q5": prior_readiness_q5,
+        "prior_readiness_q6": prior_readiness_q6,
         "time_pattern_q21": None,
         "time_pattern_q22": None,
         "time_pattern_q23": None,
@@ -127,12 +129,18 @@ def _make_item(
     )
 
 
-def _make_config() -> RetroMesterConfig:
+def _make_config(
+    group_roster: dict[str, str] | None = None,
+    prior_readiness_low_labels: list[str] | None = None,
+    baseline_segment: str = "만학도",
+) -> RetroMesterConfig:
     return RetroMesterConfig(
         semester="2026-1",
         course_slug="anatomy",
-        group_roster={"2026000001": "학령기"},
+        group_roster=group_roster or {"2026000001": "학령기"},
         unit_importance={},
+        baseline_segment=baseline_segment,
+        prior_readiness_low_labels=prior_readiness_low_labels or [],
     )
 
 
@@ -280,3 +288,127 @@ class TestClassifyCause:
         label, signals = classify_cause("8장", "학령기", rows, items, config)
 
         assert abs(signals["segment_mean_rate"] - 0.4) < 1e-9
+
+
+class TestClassifyCausePriorReadiness:
+    """Tests for prior_readiness combination in classify_cause (US2 H2)."""
+
+    def test_low_readiness_subgroup_drives_기초구멍(self) -> None:
+        """(a) Same correct rate, configured low-readiness subgroup → 기초구멍.
+
+        Items are NOT broadly hard (쉬움/보통) and the baseline segment is
+        NOT also low, so the only signal is the low-readiness subgroup —
+        classification must attribute the failure to basic gaps.
+        """
+        # Two 학령기 students at the same low chapter rate; one is low-readiness.
+        rows = [
+            _make_row("2026000001", {"8장": 0.4}, prior_readiness_q5="낮음"),
+            _make_row("2026000002", {"8장": 0.4}, prior_readiness_q5="높음"),
+            # baseline (만학도) is healthy on this chapter → not also-low.
+            _make_row("2026000003", {"8장": 0.85}, prior_readiness_q5="높음"),
+        ]
+        items = [
+            _make_item("8장", expected_difficulty="쉬움", correct_rate=0.4),
+            _make_item("8장", expected_difficulty="보통", correct_rate=0.45),
+        ]
+        config = _make_config(
+            group_roster={
+                "2026000001": "학령기",
+                "2026000002": "학령기",
+                "2026000003": "만학도",
+            },
+            prior_readiness_low_labels=["낮음"],
+            baseline_segment="만학도",
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert label == "기초구멍"
+        assert signals["low_readiness_share"] > 0.0
+
+    def test_high_readiness_baseline_low_hard_item_yields_내용난이도(self) -> None:
+        """(b) Same rate, high readiness + baseline also low + hard item → 내용난이도."""
+        rows = [
+            _make_row("2026000001", {"8장": 0.4}, prior_readiness_q5="높음"),
+            _make_row("2026000002", {"8장": 0.4}, prior_readiness_q5="높음"),
+            # baseline (만학도) is ALSO low on this chapter.
+            _make_row("2026000003", {"8장": 0.35}, prior_readiness_q5="높음"),
+        ]
+        items = [_make_item("8장", expected_difficulty="어려움", correct_rate=0.3)]
+        config = _make_config(
+            group_roster={
+                "2026000001": "학령기",
+                "2026000002": "학령기",
+                "2026000003": "만학도",
+            },
+            prior_readiness_low_labels=["낮음"],
+            baseline_segment="만학도",
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert label == "내용난이도"
+        assert signals["low_readiness_share"] == 0.0
+
+    def test_all_none_readiness_inconclusive_yields_미상(self) -> None:
+        """(c) prior_readiness all None + inconclusive item signal → 미상."""
+        rows = [
+            _make_row("2026000001", {"8장": 0.8}),  # None readiness
+        ]
+        # Easy items, high rate → no item-driven cause either.
+        items = [
+            _make_item("8장", expected_difficulty="쉬움", correct_rate=0.8),
+            _make_item("8장", expected_difficulty="보통", correct_rate=0.75),
+        ]
+        config = _make_config(prior_readiness_low_labels=["낮음"])
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert label == "미상"
+        assert signals["low_readiness_share"] == 0.0
+
+    def test_signals_contain_low_readiness_keys(self) -> None:
+        """cause_signals always carries the new low_readiness_* signals."""
+        rows = [_make_row("2026000001", {"8장": 0.3}, prior_readiness_q5="낮음")]
+        items = [_make_item("8장", expected_difficulty="보통", correct_rate=0.3)]
+        config = _make_config(prior_readiness_low_labels=["낮음"])
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert "low_readiness_share" in signals
+        assert "low_readiness_mean_rate" in signals
+        assert "baseline_segment_mean_rate" in signals
+
+    def test_empty_low_labels_yields_no_readiness_signal(self) -> None:
+        """Empty low_labels → low-readiness subgroup is empty (no fabricated split)."""
+        rows = [
+            _make_row("2026000001", {"8장": 0.4}, prior_readiness_q5="낮음"),
+            _make_row("2026000002", {"8장": 0.4}, prior_readiness_q5="높음"),
+        ]
+        items = [_make_item("8장", expected_difficulty="보통", correct_rate=0.4)]
+        # low_labels empty → q5='낮음' must NOT be treated as low-readiness.
+        config = _make_config(
+            group_roster={"2026000001": "학령기", "2026000002": "학령기"},
+            prior_readiness_low_labels=[],
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert signals["low_readiness_share"] == 0.0
+        assert signals["low_readiness_mean_rate"] == 0.0
+
+    def test_q6_label_also_marks_low_readiness(self) -> None:
+        """A low label on q6 (not q5) also identifies a low-readiness student."""
+        rows = [
+            _make_row("2026000001", {"8장": 0.4}, prior_readiness_q6="낮음"),
+            _make_row("2026000002", {"8장": 0.4}, prior_readiness_q5="높음"),
+        ]
+        items = [_make_item("8장", expected_difficulty="보통", correct_rate=0.4)]
+        config = _make_config(
+            group_roster={"2026000001": "학령기", "2026000002": "학령기"},
+            prior_readiness_low_labels=["낮음"],
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert signals["low_readiness_share"] == 0.5
