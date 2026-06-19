@@ -17,7 +17,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Self
 
-import yaml
 from paideia_shared.schemas import (
     CourseSlug,
     CurriculumMap,
@@ -27,6 +26,7 @@ from paideia_shared.schemas import (
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from metric_codex.errors import LocatedInputError
+from metric_codex.yaml_load import load_yaml_mapping
 
 # ---------------------------------------------------------------------------
 # SchoolExcelMap — config that maps school Excel columns to ingest fields
@@ -92,43 +92,6 @@ class SchoolExcelMap(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Shared YAML loading boilerplate
-# ---------------------------------------------------------------------------
-
-
-def _load_yaml_mapping(path: Path, label: str) -> dict:
-    """Read a YAML file and return its top-level mapping.
-
-    Args:
-        path: Absolute path to the YAML file.
-        label: Human-readable file label for error messages (e.g.
-            ``"blueprint.yaml"``).
-
-    Returns:
-        The parsed top-level mapping as a ``dict``.
-
-    Raises:
-        LocatedInputError: If the file does not exist, YAML parsing fails,
-            or the parsed content is not a mapping.
-    """
-    if not path.exists():
-        raise LocatedInputError(f"{label} not found", file=str(path))
-
-    try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise LocatedInputError(f"Failed to parse YAML: {exc}", file=str(path)) from exc
-
-    if not isinstance(raw, dict):
-        raise LocatedInputError(
-            f"{label} must be a YAML mapping, got {type(raw).__name__}",
-            file=str(path),
-        )
-
-    return raw
-
-
-# ---------------------------------------------------------------------------
 # load_blueprint
 # ---------------------------------------------------------------------------
 
@@ -146,7 +109,7 @@ def load_blueprint(path: Path) -> ExamenBlueprint:
         LocatedInputError: If the file does not exist, YAML parsing fails,
             the content is not a mapping, or Pydantic validation fails.
     """
-    raw = _load_yaml_mapping(path, "blueprint.yaml")
+    raw = load_yaml_mapping(path, "blueprint.yaml")
     try:
         return ExamenBlueprint(**raw)
     except ValidationError as exc:
@@ -174,7 +137,7 @@ def load_curriculum_map(path: Path) -> CurriculumMap:
         LocatedInputError: If the file does not exist, YAML parsing fails,
             the content is not a mapping, or Pydantic validation fails.
     """
-    raw = _load_yaml_mapping(path, "curriculum_map.yaml")
+    raw = load_yaml_mapping(path, "curriculum_map.yaml")
     try:
         return CurriculumMap(**raw)
     except ValidationError as exc:
@@ -203,7 +166,7 @@ def load_school_excel_map(path: Path) -> SchoolExcelMap:
             the content is not a mapping, or Pydantic validation fails
             (including the V1 at-least-one-signal invariant).
     """
-    raw = _load_yaml_mapping(path, "성적출석_map.yaml")
+    raw = load_yaml_mapping(path, "성적출석_map.yaml")
     try:
         return SchoolExcelMap(**raw)
     except ValidationError as exc:

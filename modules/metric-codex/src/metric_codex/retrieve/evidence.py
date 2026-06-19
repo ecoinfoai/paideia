@@ -79,8 +79,9 @@ def retrieve_evidence(
             )
         )
 
-    # Deterministic sort by (layer, key, source_id).
-    matched.sort(key=lambda c: (c.layer, c.key, c.source_id))
+    # Deterministic total order: include str(value) to break (layer,key,source_id)
+    # ties so input row order (e.g. parquet row-group ordering) cannot leak through.
+    matched.sort(key=lambda c: (c.layer, c.key, c.source_id, str(c.value)))
 
     return matched, distinct_layers, len(matched) == 0
 

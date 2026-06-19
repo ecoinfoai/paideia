@@ -278,6 +278,33 @@ class TestRetrieveEvidenceDeterminism:
         keys = [(c.layer, c.key, c.source_id) for c in citations]
         assert keys == sorted(keys)
 
+    def test_tie_on_layer_key_source_id_is_total_order(self):
+        """Two entries sharing (layer,key,source_id) but differing in value must
+        sort identically regardless of pre-sort input order (FR determinism)."""
+        # Two entries identical on (layer, key, source_id) but with different values.
+        e_low = _entry(
+            layer="rich",
+            entry_kind=EntryKind.domain_correct_rate,
+            domain="순환",
+            key="chapter_correct_rate:순환",
+            value_num=0.1,
+            source_id="immersio:학생지표.parquet",
+            observed_at="2026-05-20",
+        )
+        e_high = _entry(
+            layer="rich",
+            entry_kind=EntryKind.domain_correct_rate,
+            domain="순환",
+            key="chapter_correct_rate:순환",
+            value_num=0.9,
+            source_id="immersio:학생지표.parquet",
+            observed_at="2026-05-20",
+        )
+        forward, _, _ = retrieve_evidence([e_low, e_high])
+        reverse, _, _ = retrieve_evidence([e_high, e_low])
+        assert forward == reverse
+        assert [c.value for c in forward] == [c.value for c in reverse]
+
 
 # ---------------------------------------------------------------------------
 # Domain filter
@@ -337,6 +364,20 @@ class TestAnswerQuestionViaCanonicalQuestion:
         result = answer_question(entries, pseudonym="S001", question=q)
         assert result.narrative is None
         assert result.rendered_by is None
+
+    def test_question_with_domain_applies_domain_filter(self):
+        """A question carrying a non-None domain narrows retrieval to that domain."""
+        entries = _make_both_layer_entries()
+        q = CanonicalQuestion(
+            id="q_circ",
+            text="순환 단원 정답률을 알려주세요.",
+            entry_kinds=[EntryKind.domain_correct_rate],
+            domain="순환",
+        )
+        result = answer_question(entries, pseudonym="S001", question=q)
+        assert result.no_evidence is False
+        # Only the 순환 domain entry — not 호흡 — should be cited.
+        assert [c.key for c in result.citations] == ["chapter_correct_rate:순환"]
 
 
 # ---------------------------------------------------------------------------
@@ -452,3 +493,22 @@ class TestLoadQuestionSet:
         )
         with pytest.raises(LocatedInputError):
             load_question_set(p)
+
+    def test_empty_questions_list_raises_located_error(self, tmp_path):
+        p = tmp_path / "empty.yaml"
+        p.write_text("questions: []\n", encoding="utf-8")
+        with pytest.raises(LocatedInputError):
+            load_question_set(p)
+
+
+# ---------------------------------------------------------------------------
+# QuestionSet — fail-fast on empty questions
+# ---------------------------------------------------------------------------
+
+
+class TestQuestionSetEmpty:
+    def test_empty_questions_rejected(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            QuestionSet(questions=[])

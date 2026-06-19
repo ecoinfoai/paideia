@@ -14,12 +14,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Self
 
-import yaml
 from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind, QueryAnswer
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from metric_codex.errors import LocatedInputError
 from metric_codex.retrieve.evidence import retrieve_evidence
+from metric_codex.yaml_load import load_yaml_mapping
 
 # ---------------------------------------------------------------------------
 # Local config models
@@ -47,10 +47,12 @@ class CanonicalQuestion(BaseModel):
 class QuestionSet(BaseModel):
     """Ordered list of canonical questions for a module session.
 
-    Invariant: all question ``id``s must be unique within the set.
+    Invariants:
+    - ``questions`` must be non-empty (an empty set is a config error).
+    - all question ``id``s must be unique within the set.
 
     Attributes:
-        questions: Ordered list of CanonicalQuestion items.
+        questions: Ordered, non-empty list of CanonicalQuestion items.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -58,19 +60,23 @@ class QuestionSet(BaseModel):
     questions: list[CanonicalQuestion]
 
     @model_validator(mode="after")
+    def _non_empty(self) -> Self:
+        """Fail fast: a question_set with zero questions is a config error."""
+        if not self.questions:
+            raise ValueError("QuestionSet must contain at least one question.")
+        return self
+
+    @model_validator(mode="after")
     def _unique_ids(self) -> Self:
         """Enforce unique question IDs within the set."""
-        ids = [q.id for q in self.questions]
         seen: set[str] = set()
-        duplicates: list[str] = []
-        for qid in ids:
-            if qid in seen:
-                duplicates.append(qid)
-            seen.add(qid)
-        if duplicates:
-            raise ValueError(
-                f"Duplicate question IDs in QuestionSet: {sorted(set(duplicates))}"
-            )
+        dups: set[str] = set()
+        for q in self.questions:
+            if q.id in seen:
+                dups.add(q.id)
+            seen.add(q.id)
+        if dups:
+            raise ValueError(f"Duplicate question IDs in QuestionSet: {sorted(dups)}")
         return self
 
 
@@ -90,24 +96,10 @@ def load_question_set(path: Path) -> QuestionSet:
 
     Raises:
         LocatedInputError: If the file is missing, YAML parse fails, content
-            is not a mapping, Pydantic validation fails, or IDs are duplicate.
+            is not a mapping, Pydantic validation fails, IDs are duplicate, or
+            the questions list is empty.
     """
-    if not path.exists():
-        raise LocatedInputError("question_set YAML not found", file=str(path))
-
-    try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise LocatedInputError(
-            f"Failed to parse YAML: {exc}", file=str(path)
-        ) from exc
-
-    if not isinstance(raw, dict):
-        raise LocatedInputError(
-            f"question_set YAML must be a mapping, got {type(raw).__name__}",
-            file=str(path),
-        )
-
+    raw = load_yaml_mapping(path, "question_set.yaml")
     try:
         return QuestionSet(**raw)
     except ValidationError as exc:
