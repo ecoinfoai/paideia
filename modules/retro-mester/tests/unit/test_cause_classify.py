@@ -326,6 +326,82 @@ class TestClassifyCausePriorReadiness:
         assert label == "기초구멍"
         assert signals["low_readiness_share"] > 0.0
 
+    def test_readiness_is_exclusive_driver_of_기초구멍(self) -> None:
+        """Rule 3 is the ONLY rule that can fire here → proves it is necessary.
+
+        Items are above threshold (item_mean_correct_rate >= gap_threshold) and
+        not hard (hard_share < 0.5), so rules 2 and 4 cannot fire.  The low-
+        readiness subgroup alone is below threshold (low_readiness_mean_rate <
+        gap_threshold).  Only rule 3 can yield 기초구멍 — deleting rule 3 makes
+        this assertion fail (it would return 미상).
+        """
+        rows = [
+            # low-readiness student fails the chapter.
+            _make_row("2026000001", {"8장": 0.3}, prior_readiness_q5="낮음"),
+            # high-readiness student passes — keeps item-level signal inconclusive
+            # but pulls segment_mean_rate; readiness subgroup mean stays low.
+            _make_row("2026000002", {"8장": 0.5}, prior_readiness_q5="높음"),
+            # baseline (만학도) is healthy → rule "baseline also low" cannot apply.
+            _make_row("2026000003", {"8장": 0.85}, prior_readiness_q5="높음"),
+        ]
+        # Items above threshold and not hard → rules 2 & 4 are inert.
+        items = [
+            _make_item("8장", expected_difficulty="쉬움", correct_rate=0.7),
+            _make_item("8장", expected_difficulty="보통", correct_rate=0.65),
+        ]
+        config = _make_config(
+            group_roster={
+                "2026000001": "학령기",
+                "2026000002": "학령기",
+                "2026000003": "만학도",
+            },
+            prior_readiness_low_labels=["낮음"],
+            baseline_segment="만학도",
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        # Sanity: rules 2 and 4 must be inert in this fixture.
+        assert signals["hard_share"] < 0.5
+        assert signals["item_mean_correct_rate"] >= config.gap_threshold
+        # Only rule 3 (low-readiness subgroup below threshold) can produce 기초구멍.
+        assert signals["low_readiness_share"] > 0.0
+        assert signals["low_readiness_mean_rate"] < config.gap_threshold
+        assert label == "기초구멍"
+
+    def test_same_items_without_low_readiness_is_not_기초구멍(self) -> None:
+        """Control for the exclusive-driver test: no low-readiness subgroup.
+
+        Identical above-threshold, non-hard items as the exclusive-driver test,
+        but NO student qualifies as low-readiness.  With rules 2, 3 and 4 all
+        inert, the label must NOT be 기초구멍 — it falls through to 미상.  This
+        contrast proves prior_readiness is the exclusive discriminator.
+        """
+        rows = [
+            _make_row("2026000001", {"8장": 0.3}, prior_readiness_q5="높음"),
+            _make_row("2026000002", {"8장": 0.5}, prior_readiness_q5="높음"),
+            _make_row("2026000003", {"8장": 0.85}, prior_readiness_q5="높음"),
+        ]
+        items = [
+            _make_item("8장", expected_difficulty="쉬움", correct_rate=0.7),
+            _make_item("8장", expected_difficulty="보통", correct_rate=0.65),
+        ]
+        config = _make_config(
+            group_roster={
+                "2026000001": "학령기",
+                "2026000002": "학령기",
+                "2026000003": "만학도",
+            },
+            prior_readiness_low_labels=["낮음"],
+            baseline_segment="만학도",
+        )
+
+        label, signals = classify_cause("8장", "학령기", rows, items, config)
+
+        assert signals["low_readiness_share"] == 0.0
+        assert label != "기초구멍"
+        assert label == "미상"
+
     def test_high_readiness_baseline_low_hard_item_yields_내용난이도(self) -> None:
         """(b) Same rate, high readiness + baseline also low + hard item → 내용난이도."""
         rows = [

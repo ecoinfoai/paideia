@@ -234,11 +234,12 @@ def _build_fixture_tree(data_root: Path) -> None:
     pd.DataFrame(combined_rows).to_parquet(silver_dir / "진단×시험결합.parquet", index=False)
 
     # CHAPTER_A: hard item → 내용난이도 (structural, baseline also low).
-    # CHAPTER_B: non-hard item, baseline healthy → cause driven by the
-    #            학령기 low-readiness subgroup → 기초구멍.
+    # CHAPTER_B: non-hard item ABOVE threshold (item heuristic inert) and a
+    #            healthy baseline → the 학령기 low-readiness subgroup is the
+    #            exclusive driver of the 기초구멍 cause (rule 3 only).
     item_rows = [
         _item_row(1, _CHAPTER_A, expected_difficulty="어려움", correct_rate=0.3),
-        _item_row(2, _CHAPTER_B, expected_difficulty="보통", correct_rate=0.45),
+        _item_row(2, _CHAPTER_B, expected_difficulty="보통", correct_rate=0.7),
     ]
     pd.DataFrame(item_rows).to_parquet(silver_dir / "문항통계.parquet", index=False)
 
