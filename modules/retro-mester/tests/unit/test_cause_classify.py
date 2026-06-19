@@ -468,7 +468,7 @@ class TestClassifyCausePriorReadiness:
             prior_readiness_low_labels=[],
         )
 
-        label, signals = classify_cause("8장", "학령기", rows, items, config)
+        _, signals = classify_cause("8장", "학령기", rows, items, config)
 
         assert signals["low_readiness_share"] == 0.0
         assert signals["low_readiness_mean_rate"] == 0.0
@@ -485,6 +485,6 @@ class TestClassifyCausePriorReadiness:
             prior_readiness_low_labels=["낮음"],
         )
 
-        label, signals = classify_cause("8장", "학령기", rows, items, config)
+        _, signals = classify_cause("8장", "학령기", rows, items, config)
 
         assert signals["low_readiness_share"] == 0.5

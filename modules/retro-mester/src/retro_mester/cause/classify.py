@@ -127,7 +127,7 @@ def classify_cause(
     else:
         low_readiness_mean_rate = 0.0
 
-    # --- compute baseline_segment_mean_rate (escalate.py pattern) ---
+    # --- compute baseline_segment_mean_rate ---
     baseline_rates = [
         row.chapter_correct_rates[chapter]
         for row in rows
