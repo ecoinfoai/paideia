@@ -45,6 +45,7 @@ from retro_mester.forward.next_items import propose_next_items, write_next_items
 from retro_mester.forward.write import next_year, write_forward
 from retro_mester.gaps.detect import detect_gaps
 from retro_mester.gaps.escalate import escalate_structural
+from retro_mester.llm import client as _llm_client
 from retro_mester.llm.cache import InputHashCache
 from retro_mester.llm.insight import LLMRequiredError, build_insight
 from retro_mester.load import (
@@ -520,7 +521,7 @@ def _run(
         for r in recs
         if r.is_covered
     ]
-    _alignment_flag_strs = list({f.flag for f in alignment_findings if f.flag})
+    _alignment_flag_strs = sorted({f.flag for f in alignment_findings if f.flag})
     _forward_summary = f"개선 서약 {len(ledger)}건" if ledger else "개선 서약 없음"
     insight_facts: dict = {
         "top_changes": _top_changes,
@@ -534,7 +535,11 @@ def _run(
     # (FR-025 reproducibility: same input → same cached response).
     _key = output_key(semester, course)
     _cache_dir = data_root / "silver" / ".llm_cache" / "retro-mester" / _key
-    _llm_cache = InputHashCache(_cache_dir) if llm_mode != "off" else None
+    _llm_cache = (
+        InputHashCache(_cache_dir, model=_llm_client._MODEL, mode=llm_mode)
+        if llm_mode != "off"
+        else None
+    )
 
     # build_insight raises LLMRequiredError if require_llm=True and
     # backend fails — propagates to run_retro which returns exit 5.
