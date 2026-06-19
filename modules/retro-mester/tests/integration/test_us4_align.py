@@ -395,6 +395,124 @@ class TestUS4CognitiveLevelPopulated:
         )
 
 
+class TestUS3InterestGap:
+    """US3 (audit M2) — cohort interest/aversion gap reaches report + manifest."""
+
+    def test_gap_in_report_and_manifest(self, tmp_path: Path) -> None:
+        """Interest/aversion responses present → gap + bias_note in report,
+        and manifest.counts carries the cohort means/gap/counts."""
+        gold = _run(tmp_path)
+        md = (gold / "CQI회고보고서.md").read_text(encoding="utf-8")
+        assert "관심·기피 단원 성취 격차" in md
+        assert "자가응답 편향" in md  # bias_note
+
+        data_root = tmp_path / "data"
+        silver = data_root / "silver" / "retro-mester" / _KEY
+        manifest = json.loads((silver / "manifest_retro.json").read_text(encoding="utf-8"))
+        counts = manifest["counts"]
+        # Fixture: two rows carry interest/aversion rates → means available.
+        for key in (
+            "interest_mean",
+            "aversion_mean",
+            "interest_aversion_gap",
+            "n_interest",
+            "n_aversion",
+        ):
+            assert key in counts, f"manifest.counts missing {key}"
+        assert counts["n_interest"] == 2.0
+        assert counts["n_aversion"] == 2.0
+        # counts stays float-only (schema dict[str, float]).
+        for v in counts.values():
+            assert isinstance(v, float)
+
+    def test_insufficient_warning_recorded(self, tmp_path: Path) -> None:
+        """gap=None (no interest/aversion responses) → report shows 데이터 부족
+        and manifest.warnings records the absence."""
+        data_root = tmp_path / "data"
+        _build_fixture_tree(data_root)
+
+        # Strip interest/aversion rates from every combined row → gap is None.
+        key = _KEY
+        silver_in = data_root / "silver" / "immersio" / key
+        df = pd.read_parquet(silver_in / "진단×시험결합.parquet")
+        df["interest_chapters_correct_rate"] = None
+        df["aversion_chapters_correct_rate"] = None
+        df.to_parquet(silver_in / "진단×시험결합.parquet", index=False)
+
+        from retro_mester.pipeline import run_retro
+
+        code = run_retro(
+            semester=_SEMESTER,
+            course=_COURSE,
+            data_root=str(data_root),
+            llm_mode="off",
+        )
+        assert code == 0
+
+        gold = data_root / "gold" / "retro-mester" / key
+        md = (gold / "CQI회고보고서.md").read_text(encoding="utf-8")
+        assert "관심·기피 응답 데이터 부족" in md
+
+        silver = data_root / "silver" / "retro-mester" / key
+        manifest = json.loads((silver / "manifest_retro.json").read_text(encoding="utf-8"))
+        warnings = manifest["warnings"]
+        assert any("관심·기피 응답 데이터 부족" in w for w in warnings), warnings
+        # No cohort means/gap keys when insufficient (counts stays float-only).
+        counts = manifest["counts"]
+        assert "interest_mean" not in counts
+        assert "aversion_mean" not in counts
+        assert "interest_aversion_gap" not in counts
+        # n_interest / n_aversion are ALWAYS present (0.0 here).
+        assert counts["n_interest"] == 0.0
+        assert counts["n_aversion"] == 0.0
+
+    def test_no_dead_interest_gap_variable(self) -> None:
+        """The pipeline no longer keeps an unused interest-gap variable."""
+        from pathlib import Path as _Path
+
+        import retro_mester.pipeline as pipeline_mod
+
+        src = _Path(pipeline_mod.__file__).read_text(encoding="utf-8")
+        assert "_interest_gap_data" not in src, "dead interest-gap variable remains"
+
+    def test_per_unit_alignment_slots_stay_none(self, tmp_path: Path) -> None:
+        """analyze I1: per-unit AlignmentFinding.interest_gap/aversion_gap stay None.
+
+        US3 delivers only the COHORT value; the per-unit slots must not be
+        fabricated from the cohort single value.
+        """
+        from retro_mester.align.alignment import build_alignment
+        from retro_mester.load import (
+            load_combined,
+            load_config,
+            load_exam_spec,
+            load_items,
+        )
+
+        data_root = tmp_path / "data"
+        _build_fixture_tree(data_root)
+
+        key = _KEY
+        silver_in = data_root / "silver" / "immersio" / key
+        bronze = data_root / "bronze" / "retro-mester" / key
+
+        rows = load_combined(silver_in / "진단×시험결합.parquet")
+        combined_chapters: set[str] = set()
+        for row in rows:
+            combined_chapters.update(row.chapter_correct_rates.keys())
+        items, _ = load_items(silver_in / "문항통계.parquet", combined_chapters=combined_chapters)
+        blueprint, curriculum = load_exam_spec(
+            bronze / "blueprint.yaml", bronze / "curriculum_map.yaml", _SEMESTER, _COURSE
+        )
+        config = load_config(bronze / "retro_config.yaml")
+
+        findings = build_alignment(items, curriculum, blueprint, rows, config)
+        assert findings, "no alignment findings produced"
+        for f in findings:
+            assert f.interest_gap is None
+            assert f.aversion_gap is None
+
+
 class TestUS4PNGDeterminism:
     """T047 — PNG files are deterministic across runs."""
 

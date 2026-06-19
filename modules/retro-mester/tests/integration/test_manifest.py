@@ -346,10 +346,18 @@ class TestManifestCounts:
 class TestManifestWarnings:
     """items↔combined chapter mismatch must be recorded in manifest.warnings."""
 
-    def test_no_mismatch_no_warnings(self, tmp_path: Path) -> None:
-        """When item and combined chapters agree, warnings is empty."""
+    def test_no_mismatch_no_chapter_warnings(self, tmp_path: Path) -> None:
+        """When item and combined chapters agree, no chapter-mismatch warning.
+
+        The cohort interest/aversion-absence warning (audit M2) may still
+        appear when the fixture carries no interest/aversion responses; only
+        chapter-mismatch warnings must be absent here.
+        """
         manifest = _build_and_run(tmp_path / "data")
-        assert manifest.get("warnings") == []
+        warnings = manifest.get("warnings", [])
+        assert not any("문항통계" in w or "진단×시험결합" in w for w in warnings), (
+            f"unexpected chapter-mismatch warning: {warnings}"
+        )
 
     def test_both_direction_mismatch_recorded(self, tmp_path: Path) -> None:
         """items↔combined mismatch → both-direction set difference in warnings."""

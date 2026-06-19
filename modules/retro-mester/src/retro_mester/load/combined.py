@@ -24,6 +24,17 @@ _JSON_COLS = (
     "item_type_correct_rates",
 )
 
+# Nullable float columns whose absence carries semantic meaning (audit M2): a
+# missing interest/aversion rate must round-trip to ``None``, not a float NaN.
+# A missing parquet cell deserializes to NaN, which would otherwise pass the
+# ``float | None`` schema as a (non-None) NaN and be miscounted as a present
+# response.  Normalising NaN → None at this boundary keeps the cohort gap
+# computation honest about insufficient data.
+_NULLABLE_FLOAT_COLS = (
+    "interest_chapters_correct_rate",
+    "aversion_chapters_correct_rate",
+)
+
 
 def load_combined(path: Path) -> list[CombinedAnalysisRow]:
     """Load silver `진단×시험결합.parquet` and validate every row.
@@ -65,6 +76,13 @@ def load_combined(path: Path) -> list[CombinedAnalysisRow]:
                 raise InputError(
                     f"JSON decode failed in {path} row {idx} column '{col}': {exc}"
                 ) from exc
+
+        # Normalise NaN → None for nullable float columns whose absence is
+        # meaningful (audit M2).  pandas reads a null cell as float NaN.
+        for col in _NULLABLE_FLOAT_COLS:
+            val = row_dict.get(col)
+            if isinstance(val, float) and pd.isna(val):
+                row_dict[col] = None
 
         # difficulty_correct_rates: JSON gives str keys; schema wants int keys.
         dcr = row_dict.get("difficulty_correct_rates", {})

@@ -345,8 +345,15 @@ def _run(
     # Build AlignmentFinding list for output.
     alignment_findings = build_alignment(items, curriculum, blueprint, rows, config)
 
-    # Compute interest/aversion gap (FR-022) — attached to findings where applicable.
-    _interest_gap_data = interest_aversion_findings(rows)
+    # Compute the cohort-level interest/aversion achievement gap (audit M2,
+    # FR-022).  This is a single cohort value (means of per-student averages);
+    # it cannot be decomposed per chapter, so per-unit AlignmentFinding slots
+    # stay None.  Flowed to the report summary and the manifest below.
+    interest_gap = interest_aversion_findings(rows)
+    if interest_gap["gap"] is None:
+        # No-silent-omission: record the absence in the manifest.  Appended
+        # after the deterministic chapter-mismatch warnings → fixed order.
+        manifest_warnings.append("관심·기피 응답 데이터 부족 — 코호트 격차 미산출")
 
     # ------------------------------------------------------------------
     # Step 3d: US5 T049/T050 — psychometric validity gate
@@ -515,6 +522,7 @@ def _run(
         forward_audit=forward_audit,
         alignment_findings=alignment_findings,
         insufficient=insufficient,
+        interest_gap=interest_gap,
     )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
@@ -585,7 +593,17 @@ def _run(
         "uncovered_ratio": uncovered_ratio,
         "unclassified_students": float(len(_unclassified)),
         "insufficient_evidence_units": float(len(insufficient)),
+        # Audit M2: cohort interest/aversion response counts are ALWAYS recorded
+        # (cast to float; counts is dict[str, float], no None).
+        "n_interest": float(interest_gap["n_interest"]),
+        "n_aversion": float(interest_gap["n_aversion"]),
     }
+    # Cohort means/gap are added ONLY when available, so counts stays float-only
+    # (the absence is recorded as a manifest warning instead of a None value).
+    if interest_gap["gap"] is not None:
+        counts["interest_mean"] = float(interest_gap["interest_mean"])
+        counts["aversion_mean"] = float(interest_gap["aversion_mean"])
+        counts["interest_aversion_gap"] = float(interest_gap["gap"])
 
     degrade: dict[str, bool | str] = {
         "llm_used": llm_used,

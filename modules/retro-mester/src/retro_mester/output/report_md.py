@@ -359,6 +359,62 @@ def _build_insufficient_section(
     return lines
 
 
+def _build_interest_gap_section(interest_gap: dict) -> list[str]:
+    """Build the 관심·기피 단원 성취 격차 section (audit M2, FR-022).
+
+    Renders the cohort-level interest vs. aversion achievement gap computed by
+    ``interest_aversion_findings``.  The ``bias_note`` (self-report bias
+    warning) is ALWAYS rendered, regardless of data availability.
+
+    Availability dichotomy (no new threshold): when ``gap`` is a value it is
+    always shown; when ``gap`` is ``None`` (either mean unavailable due to
+    insufficient responses) an explicit "데이터 부족" line is rendered instead
+    of a blank value, so the absence is never silently dropped.
+
+    Args:
+        interest_gap: Dict from ``interest_aversion_findings`` with keys
+            ``interest_mean``, ``aversion_mean``, ``gap``, ``n_interest``,
+            ``n_aversion``, and ``bias_note``.
+
+    Returns:
+        List of Markdown line strings.
+    """
+    lines: list[str] = []
+    lines.append("## 관심·기피 단원 성취 격차 (자가응답 편향 주의)")
+    lines.append("")
+
+    if interest_gap["gap"] is None:
+        lines.append("관심·기피 응답 데이터 부족 — 코호트 격차를 산출할 수 없습니다.")
+        lines.append("")
+    else:
+        interest_mean = interest_gap["interest_mean"]
+        aversion_mean = interest_gap["aversion_mean"]
+        gap = interest_gap["gap"]
+        headers = ("관심 단원 정답률", "기피 단원 정답률", "격차(관심−기피)", "관심 n", "기피 n")
+        sep = "| " + " | ".join("---" for _ in headers) + " |"
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append(sep)
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    f"{interest_mean:.2f}",
+                    f"{aversion_mean:.2f}",
+                    f"{gap:.2f}",
+                    str(interest_gap["n_interest"]),
+                    str(interest_gap["n_aversion"]),
+                ]
+            )
+            + " |"
+        )
+        lines.append("")
+
+    lines.append(f"> {interest_gap['bias_note']}")
+    lines.append("")
+
+    return lines
+
+
 def build_report_md(
     recs: list[ChangeRecommendation],
     uncovered_ratio: float,
@@ -372,6 +428,7 @@ def build_report_md(
     forward_audit: dict | None = None,
     alignment_findings: list[AlignmentFinding] | None = None,
     insufficient: list[InsufficientEvidenceUnit] | None = None,
+    interest_gap: dict | None = None,
 ) -> str:
     """Build the Markdown retrospective report (US1 + US2 + US3 sections).
 
@@ -412,6 +469,11 @@ def build_report_md(
             ``forward_ledger``/``alignment_findings`` idiom), whereas an empty
             list ``[]`` renders the section with an explicit "없음" message.
             (``write_xlsx`` differs — it coerces ``None`` to ``[]``.)
+        interest_gap: Optional dict from ``interest_aversion_findings`` for the
+            관심·기피 단원 성취 격차 section (audit M2).  ``None`` omits the
+            section.  When provided, the cohort gap is rendered (or an explicit
+            데이터 부족 line when ``gap`` is ``None``); the ``bias_note`` always
+            renders (FR-022).
 
     Returns:
         Deterministic Markdown string ready to be written to ``.md`` or
@@ -457,6 +519,11 @@ def build_report_md(
     # chapters are visible alongside the coverage line, never silently dropped.
     if insufficient is not None:
         lines.extend(_build_insufficient_section(insufficient))
+
+    # 관심·기피 단원 성취 격차 (audit M2) — cohort interest/aversion gap with
+    # the FR-022 self-report bias note.  None omits the section.
+    if interest_gap is not None:
+        lines.extend(_build_interest_gap_section(interest_gap))
 
     # Section (B): 내년 준비 예견 (US3 T042)
     if forward_ledger is not None:
