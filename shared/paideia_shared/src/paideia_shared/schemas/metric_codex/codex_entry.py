@@ -15,8 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .._common import CanonicalStudentId, SemesterCode
 
-_MINIMAL_KINDS = frozenset({"score_total", "score_percent", "attendance"})
-
 
 class EntryKind(StrEnum):
     """Closed vocabulary of metric entry kinds.
@@ -36,6 +34,12 @@ class EntryKind(StrEnum):
     axis_score_z = "axis_score_z"
     freetext_category = "freetext_category"
     cluster_label = "cluster_label"
+
+
+_MINIMAL_KINDS: frozenset[EntryKind] = frozenset(
+    {EntryKind.score_total, EntryKind.score_percent, EntryKind.attendance}
+)
+"""Entry kinds permitted on the ``minimal`` data layer (V3 guard)."""
 
 
 class CodexEntry(BaseModel):
@@ -107,10 +111,10 @@ class CodexEntry(BaseModel):
     @model_validator(mode="after")
     def _v3_minimal_layer_kind(self) -> Self:
         """V3: layer == 'minimal' restricts entry_kind to score_total/score_percent/attendance."""
-        if self.layer == "minimal" and self.entry_kind.value not in _MINIMAL_KINDS:
+        if self.layer == "minimal" and self.entry_kind not in _MINIMAL_KINDS:
             raise ValueError(
                 f"minimal layer only allows entry_kind in "
-                f"{sorted(_MINIMAL_KINDS)}; got {self.entry_kind!r}."
+                f"{sorted(k.value for k in _MINIMAL_KINDS)}; got {self.entry_kind!r}."
             )
         return self
 

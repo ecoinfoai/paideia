@@ -1,18 +1,13 @@
 """Contract tests for AdvisorBundleSummary (spec 013 T009).
 
-RED phase: all tests must fail before implementation exists.
 Invariant: assigned_count + len(unassigned_sids) == total_students_with_codex
 """
 
 from __future__ import annotations
 
 import pytest
+from paideia_shared.schemas.metric_codex import AdvisorBundleSummary
 from pydantic import ValidationError
-
-
-def _import():
-    from paideia_shared.schemas.metric_codex import AdvisorBundleSummary
-    return AdvisorBundleSummary
 
 
 def _valid_bundle(**overrides):
@@ -29,14 +24,12 @@ def _valid_bundle(**overrides):
 
 class TestAdvisorBundleSummaryValid:
     def test_valid_bundle_constructs(self):
-        AdvisorBundleSummary = _import()
         bundle = AdvisorBundleSummary(**_valid_bundle())
         assert bundle.total_students_with_codex == 5
         assert bundle.assigned_count == 3
         assert len(bundle.unassigned_sids) == 2
 
     def test_zero_unassigned(self):
-        AdvisorBundleSummary = _import()
         bundle = AdvisorBundleSummary(
             total_students_with_codex=3,
             assigned_count=3,
@@ -47,7 +40,6 @@ class TestAdvisorBundleSummaryValid:
         assert bundle.unassigned_sids == []
 
     def test_all_unassigned(self):
-        AdvisorBundleSummary = _import()
         bundle = AdvisorBundleSummary(
             total_students_with_codex=2,
             assigned_count=0,
@@ -58,7 +50,6 @@ class TestAdvisorBundleSummaryValid:
         assert bundle.advisor_count == 0
 
     def test_zero_students(self):
-        AdvisorBundleSummary = _import()
         bundle = AdvisorBundleSummary(
             total_students_with_codex=0,
             assigned_count=0,
@@ -72,7 +63,6 @@ class TestAdvisorBundleSummaryValid:
 class TestAdvisorBundleSummaryInvariant:
     def test_invariant_violation_raises(self):
         """assigned_count + len(unassigned_sids) != total → ValueError."""
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(
                 total_students_with_codex=10,
@@ -83,7 +73,6 @@ class TestAdvisorBundleSummaryInvariant:
             )
 
     def test_invariant_assigned_too_large_raises(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(
                 total_students_with_codex=3,
@@ -94,7 +83,6 @@ class TestAdvisorBundleSummaryInvariant:
             )
 
     def test_invariant_wrong_unassigned_count_raises(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(
                 total_students_with_codex=5,
@@ -107,27 +95,22 @@ class TestAdvisorBundleSummaryInvariant:
 
 class TestAdvisorBundleSummaryBounds:
     def test_negative_total_raises(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(**_valid_bundle(total_students_with_codex=-1))
 
     def test_negative_assigned_raises(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(**_valid_bundle(assigned_count=-1))
 
     def test_negative_advisor_count_raises(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(**_valid_bundle(advisor_count=-1))
 
     def test_extra_field_rejected(self):
-        AdvisorBundleSummary = _import()
         with pytest.raises(ValidationError):
             AdvisorBundleSummary(**_valid_bundle(unknown="x"))
 
     def test_immutable(self):
-        AdvisorBundleSummary = _import()
         bundle = AdvisorBundleSummary(**_valid_bundle())
         with pytest.raises((ValidationError, TypeError)):
             bundle.assigned_count = 99  # type: ignore[misc]

@@ -74,6 +74,8 @@ from .maieutica import (
     MaieuticaTextbookEvidence,
     QuizItemCandidate,
 )
+from .manifest import IngestInput, IngestManifest, IngestRowCount
+from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .metric_codex import (
     AdvisorBundleSummary,
     CodexEntry,
@@ -82,8 +84,6 @@ from .metric_codex import (
     PseudonymMapEntry,
     SourceRecord,
 )
-from .manifest import IngestInput, IngestManifest, IngestRowCount
-from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .needs_map_manifest import (
     FontResolutionInfo,
     LLMCallStat,
