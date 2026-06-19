@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="idea/paideia_pipeline_eng.svg" alt="paideia pipeline: diagnose → teach → assess → reflect" width="100%">
+</p>
+
 # paideia
 
 > **paideia (παιδεία)** — the ancient Greek word for the all-round formation and
