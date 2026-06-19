@@ -129,13 +129,16 @@ def _build_fixture_tree(
     *,
     data_semester: str = _SEMESTER,
     data_course: str = _COURSE,
+    config_semester: str = _SEMESTER,
+    config_course: str = _COURSE,
     mixed_cohort: bool = False,
 ) -> None:
     """Write a fixture tree under ``data_root``.
 
-    The Bronze config + CLI request always use ``_SEMESTER``/``_COURSE``; the
-    data rows use ``data_semester``/``data_course`` so the guard can be
-    exercised by varying only the parquet content.
+    The CLI request always uses ``_SEMESTER``/``_COURSE``; the data rows use
+    ``data_semester``/``data_course`` and the ``retro_config.yaml`` uses
+    ``config_semester``/``config_course`` so each guard branch can be
+    exercised by varying only one source.
     """
     silver = data_root / "silver" / "immersio" / _KEY
     silver.mkdir(parents=True, exist_ok=True)
@@ -191,8 +194,8 @@ def _build_fixture_tree(
     bronze.mkdir(parents=True, exist_ok=True)
 
     retro_cfg = {
-        "semester": _SEMESTER,
-        "course_slug": _COURSE,
+        "semester": config_semester,
+        "course_slug": config_course,
         "group_roster": _STUDENT_IDS,
         "unit_importance": {_CHAPTER_A: "상", _CHAPTER_B: "중"},
         "gap_threshold": 0.6,
@@ -258,6 +261,22 @@ def _assert_no_outputs(data_root: Path) -> None:
 
 class TestThreeWayGuard:
     """T022: 3-way (request × config × data) semester/course agreement."""
+
+    def test_config_semester_mismatch_exits_2_no_output(self, tmp_path: Path) -> None:
+        """Config semester != request → exit 2 (config branch) and no output."""
+        from retro_mester.pipeline import run_retro
+
+        data_root = tmp_path / "data"
+        _build_fixture_tree(data_root, config_semester="2025-2")
+
+        code = run_retro(
+            semester=_SEMESTER,
+            course=_COURSE,
+            data_root=str(data_root),
+            llm_mode="off",
+        )
+        assert code == 2
+        _assert_no_outputs(data_root)
 
     def test_data_semester_mismatch_exits_2_no_output(self, tmp_path: Path) -> None:
         """Data semester != request/config → exit 2 and no output files."""

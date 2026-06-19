@@ -128,36 +128,41 @@ def _guard_semester_course(
         InputError: If the data mixes cohorts, or if any of request, config,
             or data disagree on the semester or course slug.
     """
-    # Invariant 1: data singularity (only meaningful when rows exist).
+    # Invariant 2a: request vs config (always checked, even with empty rows).
+    if config_semester != request_semester:
+        raise InputError(
+            f"config semester disagrees with request — "
+            f"request={request_semester!r} but config={config_semester!r}"
+        )
+    if config_course != request_course:
+        raise InputError(
+            f"config course disagrees with request — "
+            f"request={request_course!r} but config={config_course!r}"
+        )
+
+    # Invariants 1 + 2b: data singularity and data vs request (rows-only).
     if rows:
         data_semesters = sorted({row.semester for row in rows})
         data_courses = sorted({row.course_slug for row in rows})
         if len(data_semesters) > 1:
-            raise InputError(f"데이터에 복수 학기 혼재 — 단일 코호트만 허용: {data_semesters}")
+            raise InputError(
+                f"data mixes multiple semesters — single cohort required: {data_semesters}"
+            )
         if len(data_courses) > 1:
-            raise InputError(f"데이터에 복수 과목 혼재 — 단일 코호트만 허용: {data_courses}")
-
-    # Invariant 2a: request vs config (always checked, even with empty rows).
-    if config_semester != request_semester:
-        raise InputError(
-            f"설정 학기 불일치 — 요청={request_semester!r} 이지만 설정={config_semester!r}"
-        )
-    if config_course != request_course:
-        raise InputError(
-            f"설정 과목 불일치 — 요청={request_course!r} 이지만 설정={config_course!r}"
-        )
-
-    # Invariant 2b: data vs request (checked only when rows exist).
-    if rows:
+            raise InputError(
+                f"data mixes multiple courses — single cohort required: {data_courses}"
+            )
         data_semester = data_semesters[0]
         data_course = data_courses[0]
         if data_semester != request_semester:
             raise InputError(
-                f"데이터 학기 불일치 — 요청={request_semester!r} 이지만 데이터={data_semester!r}"
+                f"data semester disagrees with request — "
+                f"request={request_semester!r} but data={data_semester!r}"
             )
         if data_course != request_course:
             raise InputError(
-                f"데이터 과목 불일치 — 요청={request_course!r} 이지만 데이터={data_course!r}"
+                f"data course disagrees with request — "
+                f"request={request_course!r} but data={data_course!r}"
             )
 
 
