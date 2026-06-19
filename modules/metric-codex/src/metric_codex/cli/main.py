@@ -353,14 +353,96 @@ def _build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     build_p = sub.add_parser(
         "build",
-        help="전체 파이프라인 (ingest→generate→verify→distribute→Gold 산출)",
+        help="전체 파이프라인 (ingest→generate→distribute→verify)",
         description=(
-            "ingest→generate→verify→distribute→output 를 순서대로 실행해 Gold\n"
+            "ingest→generate→distribute→verify 를 순서대로 실행해 Gold\n"
             "산출물(지도교수별 md/yaml, manifest_metric-codex.json)을 생성한다.\n"
-            "검증 통과 전 Gold 미작성 (헌장 V 원자성)."
+            "첫 번째 비-0 종료 코드에서 중단 (first-non-zero stop)."
         ),
     )
     _add_common_args(build_p)
+    # ingest flags
+    build_p.add_argument(
+        "--school-excel",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="학교 성적·출석 xlsx 경로 (기본: Bronze '성적출석.xlsx')",
+    )
+    build_p.add_argument(
+        "--school-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="성적출석_map.yaml 경로 (기본: Bronze '성적출석_map.yaml')",
+    )
+    build_p.add_argument(
+        "--blueprint",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) examen blueprint.yaml — provenance 기록 전용",
+    )
+    build_p.add_argument(
+        "--curriculum-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) curriculum_map.yaml — provenance 기록 전용",
+    )
+    # generate flags
+    build_p.add_argument(
+        "--backend",
+        choices=("none", "subscription", "api"),
+        default="none",
+        help="LLM 백엔드 (기본: none → 결정론 template)",
+    )
+    build_p.add_argument(
+        "--model",
+        type=str,
+        default="claude-sonnet-4-6",
+        metavar="ID",
+        help="api 백엔드 모델 id (기본: claude-sonnet-4-6)",
+    )
+    build_p.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
+    build_p.add_argument(
+        "--responses-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="subscription 백엔드 응답 디렉터리 (기본: Silver staging_responses/)",
+    )
+    build_p.add_argument(
+        "--require-llm",
+        action="store_true",
+        default=False,
+        help="api 백엔드 도달 실패 시 template 폴백 없이 종료 코드 4",
+    )
+    # distribute flags
+    build_p.add_argument(
+        "--roster",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
+    )
+    # shared timestamp (ingest + generate + distribute)
+    build_p.add_argument(
+        "--now",
+        type=str,
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "모든 단계의 타임스탬프로 주입할 ISO-8601 UTC. "
+            "미지정 시 datetime.now(UTC) — 재현 테스트에는 명시 권장."
+        ),
+    )
 
     return parser
 
@@ -1062,8 +1144,40 @@ def _run_verify(args: argparse.Namespace) -> int:
 
 
 def _run_build(args: argparse.Namespace) -> int:
-    """Stub handler for ``build``. Full pipeline TBD."""
-    raise NotImplementedError("build pipeline not yet implemented")
+    """Run the full pipeline: ingest → generate → distribute → verify.
+
+    Executes each stage in order.  On the first non-zero return code, prints a
+    failure note to stderr and returns that code immediately (first-non-zero stop).
+    A stage that raises (e.g. ``LocatedInputError`` / ``BackendUnreachableError``)
+    propagates naturally to ``app()``, which also stops the sequence.
+
+    Args:
+        args: Parsed CLI arguments — the ``build`` subparser exposes the union of
+            all stage-specific flags so the shared ``Namespace`` satisfies every
+            handler without modification.
+
+    Returns:
+        ``0`` if all stages succeed; otherwise the first non-zero exit code from
+        any stage.
+
+    Raises:
+        LocatedInputError: Propagated from ingest or distribute (→ exit 2 in app).
+        BackendUnreachableError: Propagated from generate with ``--require-llm``
+            (→ exit 4 in app).
+    """
+    stages: tuple[tuple[str, ...], ...] = (
+        ("ingest", _run_ingest),
+        ("generate", _run_generate),
+        ("distribute", _run_distribute),
+        ("verify", _run_verify),
+    )
+    for name, stage in stages:
+        rc = stage(args)  # a raise here propagates to app() = first-non-zero stop
+        if rc != 0:
+            print(f"build: {name} failed (exit {rc})", file=sys.stderr)
+            return rc
+        print(f"build: {name} ✓", file=sys.stderr)
+    return 0
 
 
 # ---------------------------------------------------------------------------

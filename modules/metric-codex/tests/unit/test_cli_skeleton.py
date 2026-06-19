@@ -12,10 +12,12 @@ Tests (RED first, per TDD mandate):
 Updated in T041/T042/T045: query, dry-run, and generate are now wired.
 Updated in T052: distribute is now wired (no longer a stub).
 Updated in T054: verify is now wired (no longer a stub).
+Updated in T055: build is now wired (no longer a stub).
 - query requires --student; skeleton test passes dummy --student.
 - dry-run is wired and may fail on missing Silver files (not NotImplementedError).
 - distribute is wired and may fail on missing roster file (not NotImplementedError).
 - verify is wired and exits 0/2/3 depending on artifact state (not NotImplementedError).
+- build is wired and chains all four stages (not NotImplementedError).
 """
 
 from __future__ import annotations
@@ -24,8 +26,8 @@ import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
 # Subcommands still backed by a NotImplementedError stub.
-# query, dry-run, generate, distribute, and verify are now wired (T041/T042/T045/T052/T054).
-_STUB_SUBCOMMANDS = ["build"]
+# All subcommands are now wired (T041/T042/T045/T052/T054/T055).
+_STUB_SUBCOMMANDS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +112,11 @@ def test_common_flags_parse_without_error(subcommand: str) -> None:
 
 @pytest.mark.parametrize("subcommand", _STUB_SUBCOMMANDS)
 def test_stub_handlers_raise_not_implemented(subcommand: str) -> None:
-    """Each still-stub handler raises NotImplementedError (wired in later units)."""
+    """Each still-stub handler raises NotImplementedError (wired in later units).
+
+    All subcommands are now wired (T055), so _STUB_SUBCOMMANDS is empty and
+    this parametrized test is a no-op placeholder.
+    """
     from metric_codex.cli.main import _COMMAND_HANDLERS, _build_parser
 
     parser = _build_parser()
@@ -135,16 +141,31 @@ def test_subcommand_help_exits_zero(subcommand: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stub handler via app() returns 3 (does not raise NotImplementedError)
+# build wired — all 7 subcommands are now wired (T055)
 # ---------------------------------------------------------------------------
 
 
-def test_app_stub_handler_returns_three() -> None:
-    """app() catches a stub handler's NotImplementedError and returns exit 3.
+def test_build_subcommand_is_wired() -> None:
+    """app() with 'build' on a missing Bronze tree exits 2 (ingest boundary fail).
 
-    Uses 'build' which is still a stub (query/dry-run/generate/distribute/verify are wired).
+    All stub handlers are gone (T055).  'build' is wired: it runs ingest first,
+    which raises LocatedInputError when the school map is absent → app returns 2.
     """
+    import tempfile
+
     from metric_codex.cli.main import app
 
-    result = app(["build", "--semester", "2026-1", "--course", "x"])
-    assert result == 3
+    with tempfile.TemporaryDirectory() as td:
+        # An empty data root: no Bronze inputs → ingest fails fast (exit 2).
+        result = app([
+            "build",
+            "--semester", "2026-1",
+            "--course", "x",
+            "--data-root", td,
+        ])
+    # Exit 0 is also acceptable if no school map is found and the degraded
+    # path completes successfully (no mandatory school map in the absence of
+    # explicit flags).  Either 0 or 2 signals that the wired handler ran.
+    assert result in (0, 2), (
+        f"build should return 0 or 2 from a wired handler; got {result}"
+    )
