@@ -4,13 +4,16 @@ from .advisor_bundle import AdvisorBundleSummary
 from .codex_entry import CodexEntry, EntryKind
 from .metric_codex_manifest import MetricCodexManifest
 from .pseudonym import PseudonymMapEntry
+from .query_answer import EvidenceCitation, QueryAnswer
 from .source_record import SourceRecord
 
 __all__ = [
     "AdvisorBundleSummary",
     "CodexEntry",
     "EntryKind",
+    "EvidenceCitation",
     "MetricCodexManifest",
     "PseudonymMapEntry",
+    "QueryAnswer",
     "SourceRecord",
 ]

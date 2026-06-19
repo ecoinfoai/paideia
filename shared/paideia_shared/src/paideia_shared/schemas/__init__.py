@@ -80,8 +80,10 @@ from .metric_codex import (
     AdvisorBundleSummary,
     CodexEntry,
     EntryKind,
+    EvidenceCitation,
     MetricCodexManifest,
     PseudonymMapEntry,
+    QueryAnswer,
     SourceRecord,
 )
 from .needs_map_manifest import (
@@ -242,4 +244,7 @@ __all__ = [
     "PseudonymMapEntry",
     "AdvisorBundleSummary",
     "MetricCodexManifest",
+    # spec 013 metric-codex US2 — 2 new query-answer contracts (T038)
+    "EvidenceCitation",
+    "QueryAnswer",
 ]
