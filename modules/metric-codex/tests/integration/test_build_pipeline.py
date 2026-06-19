@@ -257,7 +257,12 @@ class TestBuildGoldUnassigned:
 
 
 class TestBuildManifestSummary:
-    """Final manifest bundle_summary reflects the distribute+verify-clean output."""
+    """Final manifest bundle_summary reflects the distribute stage's counts.
+
+    The bundle_summary (assigned/unassigned/advisor counts) is written by
+    distribute; verify runs last and is read-only, so it does not alter these
+    values — it only confirms they are internally consistent on a clean pass.
+    """
 
     def _summary(self, data_root: Path) -> dict:
         raw = json.loads(

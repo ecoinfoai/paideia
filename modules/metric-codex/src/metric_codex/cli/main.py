@@ -9,7 +9,7 @@ Subcommands:
 - ``generate``  — CodexEntry 생성 (LLM: subscription | api | none(template))
 - ``distribute``— 지도교수별 번들 배분 및 Gold 산출
 - ``verify``    — CodexEntry 완결성·근거·PII 경계 검증
-- ``build``     — 전체 파이프라인 (ingest→generate→verify→distribute→Gold)
+- ``build``     — 전체 파이프라인 (ingest→generate→distribute→verify→Gold)
 
 Common options (all subcommands):
     --semester SEMESTER  (required) SemesterCode (e.g. "2026-1")
@@ -29,6 +29,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -91,6 +92,161 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_now_arg(parser: argparse.ArgumentParser) -> None:
+    """Add the shared ``--now`` timestamp injection flag.
+
+    ``--now`` is the only non-deterministic injection point used by ingest,
+    generate, and distribute; ``build`` shares one ``--now`` across all stages.
+    Factored out so the three stage helpers can each declare it without the
+    duplicate ``add_argument`` colliding when several helpers run on one parser.
+
+    Args:
+        parser: The subcommand parser to add ``--now`` to.
+    """
+    parser.add_argument(
+        "--now",
+        type=str,
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "타임스탬프로 주입할 ISO-8601 UTC. "
+            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
+        ),
+    )
+
+
+def _add_question_set_arg(parser: argparse.ArgumentParser) -> None:
+    """Add the shared ``--question-set`` flag.
+
+    Used by query, dry-run, generate, and verify; ``build`` declares it once for
+    the generate stage.  Factored out so helpers that both want it never collide.
+
+    Args:
+        parser: The subcommand parser to add ``--question-set`` to.
+    """
+    parser.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
+
+
+def _add_ingest_args(parser: argparse.ArgumentParser, *, with_now: bool = True) -> None:
+    """Add the ingest-stage flags (school Excel/map + optional provenance).
+
+    Shared by the ``ingest`` subparser and ``build`` so the two flag sets can
+    never drift.
+
+    Args:
+        parser: The subcommand parser to add flags to.
+        with_now: When True, also add the shared ``--now`` flag.  ``build`` adds
+            ``--now`` once itself (set False there) to avoid a duplicate.
+    """
+    parser.add_argument(
+        "--school-excel",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="학교 성적·출석 xlsx 경로 (기본: Bronze '성적출석.xlsx')",
+    )
+    parser.add_argument(
+        "--school-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="성적출석_map.yaml 경로 (기본: Bronze '성적출석_map.yaml')",
+    )
+    parser.add_argument(
+        "--blueprint",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) examen blueprint.yaml — provenance 기록 전용",
+    )
+    parser.add_argument(
+        "--curriculum-map",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="(선택) curriculum_map.yaml — provenance 기록 전용",
+    )
+    if with_now:
+        _add_now_arg(parser)
+
+
+def _add_generate_args(
+    parser: argparse.ArgumentParser,
+    *,
+    with_now: bool = True,
+    with_question_set: bool = True,
+) -> None:
+    """Add the generate-stage flags (backend/model/responses + question set).
+
+    Shared by the ``generate`` subparser and ``build`` so the two flag sets can
+    never drift.
+
+    Args:
+        parser: The subcommand parser to add flags to.
+        with_now: When True, also add the shared ``--now`` flag.
+        with_question_set: When True, also add the shared ``--question-set`` flag.
+            ``build`` declares ``--now``/``--question-set`` once itself to avoid
+            duplicates with the ingest/other helpers.
+    """
+    parser.add_argument(
+        "--backend",
+        choices=("none", "subscription", "api"),
+        default="none",
+        help="LLM 백엔드 (기본: none → 결정론 template; 헌장 I 오프라인 완주)",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="claude-sonnet-4-6",
+        metavar="ID",
+        help="api 백엔드 모델 id (기본: claude-sonnet-4-6)",
+    )
+    if with_question_set:
+        _add_question_set_arg(parser)
+    parser.add_argument(
+        "--responses-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="subscription 백엔드 응답 디렉터리 (기본: Silver staging_responses/)",
+    )
+    parser.add_argument(
+        "--require-llm",
+        action="store_true",
+        default=False,
+        help="api 백엔드 도달 실패 시 template 폴백 없이 종료 코드 4 (기본: 폴백)",
+    )
+    if with_now:
+        _add_now_arg(parser)
+
+
+def _add_distribute_args(parser: argparse.ArgumentParser, *, with_now: bool = True) -> None:
+    """Add the distribute-stage flags (advisor roster).
+
+    Shared by the ``distribute`` subparser and ``build`` so the two flag sets
+    can never drift.
+
+    Args:
+        parser: The subcommand parser to add flags to.
+        with_now: When True, also add the shared ``--now`` flag.
+    """
+    parser.add_argument(
+        "--roster",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
+    )
+    if with_now:
+        _add_now_arg(parser)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with all 7 subcommands.
 
@@ -121,44 +277,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(ingest_p)
-    ingest_p.add_argument(
-        "--school-excel",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="학교 성적·출석 xlsx 경로 (기본: Bronze '성적출석.xlsx')",
-    )
-    ingest_p.add_argument(
-        "--school-map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="성적출석_map.yaml 경로 (기본: Bronze '성적출석_map.yaml')",
-    )
-    ingest_p.add_argument(
-        "--blueprint",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="(선택) examen blueprint.yaml — provenance 기록 전용",
-    )
-    ingest_p.add_argument(
-        "--curriculum-map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="(선택) curriculum_map.yaml — provenance 기록 전용",
-    )
-    ingest_p.add_argument(
-        "--now",
-        type=str,
-        default=None,
-        metavar="ISO8601",
-        help=(
-            "ingested_at/generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
-            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
-        ),
-    )
+    _add_ingest_args(ingest_p)
 
     # ------------------------------------------------------------------
     # query
@@ -192,13 +311,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="자유형식 키워드 검색",
     )
-    query_p.add_argument(
-        "--question-set",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
-    )
+    _add_question_set_arg(query_p)
     query_p.add_argument(
         "--json",
         type=Path,
@@ -226,13 +339,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(dry_run_p)
-    dry_run_p.add_argument(
-        "--question-set",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
-    )
+    _add_question_set_arg(dry_run_p)
 
     # ------------------------------------------------------------------
     # generate
@@ -246,49 +353,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(gen_p)
-    gen_p.add_argument(
-        "--backend",
-        choices=("none", "subscription", "api"),
-        default="none",
-        help="LLM 백엔드 (기본: none → 결정론 template; 헌장 I 오프라인 완주)",
-    )
-    gen_p.add_argument(
-        "--model",
-        type=str,
-        default="claude-sonnet-4-6",
-        metavar="ID",
-        help="api 백엔드 모델 id (기본: claude-sonnet-4-6)",
-    )
-    gen_p.add_argument(
-        "--question-set",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
-    )
-    gen_p.add_argument(
-        "--responses-dir",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="subscription 백엔드 응답 디렉터리 (기본: Silver staging_responses/)",
-    )
-    gen_p.add_argument(
-        "--require-llm",
-        action="store_true",
-        default=False,
-        help="api 백엔드 도달 실패 시 template 폴백 없이 종료 코드 4 (기본: 폴백)",
-    )
-    gen_p.add_argument(
-        "--now",
-        type=str,
-        default=None,
-        metavar="ISO8601",
-        help=(
-            "manifest generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
-            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
-        ),
-    )
+    _add_generate_args(gen_p)
 
     # ------------------------------------------------------------------
     # distribute
@@ -302,23 +367,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(dist_p)
-    dist_p.add_argument(
-        "--roster",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
-    )
-    dist_p.add_argument(
-        "--now",
-        type=str,
-        default=None,
-        metavar="ISO8601",
-        help=(
-            "manifest generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
-            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
-        ),
-    )
+    _add_distribute_args(dist_p)
 
     # ------------------------------------------------------------------
     # verify
@@ -333,13 +382,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(verify_p)
-    verify_p.add_argument(
-        "--question-set",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
-    )
+    _add_question_set_arg(verify_p)
     verify_p.add_argument(
         "--roster",
         type=Path,
@@ -361,88 +404,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(build_p)
-    # ingest flags
-    build_p.add_argument(
-        "--school-excel",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="학교 성적·출석 xlsx 경로 (기본: Bronze '성적출석.xlsx')",
-    )
-    build_p.add_argument(
-        "--school-map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="성적출석_map.yaml 경로 (기본: Bronze '성적출석_map.yaml')",
-    )
-    build_p.add_argument(
-        "--blueprint",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="(선택) examen blueprint.yaml — provenance 기록 전용",
-    )
-    build_p.add_argument(
-        "--curriculum-map",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="(선택) curriculum_map.yaml — provenance 기록 전용",
-    )
-    # generate flags
-    build_p.add_argument(
-        "--backend",
-        choices=("none", "subscription", "api"),
-        default="none",
-        help="LLM 백엔드 (기본: none → 결정론 template)",
-    )
-    build_p.add_argument(
-        "--model",
-        type=str,
-        default="claude-sonnet-4-6",
-        metavar="ID",
-        help="api 백엔드 모델 id (기본: claude-sonnet-4-6)",
-    )
-    build_p.add_argument(
-        "--question-set",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
-    )
-    build_p.add_argument(
-        "--responses-dir",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="subscription 백엔드 응답 디렉터리 (기본: Silver staging_responses/)",
-    )
-    build_p.add_argument(
-        "--require-llm",
-        action="store_true",
-        default=False,
-        help="api 백엔드 도달 실패 시 template 폴백 없이 종료 코드 4",
-    )
-    # distribute flags
-    build_p.add_argument(
-        "--roster",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
-    )
-    # shared timestamp (ingest + generate + distribute)
-    build_p.add_argument(
-        "--now",
-        type=str,
-        default=None,
-        metavar="ISO8601",
-        help=(
-            "모든 단계의 타임스탬프로 주입할 ISO-8601 UTC. "
-            "미지정 시 datetime.now(UTC) — 재현 테스트에는 명시 권장."
-        ),
-    )
+    # build needs the UNION of ingest + generate + distribute flags, declared via
+    # the same helpers the individual subparsers use (so the flag sets cannot
+    # drift).  ``--now`` is shared by all three and ``--question-set`` by generate;
+    # declare those once and suppress the duplicates in the stage helpers.
+    _add_now_arg(build_p)
+    _add_question_set_arg(build_p)
+    _add_ingest_args(build_p, with_now=False)
+    _add_generate_args(build_p, with_now=False, with_question_set=False)
+    _add_distribute_args(build_p, with_now=False)
 
     return parser
 
@@ -1123,8 +1093,8 @@ def _run_verify(args: argparse.Namespace) -> int:
     semester: str = args.semester
     course: str = args.course
     data_root: Path = args.data_root
-    question_set_path: Path | None = getattr(args, "question_set", None)
-    roster_path: Path | None = getattr(args, "roster", None)
+    question_set_path: Path | None = args.question_set
+    roster_path: Path | None = args.roster
 
     violations = run_all_checks(
         data_root=data_root,
@@ -1165,7 +1135,7 @@ def _run_build(args: argparse.Namespace) -> int:
         BackendUnreachableError: Propagated from generate with ``--require-llm``
             (→ exit 4 in app).
     """
-    stages: tuple[tuple[str, ...], ...] = (
+    stages: Sequence[tuple[str, Callable[[argparse.Namespace], int]]] = (
         ("ingest", _run_ingest),
         ("generate", _run_generate),
         ("distribute", _run_distribute),
@@ -1176,7 +1146,7 @@ def _run_build(args: argparse.Namespace) -> int:
         if rc != 0:
             print(f"build: {name} failed (exit {rc})", file=sys.stderr)
             return rc
-        print(f"build: {name} ✓", file=sys.stderr)
+        print(f"build: {name} ok", file=sys.stderr)
     return 0
 
 
