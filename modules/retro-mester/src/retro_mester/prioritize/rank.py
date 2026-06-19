@@ -25,10 +25,10 @@ Coverage rules:
     With no gaps but ``insufficient_count > 0`` the ratio is ``1.0`` (every
     known unit is uncovered), not ``0.0``.
 
-Provisional US1 defaults (later US overwrite):
-  - ``target_cognitive_level``: ``"미상"`` — US4 (T044) maps dominant item_type.
-  - ``cluster_vocab``: ``None`` — US2 cluster vocab assignment deferred.
-  - ``prescription_key``: ``f"{cause}/{segment}"`` — US2 refines via catalogue.
+Provisional defaults set here and finalized during pipeline enrichment:
+  - ``target_cognitive_level``: ``"미상"`` — enriched by the cognitive-cliff step.
+  - ``cluster_vocab``: ``None`` — populated via prescription catalogue + cluster vocab.
+  - ``prescription_key``: ``f"{cause}/{segment}"`` — patched by prescription catalogue lookup.
 """
 
 from __future__ import annotations
@@ -106,10 +106,10 @@ def rank_changes(
     computed over ``len(gaps) + insufficient_count``, so chapters with zero
     cohort evidence honestly lower the coverage.
 
-    Provisional fields set here (to be overwritten by later US):
-    - ``target_cognitive_level = "미상"`` (US4 wires dominant item_type)
-    - ``cluster_vocab = None`` (US2 wires cluster vocabulary)
-    - ``prescription_key = f"{cause}/{segment}"`` (US2 wires catalogue lookup)
+    Provisional fields set here and finalized during pipeline enrichment:
+    - ``target_cognitive_level = "미상"`` (enriched by the cognitive-cliff step)
+    - ``cluster_vocab = None`` (populated via cluster vocab + prescription catalogue)
+    - ``prescription_key = f"{cause}/{segment}"`` (patched by prescription catalogue)
 
     Args:
         gaps: List of ``UnitGap`` instances from ``detect_gaps``.
