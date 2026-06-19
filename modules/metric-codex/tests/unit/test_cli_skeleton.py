@@ -8,6 +8,10 @@ Tests (RED first, per TDD mandate):
   argument validation), and the stub handler raises NotImplementedError.
 - Common flags (--semester, --course, --data-root) are accepted by every
   subcommand (argparse level — parse does not fail).
+
+Updated in T041/T042/T045: query and dry-run are now wired (no longer stubs).
+- query requires --student; skeleton test passes dummy --student.
+- dry-run is wired and may fail on missing Silver files (not NotImplementedError).
 """
 
 from __future__ import annotations
@@ -15,8 +19,9 @@ from __future__ import annotations
 import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
-# Subcommands still backed by a NotImplementedError stub (ingest is now wired).
-_STUB_SUBCOMMANDS = ["query", "dry-run", "generate", "distribute", "verify", "build"]
+# Subcommands still backed by a NotImplementedError stub.
+# query and dry-run are now wired (T041/T042/T045).
+_STUB_SUBCOMMANDS = ["generate", "distribute", "verify", "build"]
 
 
 # ---------------------------------------------------------------------------
@@ -73,15 +78,20 @@ def test_command_handlers_no_extra_keys() -> None:
 
 @pytest.mark.parametrize("subcommand", _ALL_SUBCOMMANDS)
 def test_common_flags_parse_without_error(subcommand: str) -> None:
-    """--semester, --course, --data-root are accepted by every subcommand."""
+    """--semester, --course, --data-root are accepted by every subcommand.
+
+    Note: 'query' also requires --student (wired in T045); we pass a dummy value.
+    """
     from metric_codex.cli.main import _build_parser
 
     parser = _build_parser()
-    # Should not raise; NotImplementedError from the handler is fine.
+    argv = [subcommand, "--semester", "2026-1", "--course", "anatomy", "--data-root", "data/"]
+    # query requires --student (wired); provide a dummy for the parse-level test.
+    if subcommand == "query":
+        argv += ["--student", "S001", "--text", "score"]
+    # Should not raise; handler failure is fine at this level.
     try:
-        args = parser.parse_args(
-            [subcommand, "--semester", "2026-1", "--course", "anatomy", "--data-root", "data/"]
-        )
+        args = parser.parse_args(argv)
     except SystemExit as exc:
         pytest.fail(f"argparse exited {exc.code} for '{subcommand}' with common flags")
 
@@ -96,7 +106,7 @@ def test_common_flags_parse_without_error(subcommand: str) -> None:
 
 @pytest.mark.parametrize("subcommand", _STUB_SUBCOMMANDS)
 def test_stub_handlers_raise_not_implemented(subcommand: str) -> None:
-    """Each stub handler raises NotImplementedError (wired in later units)."""
+    """Each still-stub handler raises NotImplementedError (wired in later units)."""
     from metric_codex.cli.main import _COMMAND_HANDLERS, _build_parser
 
     parser = _build_parser()
@@ -128,10 +138,9 @@ def test_subcommand_help_exits_zero(subcommand: str) -> None:
 def test_app_stub_handler_returns_three() -> None:
     """app() catches a stub handler's NotImplementedError and returns exit 3.
 
-    Wiring units will replace each stub handler with real logic and adjust
-    this expectation as they go.
+    Uses 'generate' which is still a stub (query and dry-run are now wired).
     """
     from metric_codex.cli.main import app
 
-    result = app(["query", "--semester", "2026-1", "--course", "x"])
+    result = app(["generate", "--semester", "2026-1", "--course", "x"])
     assert result == 3

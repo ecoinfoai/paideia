@@ -2,10 +2,10 @@
 
 Entry point: ``metric-codex = "metric_codex.cli.main:app"``.
 
-Subcommands (stubs — real logic wired in later units):
+Subcommands:
 - ``ingest``    — Bronze→Silver: 성적·출석·immersio Silver·needs-map Silver 수집
-- ``query``     — 지도교수 질의 응답 (retrieval + LLM 다듬기)
-- ``dry-run``   — 결정론 단계만 실행, LLM 미호출 (헌장 I 검증)
+- ``query``     — 지도교수 질의 응답 (retrieval, pseudonym space)
+- ``dry-run``   — 결정론 단계만 실행, LLM 미호출 (헌장 I 검증), staging 번들 산출
 - ``generate``  — CodexEntry 생성 (LLM: subscription | api | none(template))
 - ``distribute``— 지도교수별 번들 배분 및 Gold 산출
 - ``verify``    — CodexEntry 완결성·근거·PII 경계 검증
@@ -161,26 +161,74 @@ def _build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     query_p = sub.add_parser(
         "query",
-        help="지도교수 질의 응답 (Silver 검색 + LLM 다듬기)",
+        help="지도교수 질의 응답 (Silver 검색, pseudonym 공간)",
         description=(
-            "지도교수의 자연어 질의를 Silver CodexEntry에 대해 검색하고\n"
-            "LLM 이 근거 기반 답변을 생성한다."
+            "Silver CodexEntry에서 학생의 근거를 검색한다.\n"
+            "학생은 student_id(10자리) 또는 pseudonym(S001)으로 지정.\n"
+            "--question-id 또는 --text 중 하나(상호 배타적)."
         ),
     )
     _add_common_args(query_p)
+    query_p.add_argument(
+        "--student",
+        required=True,
+        metavar="STUDENT",
+        help="학번(10자리 숫자) 또는 가명(S001 형식)",
+    )
+    query_student_group = query_p.add_mutually_exclusive_group(required=False)
+    query_student_group.add_argument(
+        "--question-id",
+        metavar="ID",
+        default=None,
+        help="question_set.yaml 에서 질문 id 지정",
+    )
+    query_student_group.add_argument(
+        "--text",
+        metavar="TEXT",
+        default=None,
+        help="자유형식 키워드 검색",
+    )
+    query_p.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
+    query_p.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        dest="json_out",
+        help="QueryAnswer JSON 저장 경로 (선택)",
+    )
+    query_p.add_argument(
+        "--reveal",
+        action="store_true",
+        default=False,
+        help="--reveal 시 student_id 와 이름 함께 출력 (기본: pseudonym만)",
+    )
 
     # ------------------------------------------------------------------
     # dry-run
     # ------------------------------------------------------------------
     dry_run_p = sub.add_parser(
         "dry-run",
-        help="결정론 단계만 실행 (LLM 미호출 — 헌장 I 완주 검증)",
+        help="결정론 단계만 실행 (LLM 미호출 — 헌장 I 완주 검증, staging 번들 산출)",
         description=(
-            "ingest 단계의 결정론 파이프라인만 실행하고 LLM 없이 Gold 산출물\n"
-            "구조를 검증한다. 실제 LLM 호출 없음."
+            "Silver CodexEntry + pseudonym_map 을 읽어 staging/{pseudonym}.json\n"
+            "번들을 산출한다. LLM 호출 없음. PRIV-01: PII 포함 파일 불산출."
         ),
     )
     _add_common_args(dry_run_p)
+    dry_run_p.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
 
     # ------------------------------------------------------------------
     # generate
@@ -396,14 +444,208 @@ def _run_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_student(
+    student_arg: str,
+    entries: list,
+    pseudonym_map: list,
+) -> tuple[str, str, str | None]:
+    """Resolve --student to (student_id, pseudonym, name_kr).
+
+    Accepts a 10-digit student_id or an S\\d{3,} pseudonym.
+
+    Args:
+        student_arg: The --student CLI value.
+        entries: All CodexEntry rows in the store.
+        pseudonym_map: Full pseudonym map.
+
+    Returns:
+        ``(student_id, pseudonym, name_kr)`` tuple.
+
+    Raises:
+        LocatedInputError: If the student is not found in the store or map.
+    """
+    import re as _re
+
+    sid_to_pseudonym: dict[str, tuple[str, str | None]] = {
+        e.student_id: (e.pseudonym, e.name_kr) for e in pseudonym_map
+    }
+    pseudonym_to_sid: dict[str, tuple[str, str | None]] = {
+        e.pseudonym: (e.student_id, e.name_kr) for e in pseudonym_map
+    }
+
+    if _re.fullmatch(r"\d{10}", student_arg):
+        # student_id branch
+        if student_arg not in sid_to_pseudonym:
+            raise LocatedInputError(
+                f"student_id {student_arg!r} not found in pseudonym map",
+                expected="a known student_id",
+                actual=student_arg,
+            )
+        pseudonym, name_kr = sid_to_pseudonym[student_arg]
+        student_id = student_arg
+    elif _re.fullmatch(r"S\d{3,}", student_arg):
+        # pseudonym branch
+        if student_arg not in pseudonym_to_sid:
+            raise LocatedInputError(
+                f"pseudonym {student_arg!r} not found in pseudonym map",
+                expected="a known pseudonym (S001 format)",
+                actual=student_arg,
+            )
+        student_id, name_kr = pseudonym_to_sid[student_arg]
+        pseudonym = student_arg
+    else:
+        raise LocatedInputError(
+            f"--student must be a 10-digit student_id or S\\d{{3,}} pseudonym; "
+            f"got {student_arg!r}",
+            expected="10-digit student_id or S001 pseudonym",
+            actual=student_arg,
+        )
+
+    # Validate: student must have entries in the codex.
+    known_sids = {e.student_id for e in entries}
+    if student_id not in known_sids:
+        raise LocatedInputError(
+            f"student_id {student_id!r} has no entries in the Silver store",
+            expected="student with codex entries",
+            actual=student_id,
+        )
+
+    return student_id, pseudonym, name_kr
+
+
 def _run_query(args: argparse.Namespace) -> int:
-    """Stub handler for ``query``. Retrieval + LLM polish TBD."""
-    raise NotImplementedError("query pipeline not yet implemented")
+    """Handle the ``query`` subcommand: evidence retrieval in pseudonym space.
+
+    Loads the Silver store + pseudonym map, resolves the --student argument
+    (10-digit id or S\\d{3,} pseudonym), runs answer_question, and prints each
+    citation to stdout.  Optionally writes a QueryAnswer JSON with --json.
+    With --reveal, also prints student_id and name_kr.
+
+    Args:
+        args: Parsed CLI arguments for the ``query`` subcommand.
+
+    Returns:
+        ``0`` on success.
+
+    Raises:
+        LocatedInputError: On boundary failures (caught by ``app`` → exit 2).
+    """
+    from metric_codex.retrieve.query import answer_question, load_question_set
+
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+
+    own_silver = silver_dir(semester, course, data_root=data_root)
+    own_bronze = bronze_dir(semester, course, data_root=data_root)
+    pseudonym_path = own_silver / "pseudonym_map.parquet"
+
+    entries, _ = read_existing_store(own_silver)
+    pmap = read_pseudonym_map(pseudonym_path)
+
+    student_id, pseudonym, name_kr = _resolve_student(args.student, entries, pmap)
+
+    # Filter entries to this student only.
+    student_entries = [e for e in entries if e.student_id == student_id]
+
+    # Build the QueryAnswer.
+    if args.question_id is not None:
+        qs_path: Path = args.question_set or (own_bronze / "question_set.yaml")
+        qs = load_question_set(qs_path)
+        question = next((q for q in qs.questions if q.id == args.question_id), None)
+        if question is None:
+            raise LocatedInputError(
+                f"question_id {args.question_id!r} not found in question_set",
+                file=str(qs_path),
+                expected="a valid question id",
+                actual=args.question_id,
+            )
+        qa = answer_question(student_entries, pseudonym=pseudonym, question=question)
+    elif args.text is not None:
+        qa = answer_question(student_entries, pseudonym=pseudonym, freeform_text=args.text)
+    else:
+        # Neither --question-id nor --text supplied — validated by argparse mutual
+        # exclusion; this branch is unreachable if argparse is configured correctly.
+        # However, if neither is given and argparse is non-strict, emit an error.
+        raise LocatedInputError(
+            "one of --question-id or --text must be provided",
+            expected="--question-id ID or --text TEXT",
+            actual="(none)",
+        )
+
+    # Print: reveal header (optional), citations or no_evidence sentinel.
+    if args.reveal:
+        print(f"student_id: {student_id}")
+        print(f"name_kr: {name_kr or '(unknown)'}")
+
+    print(f"pseudonym: {pseudonym}")
+
+    if qa.no_evidence:
+        print("근거 없음")
+    else:
+        for c in qa.citations:
+            obs = f", observed_at={c.observed_at}" if c.observed_at else ""
+            print(f"- {c.key}: {c.value} (출처: {c.source_id}, {c.layer}{obs})")
+
+    # Optional JSON output.
+    if args.json_out is not None:
+        json_path: Path = args.json_out
+        import json as _json
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(
+            _json.dumps(qa.model_dump(), sort_keys=True, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    return 0
 
 
 def _run_dry_run(args: argparse.Namespace) -> int:
-    """Stub handler for ``dry-run``. Determinism-only pass TBD."""
-    raise NotImplementedError("dry-run pipeline not yet implemented")
+    """Handle the ``dry-run`` subcommand: deterministic staging bundle generation.
+
+    Loads the Silver store + pseudonym map, builds pseudonymized StudentBundles
+    for every student, and writes staging/{pseudonym}.json files under the Silver
+    directory.  No LLM call; no PII in output (PRIV-01/SC-004).
+
+    Args:
+        args: Parsed CLI arguments for the ``dry-run`` subcommand.
+
+    Returns:
+        ``0`` on success.
+
+    Raises:
+        LocatedInputError: On any boundary failure (caught by ``app`` → exit 2).
+    """
+    from metric_codex.generate.bundle import build_bundles, write_staging
+    from metric_codex.retrieve.query import load_question_set
+
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+
+    own_silver = silver_dir(semester, course, data_root=data_root)
+    own_bronze = bronze_dir(semester, course, data_root=data_root)
+    pseudonym_path = own_silver / "pseudonym_map.parquet"
+
+    entries, _ = read_existing_store(own_silver)
+    pmap = read_pseudonym_map(pseudonym_path)
+
+    qs_path: Path = args.question_set or (own_bronze / "question_set.yaml")
+    qs = load_question_set(qs_path)
+
+    bundles = build_bundles(
+        codex_entries=entries,
+        pseudonym_map=pmap,
+        question_set=qs,
+    )
+
+    written = write_staging(own_silver, bundles)
+
+    print(f"dry-run: {len(written)} staging bundle(s) written")
+    for p in written:
+        print(f"  {p}")
+
+    return 0
 
 
 def _run_generate(args: argparse.Namespace) -> int:
