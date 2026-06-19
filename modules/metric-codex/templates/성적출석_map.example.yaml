@@ -1,0 +1,44 @@
+# 성적출석_map.example.yaml — metric-codex Bronze configuration template
+#
+# PURPOSE: Maps the column headers of the school-issued 성적·출석 Excel file
+# to the canonical ingest fields used by metric-codex.  Place a filled copy
+# at data/bronze/metric-codex/{semester}-{course}/성적출석_map.yaml.
+#
+# PLACEHOLDERS: All values below are obviously synthetic.  Replace every
+# value with the actual column header text found in your school Excel file.
+#
+# LOADER: metric_codex.ingest.bronze_copies.load_school_excel_map → SchoolExcelMap
+# INVARIANT: At least one of score_total, score_percent, or attendance must be
+# non-null (a source must carry at least one score or attendance signal).
+
+semester: "2026-1"          # SemesterCode pattern: YYYY-[12SW]
+course_slug: "example-course"  # kebab-case course slug (a-z, digits, hyphens)
+
+# sheet: name or 0-based integer index of the sheet that holds score/attendance data.
+# Default 0 (first sheet).
+sheet: 0
+
+# header_row: 1-based row number of the column header row in the sheet.
+# Default 1.
+header_row: 1
+
+columns:
+  # student_id: exact header text of the 학번 column (required).
+  student_id: "학번"
+
+  # name_kr: header text of the Korean name column; null to omit.
+  name_kr: "성명"
+
+  # score_total: header text of the raw total-score column; null if absent.
+  score_total: "총점"
+
+  # score_percent: header text of the percentage-score column; null if absent.
+  score_percent: "점수"
+
+  # attendance: header text of the attendance column; null if absent.
+  attendance: "출결"
+
+# cohort_year_column: header text of the column holding the cohort year.
+# When null, cohort_year is derived from the first 4 digits of the 학번.
+# Uncomment and set if your Excel file has an explicit cohort year column.
+# cohort_year_column: "학년도"

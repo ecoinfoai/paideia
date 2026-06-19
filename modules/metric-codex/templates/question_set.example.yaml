@@ -1,0 +1,47 @@
+# question_set.example.yaml — metric-codex advisor query configuration template
+#
+# PURPOSE: Defines the structured questions an advisor can ask about a student's
+# learning competency.  Each question maps to a closed set of EntryKind values
+# that drive the evidence retrieval stage.  Place a filled copy at
+# data/bronze/metric-codex/{semester}-{course}/question_set.yaml.
+#
+# LOADER: metric_codex.retrieve.query.load_question_set → QuestionSet
+# INVARIANT: questions must be non-empty; all id values must be unique.
+#
+# Available entry_kinds (stable vocabulary — adding a new kind is a paideia minor bump):
+#   score_total, score_percent, attendance
+#   percentile_section, percentile_cohort
+#   z_score
+#   domain_correct_rate, item_correct
+#   axis_score_z
+#   freetext_category, cluster_label
+
+questions:
+  - id: "q1-overall-score"
+    text: "이 학생의 최종 점수와 출석 현황은 어떻습니까?"
+    entry_kinds:
+      - score_total
+      - score_percent
+      - attendance
+
+  - id: "q2-cohort-standing"
+    text: "동일 코호트 내 상대적 위치(백분위)는 어떻습니까?"
+    entry_kinds:
+      - percentile_cohort
+
+  - id: "q3-domain-mastery"
+    text: "도메인별 정답률에서 강점과 약점 영역은 무엇입니까?"
+    entry_kinds:
+      - domain_correct_rate
+    # domain: null here means retrieve all domains.
+    # Set to a specific domain string to filter (e.g. "순환").
+
+  - id: "q4-learning-axis"
+    text: "학습 진단 축(axis) 점수에서 주목할 만한 편차가 있습니까?"
+    entry_kinds:
+      - axis_score_z
+
+  - id: "q5-qualitative-category"
+    text: "서술형 응답에서 분류된 학습 특성 범주는 무엇입니까?"
+    entry_kinds:
+      - freetext_category

@@ -1,0 +1,33 @@
+# 지도교수배정.example.yaml — metric-codex advisor roster template
+#
+# PURPOSE: Maps each student to their assigned advisor.  The distribute stage
+# uses this to write per-advisor Gold bundles under
+# data/gold/metric-codex/{semester}-{course}/지도교수별/{advisor_id}/.
+# Place a filled copy at
+# data/bronze/metric-codex/{semester}-{course}/지도교수배정.yaml.
+#
+# PLACEHOLDERS: All student_id, advisor_id, and advisor_name values below are
+# OBVIOUSLY SYNTHETIC.  student_ids beginning with "000000" are the sentinel
+# placeholder prefix — they are structurally valid 10-digit ids but will never
+# appear in a real school system.  Replace every entry with actual data.
+#
+# LOADER: metric_codex.distribute.roster.load_roster → list[AdvisorRosterEntry]
+# UNIQUENESS: student_id must be unique across all entries (one advisor per student).
+
+assignments:
+  # advisor_id is used as a subdirectory name; avoid slashes, leading dots, and NUL.
+  - student_id: "0000000001"
+    advisor_id: "prof-a"
+    advisor_name: "지도교수A"
+
+  - student_id: "0000000002"
+    advisor_id: "prof-a"
+    advisor_name: "지도교수A"
+
+  - student_id: "0000000003"
+    advisor_id: "prof-b"
+    advisor_name: "지도교수B"
+
+  - student_id: "0000000004"
+    advisor_id: "prof-b"
+    # advisor_name is optional; omit when unknown.
