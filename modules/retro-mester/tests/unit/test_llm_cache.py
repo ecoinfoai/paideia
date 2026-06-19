@@ -97,8 +97,9 @@ class TestInputHashCache:
     def test_cache_hit_avoids_backend_call(self, tmp_path: Path) -> None:
         """Cache hit: backend callable is NOT invoked on second call.
 
-        Simulates the pattern: first call writes to cache; second call
-        with same inputs should return cached value without calling the backend.
+        First call is a miss → backend invoked once and result stored.
+        Second call with same inputs must be a hit: get() returns the stored
+        value without invoking the backend again.
         """
         from retro_mester.llm.cache import InputHashCache
 
@@ -115,18 +116,15 @@ class TestInputHashCache:
 
         # First call — cache miss → backend invoked → stored
         result1 = cache.get(prompt, facts)
-        if result1 is None:
-            result1 = stub_backend(prompt, facts)
-            cache.put(prompt, facts, result1)
+        assert result1 is None, "Fresh cache must miss on first lookup"
+        result1 = stub_backend(prompt, facts)
+        cache.put(prompt, facts, result1)
 
-        # Second call — cache hit → backend NOT invoked
+        # Second call — must be a hit; backend must NOT be invoked again
         result2 = cache.get(prompt, facts)
-        if result2 is None:
-            result2 = stub_backend(prompt, facts)
-            cache.put(prompt, facts, result2)
-
+        assert result2 is not None, "Second get() must return cached value (not None)"
+        assert result2 == result1, "Cached value must equal the stored result"
         assert call_count == 1, "Backend must be called exactly once (cache hit on 2nd)"
-        assert result1 == result2 == "backend result"
 
 
 class TestInputHashCacheModelMode:
