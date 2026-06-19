@@ -247,7 +247,22 @@ def _run(
     for row in rows:
         combined_chapters.update(row.chapter_correct_rates.keys())
 
-    items, _mismatch = load_items(items_path, combined_chapters=combined_chapters)
+    items, mismatch = load_items(items_path, combined_chapters=combined_chapters)
+
+    # M3 / no-silent-omission: record items↔combined chapter-set mismatches as
+    # manifest warnings (both directions) so they never vanish.  Lists from
+    # load_items are already sorted → deterministic.
+    manifest_warnings: list[str] = []
+    for ch in mismatch["items_not_in_combined"]:
+        manifest_warnings.append(
+            f"Chapter '{ch}' appears in 문항통계 but not in 진단×시험결합 — "
+            "no student answer data for it."
+        )
+    for ch in mismatch["combined_not_in_items"]:
+        manifest_warnings.append(
+            f"Chapter '{ch}' appears in 진단×시험결합 but not in 문항통계 — "
+            "no item statistics for it."
+        )
 
     blueprint, curriculum = load_exam_spec(bp_path, cm_path, semester, course)
     config = load_config(cfg_path)
@@ -266,7 +281,7 @@ def _run(
     # ------------------------------------------------------------------
     # Assign segments to capture unclassified count for manifest (T060).
     _segment_buckets, _unclassified = assign_segments(rows, config)
-    gaps = detect_gaps(rows, items, config)
+    gaps, insufficient = detect_gaps(rows, items, config)
 
     # US2 T032: escalate chapters where baseline is also below threshold.
     gaps = escalate_structural(gaps, rows, config)
@@ -291,7 +306,7 @@ def _run(
     # US2 T034: cluster vocabulary per segment.
     vocab = segment_cluster_vocab(rows, config)
 
-    recs, uncovered_ratio = rank_changes(gaps, config)
+    recs, uncovered_ratio = rank_changes(gaps, config, insufficient_count=len(insufficient))
 
     # US2 T035: patch prescription_key and cluster_vocab onto recommendations.
     patched_recs = []
@@ -480,7 +495,7 @@ def _run(
     # ------------------------------------------------------------------
 
     # Silver
-    write_silver(gaps, recs, silver_out)
+    write_silver(gaps, recs, insufficient, silver_out)
 
     # Gold — figures (US4 T047: alignment PNGs, deterministic)
     figs_dir = gold_out / "figs"
@@ -499,6 +514,7 @@ def _run(
         forward_ledger=ledger,
         forward_audit=forward_audit,
         alignment_findings=alignment_findings,
+        insufficient=insufficient,
     )
     atomic_write_text(gold_out / "CQI회고보고서.md", md_text, encoding="utf-8")
 
@@ -514,6 +530,7 @@ def _run(
         prescriptions=prescriptions,
         alignment_findings=alignment_findings,
         validity_table=validity_table,
+        insufficient=insufficient,
     )
 
     # Gold — 차년도방향.yaml (US3 T039)
@@ -530,7 +547,7 @@ def _run(
     # Gold — 차년도진단문항제안.md (US3 T041)
     write_next_items_md(gold_out / "차년도진단문항제안.md", proposals)
 
-    # Gold — manifest (uses real now_utc for generated_at_utc)
+    # Silver — manifest (uses real now_utc for generated_at_utc); FR-012.
     _input_paths: dict[str, Path] = {
         "combined": combined_path,
         "items": items_path,
@@ -538,6 +555,13 @@ def _run(
         "blueprint": bp_path,
         "curriculum_map": cm_path,
     }
+    # M5 provenance: record the prior-year forward yaml when one was supplied
+    # and the file exists, so its path + content hash are auditable.
+    if prior_yaml_path is not None:
+        _prior_path = Path(prior_yaml_path)
+        if _prior_path.exists():
+            _input_paths["prior_year"] = _prior_path
+
     # Build InputProvenance objects for each existing input file.
     # _file_sha256 returns "sha256:<hex>"; strip the prefix to get the bare hex.
     input_provenances: dict[str, InputProvenance] = {
@@ -560,6 +584,7 @@ def _run(
         "covered": float(sum(1 for r in recs if r.is_covered)),
         "uncovered_ratio": uncovered_ratio,
         "unclassified_students": float(len(_unclassified)),
+        "insufficient_evidence_units": float(len(insufficient)),
     }
 
     degrade: dict[str, bool | str] = {
@@ -578,8 +603,11 @@ def _run(
         thresholds=thresholds,
         counts=counts,
         degrade=degrade,
+        warnings=manifest_warnings,
     )
-    write_manifest(gold_out / "manifest_retro.json", manifest, now_utc)
+    # FR-012: the manifest is a Silver-layer artefact (RetroManifest docstring),
+    # so it is written under the Silver dir, not Gold.
+    write_manifest(silver_out / "manifest_retro.json", manifest, now_utc)
 
     return 0
 

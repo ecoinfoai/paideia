@@ -252,13 +252,16 @@ class TestUS2Segments:
         return data_root / "gold" / "retro-mester" / _KEY
 
     def test_exit_zero_and_outputs_exist(self, tmp_path: Path) -> None:
-        """Pipeline exits 0 and all expected gold outputs are present."""
+        """Pipeline exits 0 and all expected outputs are present."""
         gold = self._run(tmp_path)
 
         assert (gold / "CQI회고보고서.md").exists()
         assert (gold / "CQI회고보고서.pdf").exists()
         assert (gold / "회고분석.xlsx").exists()
-        assert (gold / "manifest_retro.json").exists()
+        # FR-012: the manifest is a Silver-layer artefact.
+        assert (
+            tmp_path / "data" / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
+        ).exists()
 
     def test_recommendations_carry_segment(self, tmp_path: Path) -> None:
         """ChangeRecommendation records carry non-empty segment field."""

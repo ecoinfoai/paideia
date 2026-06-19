@@ -236,7 +236,6 @@ class TestOutputUnderDataDir:
             "CQI회고보고서.md",
             "CQI회고보고서.pdf",
             "회고분석.xlsx",
-            "manifest_retro.json",
             "차년도방향.yaml",
         ]:
             p = gold / artefact
@@ -249,7 +248,13 @@ class TestOutputUnderDataDir:
         _build_fixture_and_run(data_root)
 
         silver = data_root / "silver" / "retro-mester" / _KEY
-        for artefact in ["빈틈표.parquet", "변경권고.parquet"]:
+        # FR-012: manifest_retro.json is a Silver-layer artefact.
+        for artefact in [
+            "빈틈표.parquet",
+            "변경권고.parquet",
+            "근거부족단원.parquet",
+            "manifest_retro.json",
+        ]:
             p = silver / artefact
             assert p.exists(), f"Missing silver artefact: {artefact}"
             assert str(p).startswith(str(data_root)), f"{artefact} is outside data_root: {p}"

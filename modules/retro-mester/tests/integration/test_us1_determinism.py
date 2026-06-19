@@ -259,10 +259,10 @@ class TestUS1Determinism:
         run_retro(semester=_SEMESTER, course=_COURSE, data_root=str(root2))
 
         m1 = json.loads(
-            (root1 / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
+            (root1 / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
         )
         m2 = json.loads(
-            (root2 / "gold" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
+            (root2 / "silver" / "retro-mester" / _KEY / "manifest_retro.json").read_text()
         )
 
         # Non-timestamp fields must be identical
