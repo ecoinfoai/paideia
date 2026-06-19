@@ -78,6 +78,7 @@ from .manifest import IngestInput, IngestManifest, IngestRowCount
 from .metadata_aggregate import MetadataAggregate, MetadataKind, TestKind
 from .metric_codex import (
     AdvisorBundleSummary,
+    AdvisorRosterEntry,
     CodexEntry,
     EntryKind,
     EvidenceCitation,
@@ -247,4 +248,6 @@ __all__ = [
     # spec 013 metric-codex US2 — 2 new query-answer contracts (T038)
     "EvidenceCitation",
     "QueryAnswer",
+    # spec 013 metric-codex US3 — advisor roster contract (T048)
+    "AdvisorRosterEntry",
 ]

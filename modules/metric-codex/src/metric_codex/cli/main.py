@@ -302,6 +302,23 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(dist_p)
+    dist_p.add_argument(
+        "--roster",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="지도교수배정.yaml 경로 (기본: Bronze '지도교수배정.yaml')",
+    )
+    dist_p.add_argument(
+        "--now",
+        type=str,
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "manifest generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
+            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # verify
@@ -893,8 +910,114 @@ def _run_generate(args: argparse.Namespace) -> int:
 
 
 def _run_distribute(args: argparse.Namespace) -> int:
-    """Stub handler for ``distribute``. Advisor bundle distribution TBD."""
-    raise NotImplementedError("distribute pipeline not yet implemented")
+    """Handle the ``distribute`` subcommand: per-advisor bundle assembly.
+
+    Reads the advisor roster, groups Gold student md files by advisor, copies
+    each advisee's md into the advisor's own Gold subdirectory (no cross-leak),
+    reports unassigned students explicitly, and updates the manifest preserving
+    the prior ingest/generate provenance (constitution V).
+
+    Args:
+        args: Parsed CLI arguments for the ``distribute`` subcommand.
+
+    Returns:
+        ``0`` on success.
+
+    Raises:
+        LocatedInputError: On boundary failures (caught by ``app`` → exit 2).
+    """
+    import re
+
+    from metric_codex.distribute.bundles import group_by_advisor, write_advisor_bundles
+    from metric_codex.distribute.roster import load_roster
+    from metric_codex.distribute.summary import build_summary, write_unassigned_report
+    from metric_codex.output.paths import gold_dir
+
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+    now: str = args.now or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    own_bronze = bronze_dir(semester, course, data_root=data_root)
+    own_silver = silver_dir(semester, course, data_root=data_root)
+    own_gold = gold_dir(semester, course, data_root=data_root)
+
+    # 1) Load advisor roster.
+    roster_path: Path = args.roster or (own_bronze / "지도교수배정.yaml")
+    roster = load_roster(roster_path)
+
+    # 2) Group student md files by advisor; identify unassigned.
+    per_advisor, unassigned = group_by_advisor(gold_dir=own_gold, roster=roster)
+
+    # 3) Write per-advisor bundles (atomic, no cross-leak).
+    write_advisor_bundles(gold_dir=own_gold, per_advisor=per_advisor)
+
+    # 4) Build summary and write unassigned report.
+    student_dir = own_gold / "학생별"
+    all_md_files = sorted(student_dir.glob("*.md"))
+    all_student_ids = []
+    _sid_re = re.compile(r"^(\d{10})")
+    names: dict[str, str | None] = {}
+    for md_path in all_md_files:
+        stem = md_path.stem
+        m = _sid_re.match(stem)
+        if m:
+            sid = m.group(1)
+            all_student_ids.append(sid)
+            parts = stem.split("_", 1)
+            names[sid] = parts[1] if len(parts) == 2 and parts[1] else None
+
+    summary = build_summary(
+        all_student_ids=all_student_ids,
+        per_advisor=per_advisor,
+        unassigned=unassigned,
+    )
+    write_unassigned_report(gold_dir=own_gold, unassigned=unassigned, names=names)
+
+    # 5) Update manifest — preserve provenance, update bundle_summary.
+    manifest_path = own_silver / "manifest_metric-codex.json"
+    if manifest_path.is_file():
+        prior = read_manifest(manifest_path)
+        input_hashes = prior.input_hashes
+        config_ids = prior.config_ids
+        llm_backend = prior.llm_backend
+        llm_model = prior.llm_model
+        cache_hit_rate = prior.cache_hit_rate
+        student_count = prior.student_count
+        entry_count = prior.entry_count
+    else:
+        input_hashes = {}
+        config_ids = {}
+        llm_backend = "none(template)"
+        llm_model = None
+        cache_hit_rate = None
+        student_count = len(all_student_ids)
+        entry_count = 0
+
+    manifest = build_manifest(
+        semester=semester,
+        course_slug=course,
+        input_hashes=input_hashes,
+        config_ids=config_ids,
+        generated_at=now,
+        llm_backend=llm_backend,
+        llm_model=llm_model,
+        cache_hit_rate=cache_hit_rate,
+        student_count=student_count,
+        entry_count=entry_count,
+        bundle_summary=summary,
+    )
+    write_manifest(manifest_path, manifest)
+
+    assigned_count = summary.assigned_count
+    unassigned_count = len(summary.unassigned_sids)
+    advisor_count = summary.advisor_count
+    print(
+        f"distribute: {assigned_count} assigned, {unassigned_count} unassigned, "
+        f"{advisor_count} advisor(s)"
+    )
+
+    return 0
 
 
 def _run_verify(args: argparse.Namespace) -> int:
