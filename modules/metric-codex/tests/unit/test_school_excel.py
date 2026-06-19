@@ -1,24 +1,25 @@
-"""T029 — Unit tests for read_school_excel and SourceReadResult (RED first).
+"""T029 / U1b-1 hardening — Unit tests for read_school_excel and SourceReadResult.
 
 Tests written before implementation per TDD mandate.
 
 Covers:
-- Happy path: 2 students with total/percent/attendance → correct CodexEntry rows
-  (right kinds/values/layer/student_id/cohort_year derived from id prefix);
-  identities captured.
-- Blank score cell for one student → that entry_kind skipped, others present, no error.
-- All score cells blank → identity present, zero entries, no error.
-- cohort_year_column set → cohort_year read from column, not id prefix.
-- Malformed student_id cell → LocatedInputError with row number.
-- Non-numeric score cell → LocatedInputError (row + column).
-- Configured header missing from sheet → LocatedInputError.
-- Determinism: two reads of the same fixture produce equal entries.
-- source_record has the right source_id/origin_module/origin_layer/sha256/ingested_at.
-- SourceReadResult and compute_sha256 are importable from their modules.
+- Happy path: students with total/percent/attendance → correct CodexEntry rows
+  (kinds/values/layer/student_id/cohort_year/key/source_id; identities captured).
+- Blank score cell → that entry_kind skipped; all-blank → identity only, no error.
+- cohort_year_column set → cohort_year read from column (coerced, validated).
+- Boundary errors (all LocatedInputError): malformed student_id, non-numeric
+  score, boolean score, missing/duplicate header, empty sheet, header_row past
+  the data, missing/out-of-range sheet, student_id=None with a present score,
+  non-numeric / out-of-range cohort_year.
+- Determinism: two reads produce equal entries; stable sort order.
+- source_record: source_id/origin_module/origin_layer/sha256/ingested_at, and
+  caller-supplied source_path used verbatim.
+- SourceReadResult / compute_sha256 importable and correct.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from pathlib import Path
 
@@ -32,14 +33,15 @@ from metric_codex.output.sha256 import compute_sha256
 from paideia_shared.schemas.metric_codex import EntryKind, SourceRecord
 
 # ---------------------------------------------------------------------------
-# Fixture builders
+# Fixtures / builders
 # ---------------------------------------------------------------------------
 
 _SEMESTER = "2026-1"
 _COURSE_SLUG = "anatomy"
 _INGESTED_AT = "2026-06-19T00:00:00Z"
+_SOURCE_PATH = "data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx"
 
-# Minimal SchoolExcelMap with score_total + score_percent + attendance all mapped.
+# Map with score_total + score_percent + attendance all mapped.
 _FULL_EXCEL_MAP = SchoolExcelMap(
     semester=_SEMESTER,
     course_slug=_COURSE_SLUG,
@@ -82,12 +84,13 @@ _COHORT_YEAR_MAP = SchoolExcelMap(
 )
 
 
-def _make_workbook(tmp_path: Path, rows: list[list]) -> Path:
+def _make_workbook(tmp_path: Path, rows: list[list], *, name: str = "grades.xlsx") -> Path:
     """Write a single-sheet workbook with the given row data to tmp_path.
 
     Args:
         tmp_path: Directory to write the workbook into.
         rows: List of rows; each row is a list of cell values.
+        name: Output file name.
 
     Returns:
         Path to the written xlsx file.
@@ -96,18 +99,80 @@ def _make_workbook(tmp_path: Path, rows: list[list]) -> Path:
     ws = wb.active
     for row in rows:
         ws.append(row)
-    path = tmp_path / "grades.xlsx"
+    path = tmp_path / name
     wb.save(path)
     return path
 
 
+def _read(path: Path, excel_map: SchoolExcelMap = _TOTAL_ONLY_MAP) -> SourceReadResult:
+    """Call read_school_excel with the standard test ingested_at / source_path."""
+    return read_school_excel(
+        path,
+        excel_map,
+        ingested_at=_INGESTED_AT,
+        source_path=_SOURCE_PATH,
+    )
+
+
+@pytest.fixture
+def one_student_result(tmp_path: Path) -> SourceReadResult:
+    """A SourceReadResult for one student with total/percent/attendance present."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점", "환산점수", "출석"],
+            [2026000001, "테스트A", 85, 90.5, 15],
+        ],
+    )
+    return _read(path, _FULL_EXCEL_MAP)
+
+
 # ---------------------------------------------------------------------------
-# Happy-path: 2 students × (total, percent, attendance)
+# Happy path — one student, all fields asserted on the shared fixture
 # ---------------------------------------------------------------------------
 
 
-def test_happy_path_returns_source_read_result(tmp_path: Path) -> None:
-    """read_school_excel returns a SourceReadResult."""
+def test_happy_path_returns_source_read_result(one_student_result: SourceReadResult) -> None:
+    """read_school_excel returns a frozen SourceReadResult."""
+    assert isinstance(one_student_result, SourceReadResult)
+    assert dataclasses.is_dataclass(SourceReadResult)
+
+
+def test_happy_path_entries(one_student_result: SourceReadResult) -> None:
+    """One student × 3 kinds → 3 correct minimal-layer CodexEntry rows."""
+    entries = one_student_result.entries
+    assert len(entries) == 3
+
+    by_kind = {e.entry_kind: e for e in entries}
+    assert set(by_kind) == {
+        EntryKind.score_total,
+        EntryKind.score_percent,
+        EntryKind.attendance,
+    }
+    assert by_kind[EntryKind.score_total].value_num == 85.0
+    assert by_kind[EntryKind.score_percent].value_num == 90.5
+    assert by_kind[EntryKind.attendance].value_num == 15.0
+
+    for entry in entries:
+        assert entry.layer == "minimal"
+        assert entry.student_id == "2026000001"
+        assert entry.cohort_year == 2026  # derived from id prefix
+        assert entry.semester == "2026-1"
+        assert entry.source_id == "school_excel:grades.xlsx"
+        assert entry.key == entry.entry_kind.value
+        assert entry.value_text is None
+        assert entry.domain is None
+        assert entry.item_ref is None
+        assert entry.observed_at is None
+
+
+def test_happy_path_identities(one_student_result: SourceReadResult) -> None:
+    """identities maps student_id → name_kr."""
+    assert one_student_result.identities == {"2026000001": "테스트A"}
+
+
+def test_happy_path_two_students_identities(tmp_path: Path) -> None:
+    """Two students → 6 entries and both identities captured."""
     path = _make_workbook(
         tmp_path,
         [
@@ -116,229 +181,22 @@ def test_happy_path_returns_source_read_result(tmp_path: Path) -> None:
             [2026000002, "테스트B", 70, 75.0, 12],
         ],
     )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert isinstance(result, SourceReadResult)
-
-
-def test_happy_path_entry_count(tmp_path: Path) -> None:
-    """Two students × 3 kinds → 6 CodexEntry rows."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-            [2026000002, "테스트B", 70, 75.0, 12],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
+    result = _read(path, _FULL_EXCEL_MAP)
 
     assert len(result.entries) == 6
-
-
-def test_happy_path_entry_kinds(tmp_path: Path) -> None:
-    """All three entry kinds are emitted for each student."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    kinds = {e.entry_kind for e in result.entries}
-    assert EntryKind.score_total in kinds
-    assert EntryKind.score_percent in kinds
-    assert EntryKind.attendance in kinds
-
-
-def test_happy_path_entry_values(tmp_path: Path) -> None:
-    """Numeric values are correctly read as float."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    by_kind = {e.entry_kind: e.value_num for e in result.entries}
-    assert by_kind[EntryKind.score_total] == 85.0
-    assert by_kind[EntryKind.score_percent] == 90.5
-    assert by_kind[EntryKind.attendance] == 15.0
-
-
-def test_happy_path_layer_minimal(tmp_path: Path) -> None:
-    """All entries have layer='minimal'."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.layer == "minimal" for e in result.entries)
-
-
-def test_happy_path_student_id_normalized(tmp_path: Path) -> None:
-    """student_id is normalized to 10-digit string."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.student_id == "2026000001" for e in result.entries)
-
-
-def test_happy_path_cohort_year_from_id_prefix(tmp_path: Path) -> None:
-    """cohort_year is derived from first 4 digits of student_id when no column set."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.cohort_year == 2026 for e in result.entries)
-
-
-def test_happy_path_semester_set(tmp_path: Path) -> None:
-    """semester matches the excel_map.semester."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.semester == "2026-1" for e in result.entries)
-
-
-def test_happy_path_source_id_on_entries(tmp_path: Path) -> None:
-    """All entries carry source_id = 'school_excel:<filename>'."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    expected_source_id = f"school_excel:{path.name}"
-    assert all(e.source_id == expected_source_id for e in result.entries)
-
-
-def test_happy_path_identities_captured(tmp_path: Path) -> None:
-    """identities dict maps student_id → name_kr for all students."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-            [2026000002, "테스트B", 70, 75.0, 12],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
     assert result.identities == {
         "2026000001": "테스트A",
         "2026000002": "테스트B",
     }
 
 
-def test_happy_path_key_equals_entry_kind_value(tmp_path: Path) -> None:
-    """Each entry's key equals its entry_kind value (e.g. 'score_total')."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    for entry in result.entries:
-        assert entry.key == entry.entry_kind.value
-
-
-def test_happy_path_value_text_is_none(tmp_path: Path) -> None:
-    """value_text is None for all minimal-layer numeric entries."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.value_text is None for e in result.entries)
-
-
-def test_happy_path_domain_and_item_ref_none(tmp_path: Path) -> None:
-    """domain and item_ref are None for school-level minimal entries."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.domain is None for e in result.entries)
-    assert all(e.item_ref is None for e in result.entries)
-
-
-def test_happy_path_observed_at_none(tmp_path: Path) -> None:
-    """observed_at is None for school Excel entries (no event date in file)."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, 90.5, 15],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.observed_at is None for e in result.entries)
-
-
 # ---------------------------------------------------------------------------
-# Blank score cell for one kind → that kind skipped, others present
+# Blank cells
 # ---------------------------------------------------------------------------
 
 
 def test_blank_score_cell_skipped(tmp_path: Path) -> None:
-    """A blank score cell does not emit a CodexEntry for that kind."""
-    # score_percent is None (blank).
+    """A blank score cell skips that kind (no error); other kinds still emitted."""
     path = _make_workbook(
         tmp_path,
         [
@@ -346,37 +204,14 @@ def test_blank_score_cell_skipped(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85, None, 15],
         ],
     )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
+    result = _read(path, _FULL_EXCEL_MAP)
 
     kinds = {e.entry_kind for e in result.entries}
-    assert EntryKind.score_percent not in kinds
-    assert EntryKind.score_total in kinds
-    assert EntryKind.attendance in kinds
+    assert kinds == {EntryKind.score_total, EntryKind.attendance}
 
 
-def test_blank_score_cell_no_error(tmp_path: Path) -> None:
-    """A blank score cell does not raise an error."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", 85, None, 15],
-        ],
-    )
-
-    # Should not raise.
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-    assert len(result.entries) == 2  # only score_total and attendance
-
-
-# ---------------------------------------------------------------------------
-# All score cells blank → identity present, zero entries
-# ---------------------------------------------------------------------------
-
-
-def test_all_scores_blank_no_entries(tmp_path: Path) -> None:
-    """Student with all blank score cells contributes no CodexEntry rows."""
+def test_all_scores_blank_identity_only(tmp_path: Path) -> None:
+    """All-blank score cells → identity present, zero entries, no error."""
     path = _make_workbook(
         tmp_path,
         [
@@ -384,117 +219,67 @@ def test_all_scores_blank_no_entries(tmp_path: Path) -> None:
             [2026000001, "테스트A", None, None, None],
         ],
     )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
+    result = _read(path, _FULL_EXCEL_MAP)
 
     assert result.entries == []
-
-
-def test_all_scores_blank_identity_present(tmp_path: Path) -> None:
-    """Student with all blank scores still has their identity recorded."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "환산점수", "출석"],
-            [2026000001, "테스트A", None, None, None],
-        ],
-    )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert "2026000001" in result.identities
-    assert result.identities["2026000001"] == "테스트A"
+    assert result.identities == {"2026000001": "테스트A"}
 
 
 # ---------------------------------------------------------------------------
-# cohort_year_column set → cohort_year read from column, not id prefix
+# cohort_year_column
 # ---------------------------------------------------------------------------
 
 
-def test_cohort_year_from_column(tmp_path: Path) -> None:
-    """When cohort_year_column is configured, it overrides id-prefix derivation."""
+@pytest.mark.parametrize("raw_year, expected", [(2024, 2024), (2024.0, 2024), (2023, 2023)])
+def test_cohort_year_from_column(tmp_path: Path, raw_year: object, expected: int) -> None:
+    """cohort_year_column overrides id-prefix derivation; coerced to int."""
     path = _make_workbook(
         tmp_path,
         [
             ["학번", "이름", "총점", "입학년도"],
-            [2026000001, "테스트A", 85, 2024],
+            [2026000001, "테스트A", 85, raw_year],
         ],
     )
+    result = _read(path, _COHORT_YEAR_MAP)
 
-    result = read_school_excel(path, _COHORT_YEAR_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.cohort_year == 2024 for e in result.entries)
+    assert all(e.cohort_year == expected for e in result.entries)
 
 
-def test_cohort_year_column_coerced_to_int(tmp_path: Path) -> None:
-    """cohort_year column value is coerced to int (may be stored as float in Excel)."""
+def test_cohort_year_column_non_numeric_raises(tmp_path: Path) -> None:
+    """Non-numeric cohort_year value raises LocatedInputError (row + column)."""
     path = _make_workbook(
         tmp_path,
         [
             ["학번", "이름", "총점", "입학년도"],
-            [2026000001, "테스트A", 85, 2024.0],
+            [2026000001, "테스트A", 85, "졸업"],
         ],
     )
-
-    result = read_school_excel(path, _COHORT_YEAR_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.cohort_year == 2024 for e in result.entries)
-
-
-def test_cohort_year_id_prefix_differs_from_column(tmp_path: Path) -> None:
-    """When column is set and differs from id prefix, the column wins."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점", "입학년도"],
-            # id prefix is 2026 but column says 2023.
-            [2026000001, "테스트A", 85, 2023],
-        ],
-    )
-
-    result = read_school_excel(path, _COHORT_YEAR_MAP, ingested_at=_INGESTED_AT)
-
-    assert all(e.cohort_year == 2023 for e in result.entries)
-
-
-# ---------------------------------------------------------------------------
-# Error: malformed student_id cell
-# ---------------------------------------------------------------------------
-
-
-def test_malformed_student_id_raises(tmp_path: Path) -> None:
-    """Non-digit student_id value raises LocatedInputError."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            ["BADID", "테스트A", 85],
-        ],
-    )
-
-    with pytest.raises(LocatedInputError):
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-
-def test_malformed_student_id_error_contains_row(tmp_path: Path) -> None:
-    """LocatedInputError for bad student_id includes the data row number."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            ["BADID", "테스트A", 85],
-        ],
-    )
-
     with pytest.raises(LocatedInputError) as exc_info:
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    # data row 2 (1-based: row 1 = header, row 2 = first data row)
+        _read(path, _COHORT_YEAR_MAP)
+    assert "입학년도" in str(exc_info.value)
     assert "2" in str(exc_info.value)
 
 
-def test_malformed_student_id_error_is_value_error(tmp_path: Path) -> None:
-    """LocatedInputError is catchable as ValueError (CLI exit-2 contract)."""
+def test_cohort_year_column_out_of_range_raises(tmp_path: Path) -> None:
+    """cohort_year outside [2000, 2100] raises LocatedInputError."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점", "입학년도"],
+            [2026000001, "테스트A", 85, 1999],
+        ],
+    )
+    with pytest.raises(LocatedInputError):
+        _read(path, _COHORT_YEAR_MAP)
+
+
+# ---------------------------------------------------------------------------
+# Boundary errors — student_id
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_student_id_raises_with_row(tmp_path: Path) -> None:
+    """Non-digit student_id raises LocatedInputError naming the data row."""
     path = _make_workbook(
         tmp_path,
         [
@@ -502,48 +287,33 @@ def test_malformed_student_id_error_is_value_error(tmp_path: Path) -> None:
             ["BADID", "테스트A", 85],
         ],
     )
-
-    with pytest.raises(ValueError):
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-
-# ---------------------------------------------------------------------------
-# Error: non-numeric score cell
-# ---------------------------------------------------------------------------
-
-
-def test_non_numeric_score_raises(tmp_path: Path) -> None:
-    """Non-numeric value in score cell raises LocatedInputError."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", "not-a-number"],
-        ],
-    )
-
-    with pytest.raises(LocatedInputError):
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-
-def test_non_numeric_score_error_contains_row(tmp_path: Path) -> None:
-    """LocatedInputError for bad score includes the row number."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", "not-a-number"],
-        ],
-    )
-
     with pytest.raises(LocatedInputError) as exc_info:
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
+        _read(path)
     assert "2" in str(exc_info.value)
+    # LocatedInputError subclasses ValueError (CLI exit-2 trap).
+    assert isinstance(exc_info.value, ValueError)
 
 
-def test_non_numeric_score_error_contains_column(tmp_path: Path) -> None:
-    """LocatedInputError for bad score includes the column header name."""
+def test_none_student_id_with_score_raises(tmp_path: Path) -> None:
+    """student_id=None with a present score → LocatedInputError (no silent skip)."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점"],
+            [None, "테스트A", 85],
+        ],
+    )
+    with pytest.raises(LocatedInputError):
+        _read(path)
+
+
+# ---------------------------------------------------------------------------
+# Boundary errors — score cells
+# ---------------------------------------------------------------------------
+
+
+def test_non_numeric_score_raises_with_row_and_column(tmp_path: Path) -> None:
+    """Non-numeric score raises LocatedInputError naming row and column."""
     path = _make_workbook(
         tmp_path,
         [
@@ -551,21 +321,34 @@ def test_non_numeric_score_error_contains_column(tmp_path: Path) -> None:
             [2026000001, "테스트A", "not-a-number"],
         ],
     )
-
     with pytest.raises(LocatedInputError) as exc_info:
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
+        _read(path)
+    msg = str(exc_info.value)
+    assert "2" in msg
+    assert "총점" in msg
 
+
+def test_boolean_score_raises(tmp_path: Path) -> None:
+    """A boolean score cell raises LocatedInputError (not coerced to 1.0/0.0)."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점"],
+            [2026000001, "테스트A", True],
+        ],
+    )
+    with pytest.raises(LocatedInputError) as exc_info:
+        _read(path)
     assert "총점" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
-# Error: configured header missing from sheet
+# Boundary errors — headers
 # ---------------------------------------------------------------------------
 
 
-def test_missing_header_raises(tmp_path: Path) -> None:
-    """If a configured header column is absent from the sheet, LocatedInputError is raised."""
-    # Sheet has no '총점' column but excel_map expects it.
+def test_missing_score_header_names_header(tmp_path: Path) -> None:
+    """A configured header absent from the sheet raises LocatedInputError naming it."""
     path = _make_workbook(
         tmp_path,
         [
@@ -573,29 +356,13 @@ def test_missing_header_raises(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85],
         ],
     )
-
-    with pytest.raises(LocatedInputError):
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-
-def test_missing_header_error_mentions_header_name(tmp_path: Path) -> None:
-    """LocatedInputError for missing header names the missing header."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "WRONG_HEADER"],
-            [2026000001, "테스트A", 85],
-        ],
-    )
-
     with pytest.raises(LocatedInputError) as exc_info:
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
+        _read(path)
     assert "총점" in str(exc_info.value)
 
 
 def test_missing_student_id_header_raises(tmp_path: Path) -> None:
-    """If student_id column header is absent, LocatedInputError is raised."""
+    """Absent student_id header raises LocatedInputError."""
     path = _make_workbook(
         tmp_path,
         [
@@ -603,18 +370,43 @@ def test_missing_student_id_header_raises(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85],
         ],
     )
+    with pytest.raises(LocatedInputError):
+        _read(path)
+
+
+def test_duplicate_header_raises(tmp_path: Path) -> None:
+    """Duplicate column headers raise LocatedInputError (no silent overwrite)."""
+    # '총점' appears twice — last-wins would lose the first column's data.
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점", "총점"],
+            [2026000001, "테스트A", 85, 99],
+        ],
+    )
+    with pytest.raises(LocatedInputError) as exc_info:
+        _read(path)
+    assert "총점" in str(exc_info.value)
+    assert "duplicate" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Boundary errors — empty / short sheets
+# ---------------------------------------------------------------------------
+
+
+def test_empty_sheet_raises(tmp_path: Path) -> None:
+    """An empty sheet (no rows) raises LocatedInputError, not bare StopIteration."""
+    wb = openpyxl.Workbook()
+    path = tmp_path / "empty.xlsx"
+    wb.save(path)
 
     with pytest.raises(LocatedInputError):
-        read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
+        _read(path)
 
 
-# ---------------------------------------------------------------------------
-# Error: sheet not found
-# ---------------------------------------------------------------------------
-
-
-def test_sheet_by_name_not_found_raises(tmp_path: Path) -> None:
-    """Referencing a sheet by name that doesn't exist raises LocatedInputError."""
+def test_header_row_past_data_raises(tmp_path: Path) -> None:
+    """header_row beyond the populated range raises LocatedInputError."""
     path = _make_workbook(
         tmp_path,
         [
@@ -622,7 +414,32 @@ def test_sheet_by_name_not_found_raises(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85],
         ],
     )
+    # header_row=10 is far past the 2 populated rows.
+    far_map = SchoolExcelMap(
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        sheet=0,
+        header_row=10,
+        columns=ColumnMap(student_id="학번", score_total="총점"),
+    )
+    with pytest.raises(LocatedInputError):
+        read_school_excel(path, far_map, ingested_at=_INGESTED_AT, source_path=_SOURCE_PATH)
 
+
+# ---------------------------------------------------------------------------
+# Boundary errors — sheet selection
+# ---------------------------------------------------------------------------
+
+
+def test_sheet_by_name_not_found_raises(tmp_path: Path) -> None:
+    """A sheet name that does not exist raises LocatedInputError."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점"],
+            [2026000001, "테스트A", 85],
+        ],
+    )
     bad_map = SchoolExcelMap(
         semester=_SEMESTER,
         course_slug=_COURSE_SLUG,
@@ -630,13 +447,32 @@ def test_sheet_by_name_not_found_raises(tmp_path: Path) -> None:
         header_row=1,
         columns=ColumnMap(student_id="학번", score_total="총점"),
     )
-
     with pytest.raises(LocatedInputError):
-        read_school_excel(path, bad_map, ingested_at=_INGESTED_AT)
+        read_school_excel(path, bad_map, ingested_at=_INGESTED_AT, source_path=_SOURCE_PATH)
+
+
+def test_sheet_index_out_of_range_raises(tmp_path: Path) -> None:
+    """A sheet index beyond the workbook's sheet count raises LocatedInputError."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점"],
+            [2026000001, "테스트A", 85],
+        ],
+    )
+    bad_map = SchoolExcelMap(
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        sheet=5,  # workbook has only 1 sheet
+        header_row=1,
+        columns=ColumnMap(student_id="학번", score_total="총점"),
+    )
+    with pytest.raises(LocatedInputError):
+        read_school_excel(path, bad_map, ingested_at=_INGESTED_AT, source_path=_SOURCE_PATH)
 
 
 # ---------------------------------------------------------------------------
-# Determinism: two reads produce equal entries
+# Determinism
 # ---------------------------------------------------------------------------
 
 
@@ -650,15 +486,11 @@ def test_determinism_equal_entries(tmp_path: Path) -> None:
             [2026000002, "테스트B", 70, 75.0, 12],
         ],
     )
-
-    result1 = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-    result2 = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    assert result1.entries == result2.entries
+    assert _read(path, _FULL_EXCEL_MAP).entries == _read(path, _FULL_EXCEL_MAP).entries
 
 
 def test_determinism_stable_sort_order(tmp_path: Path) -> None:
-    """Entries are sorted deterministically by (student_id, entry_kind)."""
+    """Entries are sorted by (student_id, entry_kind, key) regardless of row order."""
     path = _make_workbook(
         tmp_path,
         [
@@ -667,20 +499,29 @@ def test_determinism_stable_sort_order(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85, 90.5, 15],
         ],
     )
-
-    result = read_school_excel(path, _FULL_EXCEL_MAP, ingested_at=_INGESTED_AT)
-
-    # First student_id in sorted order should be 2026000001.
+    result = _read(path, _FULL_EXCEL_MAP)
     assert result.entries[0].student_id == "2026000001"
 
 
 # ---------------------------------------------------------------------------
-# source_record correctness
+# source_record
 # ---------------------------------------------------------------------------
 
 
-def test_source_record_type(tmp_path: Path) -> None:
-    """source_record is a SourceRecord instance."""
+def test_source_record_fields(one_student_result: SourceReadResult) -> None:
+    """source_record carries the right provenance fields."""
+    rec = one_student_result.source_record
+    assert isinstance(rec, SourceRecord)
+    assert rec.source_id == "school_excel:grades.xlsx"
+    assert rec.origin_module == "school"
+    assert rec.origin_layer == "bronze"
+    assert rec.ingested_at == _INGESTED_AT
+    assert len(rec.sha256) == 64
+    assert all(c in "0123456789abcdef" for c in rec.sha256)
+
+
+def test_source_path_used_verbatim(tmp_path: Path) -> None:
+    """source_record.source_path is the caller-supplied string, unmodified."""
     path = _make_workbook(
         tmp_path,
         [
@@ -688,71 +529,16 @@ def test_source_record_type(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85],
         ],
     )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert isinstance(result.source_record, SourceRecord)
-
-
-def test_source_record_source_id(tmp_path: Path) -> None:
-    """source_record.source_id is 'school_excel:<filename>'."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
+    result = read_school_excel(
+        path,
+        _TOTAL_ONLY_MAP,
+        ingested_at=_INGESTED_AT,
+        source_path="data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx",
     )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert result.source_record.source_id == f"school_excel:{path.name}"
-
-
-def test_source_record_origin_module(tmp_path: Path) -> None:
-    """source_record.origin_module == 'school'."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
+    assert (
+        result.source_record.source_path
+        == "data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx"
     )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert result.source_record.origin_module == "school"
-
-
-def test_source_record_origin_layer(tmp_path: Path) -> None:
-    """source_record.origin_layer == 'bronze'."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
-    )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert result.source_record.origin_layer == "bronze"
-
-
-def test_source_record_sha256_length(tmp_path: Path) -> None:
-    """source_record.sha256 is a 64-character hex string."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
-    )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert len(result.source_record.sha256) == 64
-    assert all(c in "0123456789abcdef" for c in result.source_record.sha256)
 
 
 def test_source_record_sha256_matches_file(tmp_path: Path) -> None:
@@ -764,82 +550,25 @@ def test_source_record_sha256_matches_file(tmp_path: Path) -> None:
             [2026000001, "테스트A", 85],
         ],
     )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    expected = hashlib.sha256(path.read_bytes()).hexdigest()
-    assert result.source_record.sha256 == expected
-
-
-def test_source_record_ingested_at(tmp_path: Path) -> None:
-    """source_record.ingested_at matches the passed ingested_at string."""
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
-    )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
-    assert result.source_record.ingested_at == _INGESTED_AT
+    result = _read(path)
+    assert result.source_record.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
-# compute_sha256 importable and correct
+# compute_sha256 + SourceReadResult helpers
 # ---------------------------------------------------------------------------
-
-
-def test_compute_sha256_importable() -> None:
-    """compute_sha256 is importable from metric_codex.output.sha256."""
-    from metric_codex.output.sha256 import compute_sha256  # noqa: F401 (import check)
 
 
 def test_compute_sha256_correct(tmp_path: Path) -> None:
-    """compute_sha256 returns the SHA-256 hex digest of file bytes."""
+    """compute_sha256 returns the 64-hex SHA-256 digest of file bytes."""
     p = tmp_path / "test.bin"
     p.write_bytes(b"hello world")
-
-    expected = hashlib.sha256(b"hello world").hexdigest()
-    assert compute_sha256(p) == expected
-
-
-def test_compute_sha256_returns_64_hex_chars(tmp_path: Path) -> None:
-    """compute_sha256 always returns exactly 64 lowercase hex chars."""
-    p = tmp_path / "file.bin"
-    p.write_bytes(b"")
-
     digest = compute_sha256(p)
+    assert digest == hashlib.sha256(b"hello world").hexdigest()
     assert len(digest) == 64
-    assert all(c in "0123456789abcdef" for c in digest)
 
 
-# ---------------------------------------------------------------------------
-# SourceReadResult importable and dataclass contract
-# ---------------------------------------------------------------------------
-
-
-def test_source_read_result_importable() -> None:
-    """SourceReadResult is importable from metric_codex.ingest.result."""
-    from metric_codex.ingest.result import SourceReadResult  # noqa: F401
-
-
-def test_source_read_result_is_frozen(tmp_path: Path) -> None:
-    """SourceReadResult is a frozen dataclass (immutable)."""
-    import dataclasses
-
-    assert dataclasses.is_dataclass(SourceReadResult)
-
-    path = _make_workbook(
-        tmp_path,
-        [
-            ["학번", "이름", "총점"],
-            [2026000001, "테스트A", 85],
-        ],
-    )
-
-    result = read_school_excel(path, _TOTAL_ONLY_MAP, ingested_at=_INGESTED_AT)
-
+def test_source_read_result_is_frozen(one_student_result: SourceReadResult) -> None:
+    """SourceReadResult is immutable."""
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
-        result.entries = []  # type: ignore[misc]
+        one_student_result.entries = []  # type: ignore[misc]

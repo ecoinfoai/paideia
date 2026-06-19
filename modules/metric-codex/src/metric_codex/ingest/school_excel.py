@@ -3,6 +3,11 @@
 Reads a school-issued ``.xlsx`` grade/attendance file and converts each
 student row into ``CodexEntry`` instances (layer="minimal").  Fail-fast
 on every boundary violation; no silent skip of malformed rows.
+
+This is the canonical shared-reader convention: ``source_path`` is supplied
+by the caller (a repo-relative string) so the resulting ``SourceRecord`` is
+byte-identical across machines.  Subsequent source readers follow the same
+signature.
 """
 
 from __future__ import annotations
@@ -10,6 +15,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import openpyxl
+from openpyxl.worksheet._read_only import ReadOnlyWorksheet
+from openpyxl.worksheet.worksheet import Worksheet
 from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind, SourceRecord
 
 from metric_codex.errors import LocatedInputError
@@ -30,7 +37,7 @@ def _select_sheet(
     wb: openpyxl.Workbook,
     sheet: str | int,
     filename: str,
-) -> openpyxl.worksheet.worksheet.Worksheet:
+) -> Worksheet | ReadOnlyWorksheet:
     """Select a worksheet by name or 0-based index.
 
     Args:
@@ -50,7 +57,7 @@ def _select_sheet(
                 f"sheet '{sheet}' not found in workbook",
                 file=filename,
             )
-        return wb[sheet]  # type: ignore[return-value]
+        return wb[sheet]
 
     # int path: 0-based index
     names = wb.sheetnames
@@ -59,11 +66,11 @@ def _select_sheet(
             f"sheet index {sheet} is out of range (workbook has {len(names)} sheet(s))",
             file=filename,
         )
-    return wb[names[sheet]]  # type: ignore[return-value]
+    return wb[names[sheet]]
 
 
 def _find_column_indices(
-    ws: openpyxl.worksheet.worksheet.Worksheet,
+    ws: Worksheet | ReadOnlyWorksheet,
     header_row: int,
     required_headers: list[str],
     filename: str,
@@ -80,17 +87,37 @@ def _find_column_indices(
         Dict mapping header text → 1-based column index.
 
     Raises:
-        LocatedInputError: If any required header is not found in the row.
+        LocatedInputError: If the header row is beyond the populated range,
+            a header text is duplicated, or any required header is absent.
     """
-    # Read the header row cells into a dict: text → col index (1-based).
+    # Fetch the header row.  ``next(gen, None)`` keeps an empty sheet (or a
+    # header_row past the populated range) inside the LocatedInputError contract
+    # instead of leaking a bare StopIteration.
+    header_cells = next(
+        ws.iter_rows(min_row=header_row, max_row=header_row),
+        None,
+    )
+    if header_cells is None:
+        raise LocatedInputError(
+            f"header row {header_row} is beyond the sheet's populated range",
+            file=filename,
+            row=header_row,
+        )
+
+    # Build text → 1-based index, rejecting duplicate headers.
     found: dict[str, int] = {}
-    for col_idx, cell in enumerate(
-        ws.iter_rows(min_row=header_row, max_row=header_row).__next__(),
-        start=1,
-    ):
+    for col_idx, cell in enumerate(header_cells, start=1):
         val = cell.value
-        if val is not None:
-            found[str(val).strip()] = col_idx
+        if val is None:
+            continue
+        text = str(val).strip()
+        if text in found:
+            raise LocatedInputError(
+                f"duplicate column header '{text}' at columns {found[text]} and {col_idx}",
+                file=filename,
+                row=header_row,
+            )
+        found[text] = col_idx
 
     # Validate that every required header is present.
     for header in required_headers:
@@ -123,8 +150,19 @@ def _coerce_score(
         The value as a float.
 
     Raises:
-        LocatedInputError: If the value cannot be coerced to float.
+        LocatedInputError: If the value is a boolean or cannot be coerced to float.
     """
+    # bool is an int subclass; float(True) == 1.0 would silently fabricate a
+    # score.  Reject it explicitly before the float() coercion.
+    if isinstance(raw, bool):
+        raise LocatedInputError(
+            "boolean is not a valid score/attendance value",
+            file=filename,
+            row=row,
+            column=column,
+            expected="numeric",
+            actual=repr(raw),
+        )
     try:
         return float(raw)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
@@ -143,6 +181,7 @@ def read_school_excel(
     excel_map: SchoolExcelMap,
     *,
     ingested_at: str,
+    source_path: str,
 ) -> SourceReadResult:
     """Read a school Excel file into minimal-layer CodexEntry rows.
 
@@ -152,10 +191,14 @@ def read_school_excel(
     other boundary error raises ``LocatedInputError`` immediately.
 
     Args:
-        path: Absolute path to the ``.xlsx`` file.
+        path: Real filesystem path to the ``.xlsx`` file (used for opening and
+            the SHA-256 digest only).
         excel_map: Parsed ``SchoolExcelMap`` config for this file.
         ingested_at: ISO-8601 UTC timestamp string to embed in the
             ``SourceRecord``.
+        source_path: Repo-relative path string recorded verbatim in the
+            ``SourceRecord.source_path`` field.  Caller-supplied so manifests
+            are byte-identical across machines (independent of cwd).
 
     Returns:
         A ``SourceReadResult`` with ``entries`` sorted by
@@ -164,8 +207,10 @@ def read_school_excel(
         ``student_id → name_kr``.
 
     Raises:
-        LocatedInputError: On any boundary violation — missing sheet,
-            missing header, invalid student_id, or non-numeric score cell.
+        LocatedInputError: On any boundary violation — missing/out-of-range
+            sheet, empty sheet, header row past the data, missing/duplicate
+            header, invalid student_id, boolean/non-numeric score cell, or an
+            invalid cohort_year.
     """
     filename = path.name
     cols = excel_map.columns
@@ -193,21 +238,21 @@ def read_school_excel(
         entries: list[CodexEntry] = []
         identities: dict[str, str | None] = {}
 
-        # Iterate data rows: from header_row+1 onward.
-        for row_tuple in ws.iter_rows(min_row=excel_map.header_row + 1):
+        student_id_idx = col_indices[cols.student_id]
+
+        # Iterate data rows: from header_row+1 onward.  ``row_num`` is computed
+        # from the offset rather than ``cell.row`` because read-only EmptyCell
+        # objects (e.g. a leading None cell) carry no ``.row`` attribute.
+        first_data_row = excel_map.header_row + 1
+        for offset, row_tuple in enumerate(ws.iter_rows(min_row=first_data_row)):
             # Skip entirely blank rows (e.g. trailing empty rows in the sheet).
             if all(cell.value is None for cell in row_tuple):
                 continue
 
-            row_num = row_tuple[0].row  # 1-based
+            row_num = first_data_row + offset  # 1-based
 
-            # Bind row_tuple at definition time via default arg to avoid B023.
-            def _cell(header: str, _row: tuple = row_tuple) -> object:  # type: ignore[assignment]
-                idx = col_indices[header]
-                return _row[idx - 1].value  # col_indices are 1-based
-
-            # Normalize student_id — fail-fast at boundary.
-            raw_id = _cell(cols.student_id)
+            # Normalize student_id — fail-fast at boundary (None included).
+            raw_id = row_tuple[student_id_idx - 1].value
             student_id = normalize_student_id(
                 raw_id,  # type: ignore[arg-type]
                 source=filename,
@@ -217,13 +262,13 @@ def read_school_excel(
             # Capture identity.
             name_kr_val: str | None = None
             if cols.name_kr is not None:
-                name_raw = _cell(cols.name_kr)
+                name_raw = row_tuple[col_indices[cols.name_kr] - 1].value
                 name_kr_val = str(name_raw).strip() if name_raw is not None else None
             identities[student_id] = name_kr_val
 
             # Derive or read cohort_year.
             if excel_map.cohort_year_column is not None:
-                raw_cy = _cell(excel_map.cohort_year_column)
+                raw_cy = row_tuple[col_indices[excel_map.cohort_year_column] - 1].value
                 try:
                     cohort_year = int(float(raw_cy))  # type: ignore[arg-type]
                 except (TypeError, ValueError) as exc:
@@ -262,7 +307,7 @@ def read_school_excel(
                 header = getattr(cols, field)
                 if header is None:
                     continue  # not configured for this source
-                raw_score = _cell(header)
+                raw_score = row_tuple[col_indices[header] - 1].value
                 if raw_score is None:
                     continue  # blank cell — skip this kind (not an error)
 
@@ -294,13 +339,6 @@ def read_school_excel(
 
     # Deterministic sort: (student_id, entry_kind, key).
     entries.sort(key=lambda e: (e.student_id, e.entry_kind, e.key))
-
-    # Build repo-relative source_path (best-effort: use the path as-is if not
-    # relative to cwd; downstream manifest callers can normalise further).
-    try:
-        source_path = str(path.relative_to(Path.cwd()))
-    except ValueError:
-        source_path = str(path)
 
     source_record = SourceRecord(
         source_id=source_id,
