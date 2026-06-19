@@ -101,6 +101,66 @@ def _file_sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def _guard_semester_course(
+    rows: list,
+    request_semester: str,
+    request_course: str,
+    config_semester: str,
+    config_course: str,
+) -> None:
+    """Fail fast unless request, config, and data agree on (semester, course).
+
+    Enforces two invariants before any analysis or output:
+
+    1. Data singularity — when ``rows`` is non-empty, every row must share a
+       single ``semester`` and a single ``course_slug`` (no mixed-cohort data).
+    2. Three-way agreement — the request, the config, and (when present) the
+       data must all carry the same ``(semester, course_slug)`` pair.
+
+    Args:
+        rows: Loaded ``CombinedAnalysisRow`` instances for the current run.
+        request_semester: Semester from the CLI request.
+        request_course: Course slug from the CLI request.
+        config_semester: ``semester`` from the loaded config.
+        config_course: ``course_slug`` from the loaded config.
+
+    Raises:
+        InputError: If the data mixes cohorts, or if any of request, config,
+            or data disagree on the semester or course slug.
+    """
+    # Invariant 1: data singularity (only meaningful when rows exist).
+    if rows:
+        data_semesters = sorted({row.semester for row in rows})
+        data_courses = sorted({row.course_slug for row in rows})
+        if len(data_semesters) > 1:
+            raise InputError(f"데이터에 복수 학기 혼재 — 단일 코호트만 허용: {data_semesters}")
+        if len(data_courses) > 1:
+            raise InputError(f"데이터에 복수 과목 혼재 — 단일 코호트만 허용: {data_courses}")
+
+    # Invariant 2a: request vs config (always checked, even with empty rows).
+    if config_semester != request_semester:
+        raise InputError(
+            f"설정 학기 불일치 — 요청={request_semester!r} 이지만 설정={config_semester!r}"
+        )
+    if config_course != request_course:
+        raise InputError(
+            f"설정 과목 불일치 — 요청={request_course!r} 이지만 설정={config_course!r}"
+        )
+
+    # Invariant 2b: data vs request (checked only when rows exist).
+    if rows:
+        data_semester = data_semesters[0]
+        data_course = data_courses[0]
+        if data_semester != request_semester:
+            raise InputError(
+                f"데이터 학기 불일치 — 요청={request_semester!r} 이지만 데이터={data_semester!r}"
+            )
+        if data_course != request_course:
+            raise InputError(
+                f"데이터 과목 불일치 — 요청={request_course!r} 이지만 데이터={data_course!r}"
+            )
+
+
 def _resolve_immersio_silver(semester: str, course: str, data_root: Path) -> tuple[Path, Path]:
     """Return (combined_path, items_path) in the immersio Silver tier.
 
@@ -274,6 +334,14 @@ def _run(
     student_ids: set[str] = {row.student_id for row in rows}
 
     reconcile_config(config, chapters, student_ids)
+
+    # ------------------------------------------------------------------
+    # Step 2b: semester/course 3-way fail-fast guard (audit M4, FR-008)
+    # ------------------------------------------------------------------
+    # Reject mixed-cohort data and any disagreement between the CLI request,
+    # the config, and the loaded data.  A clean InputError here maps to exit 2
+    # and produces no output (dirs are created only after this passes).
+    _guard_semester_course(rows, semester, course, config.semester, config.course_slug)
 
     # ------------------------------------------------------------------
     # Step 3: Detect gaps → escalate structural → compute prescriptions
