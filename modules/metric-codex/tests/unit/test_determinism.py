@@ -36,12 +36,17 @@ def test_parquet_write_options_keys() -> None:
 
 
 def test_parquet_write_options_immutable_between_calls() -> None:
-    """Two calls return equal dicts (no shared mutable state)."""
+    """Two calls return equal dicts; mutating one must not affect the next."""
     from metric_codex.output.determinism import parquet_write_options
 
     a = parquet_write_options()
     b = parquet_write_options()
     assert a == b
+
+    # Mutate the first dict — a fresh call must be unaffected (no shared state).
+    a["use_dictionary"] = True
+    c = parquet_write_options()
+    assert c["use_dictionary"] is False
 
 
 # ---------------------------------------------------------------------------

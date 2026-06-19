@@ -116,3 +116,20 @@ def test_subcommand_help_exits_zero(subcommand: str) -> None:
 
     result = app([subcommand, "--help"])
     assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# Stub handler via app() returns 3 (does not raise NotImplementedError)
+# ---------------------------------------------------------------------------
+
+
+def test_app_stub_handler_returns_three() -> None:
+    """app() catches a stub handler's NotImplementedError and returns exit 3.
+
+    Wiring units will replace each stub handler with real logic and adjust
+    this expectation as they go.
+    """
+    from metric_codex.cli.main import app
+
+    result = app(["ingest", "--semester", "2026-1", "--course", "x"])
+    assert result == 3

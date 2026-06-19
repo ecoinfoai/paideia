@@ -254,16 +254,23 @@ def app(argv: list[str] | None = None) -> int:
     handler = _COMMAND_HANDLERS.get(args.command)
     if handler is None:  # pragma: no cover
         parser.error(f"unknown command: {args.command}")
-        return 2
 
     try:
         return handler(args)
     except NotImplementedError:
-        # Stub handlers — propagate as exit 3 (pipeline not yet wired).
-        raise
+        # Stub handlers — pipeline not yet wired. Treat as a pipeline step
+        # failure (exit 3) rather than letting the traceback escape.
+        print(
+            f"metric-codex: '{args.command}' is not yet implemented",
+            file=sys.stderr,
+        )
+        return 3
     except ValueError as exc:
         print(f"ERROR [metric-codex]: input/config validation error — {exc}", file=sys.stderr)
         return 2
+    # TODO(U2b/generate): add `except BackendUnreachableError: return 4` when the
+    # api backend is wired (BackendUnreachableError subclasses RuntimeError, so it
+    # must be caught BEFORE the RuntimeError branch below — order matters).
     except RuntimeError as exc:
         print(f"ERROR [metric-codex]: pipeline step failed — {exc}", file=sys.stderr)
         return 3

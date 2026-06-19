@@ -145,7 +145,7 @@ def test_write_manifest_produces_valid_json(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(parsed, dict)
@@ -157,7 +157,7 @@ def test_write_manifest_sorted_keys(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     keys = list(parsed.keys())
@@ -172,8 +172,8 @@ def test_write_manifest_byte_identical_two_writes(tmp_path: Path) -> None:
     path_a = tmp_path / "manifest_a.json"
     path_b = tmp_path / "manifest_b.json"
 
-    write_manifest(manifest, path_a)
-    write_manifest(manifest, path_b)
+    write_manifest(path_a, manifest)
+    write_manifest(path_b, manifest)
 
     assert path_a.read_bytes() == path_b.read_bytes()
 
@@ -184,7 +184,7 @@ def test_write_manifest_roundtrip(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     raw = json.loads(path.read_text(encoding="utf-8"))
     restored = MetricCodexManifest.model_validate(raw)
@@ -216,7 +216,7 @@ def test_write_manifest_ensure_ascii_false(tmp_path: Path) -> None:
         ),
     )
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     content = path.read_text(encoding="utf-8")
     assert "성적.xlsx" in content, "Korean key must appear as-is (ensure_ascii=False)"
@@ -229,7 +229,7 @@ def test_write_manifest_file_exists_after_write(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     assert path.exists()
     assert path.stat().st_size > 0
@@ -241,7 +241,7 @@ def test_write_manifest_creates_parent_dirs(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     nested = tmp_path / "deep" / "nested" / "manifest_metric-codex.json"
-    write_manifest(manifest, nested)
+    write_manifest(nested, manifest)
 
     assert nested.exists()
 
@@ -252,7 +252,7 @@ def test_write_manifest_trailing_newline(tmp_path: Path) -> None:
 
     manifest = _build_test_manifest()
     path = tmp_path / "manifest_metric-codex.json"
-    write_manifest(manifest, path)
+    write_manifest(path, manifest)
 
     content = path.read_text(encoding="utf-8")
     assert content.endswith("\n")

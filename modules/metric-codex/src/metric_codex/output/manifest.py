@@ -28,7 +28,7 @@ Usage::
         entry_count=126,
         bundle_summary=summary,
     )
-    write_manifest(m, gold_dir / "manifest_metric-codex.json")
+    write_manifest(gold_dir / "manifest_metric-codex.json", m)
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def build_manifest(
     )
 
 
-def write_manifest(manifest: MetricCodexManifest, path: Path) -> None:
+def write_manifest(path: Path, manifest: MetricCodexManifest) -> None:
     """Serialise ``manifest`` to a deterministic UTF-8 JSON file.
 
     Output properties:
@@ -110,8 +110,8 @@ def write_manifest(manifest: MetricCodexManifest, path: Path) -> None:
     - Parent directories are created if they do not exist.
 
     Args:
-        manifest: Validated MetricCodexManifest to serialise.
         path: Destination path (e.g. ``gold_dir / "manifest_metric-codex.json"``).
+        manifest: Validated MetricCodexManifest to serialise.
     """
     # Serialise first — if it fails, no filesystem side-effect.
     raw = manifest.model_dump(mode="json")
