@@ -200,3 +200,14 @@ class TestWriteXlsxInsufficient:
         write_xlsx(_make_gaps(), _make_recs(), out1, _WHEN, insufficient=insuf)
         write_xlsx(_make_gaps(), _make_recs(), out2, _WHEN, insufficient=insuf)
         assert out1.read_bytes() == out2.read_bytes()
+
+
+class TestXlsxSheetOrder:
+    """T026 (FR-011): sheet tab order must be 빈틈·변경권고·정렬·타당도·집단대비."""
+
+    def test_sheet_order(self, tmp_path: Path) -> None:
+        """wb.sheetnames must be exactly ['빈틈','변경권고','정렬','타당도','집단대비']."""
+        out = tmp_path / "retro.xlsx"
+        write_xlsx(_make_gaps(), _make_recs(), out, _WHEN)
+        wb = load_workbook(out, read_only=True)
+        assert wb.sheetnames == ["빈틈", "변경권고", "정렬", "타당도", "집단대비"]

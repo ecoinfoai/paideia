@@ -297,7 +297,7 @@ def write_xlsx(
     validity_table: list[dict] | None = None,
     insufficient: list[InsufficientEvidenceUnit] | None = None,
 ) -> None:
-    """Write ``빈틈``, ``변경권고``, ``집단대비``, ``정렬``, ``타당도`` sheets.
+    """Write ``빈틈``, ``변경권고``, ``정렬``, ``타당도``, ``집단대비`` sheets.
 
     Never calls ``datetime.now()`` internally.  ``finalize_xlsx`` is
     called after ``save()`` to pin ``<dcterms:modified>`` and
@@ -339,9 +339,9 @@ def write_xlsx(
 
     _build_gap_sheet(wb, gaps, insufficient or [])
     _build_rec_sheet(wb, recs)
-    _build_contrast_sheet(wb, gaps, prescriptions or {})
     _build_align_sheet(wb, alignment_findings or [])
     _build_validity_sheet(wb, validity_table or [])
+    _build_contrast_sheet(wb, gaps, prescriptions or {})
 
     # Pin workbook-level metadata
     wb.properties.creator = _PRODUCER
