@@ -245,6 +245,6 @@ class TestPerfSmoke:
         ]:
             assert (gold / artefact).exists(), f"Missing: {artefact}"
         # FR-012: the manifest is a Silver-layer artefact.
-        assert (
-            data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
-        ).exists(), "Missing: manifest_retro.json"
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists(), (
+            "Missing: manifest_retro.json"
+        )

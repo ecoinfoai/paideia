@@ -262,9 +262,7 @@ class TestEmptyChapter:
 
         gold = data_root / "gold" / "retro-mester" / _KEY
         assert (gold / "CQI회고보고서.md").exists()
-        assert (
-            data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
-        ).exists()
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -458,9 +456,7 @@ class TestChapterLabelMismatch:
 
         gold = data_root / "gold" / "retro-mester" / _KEY
         assert (gold / "CQI회고보고서.md").exists()
-        assert (
-            data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json"
-        ).exists()
+        assert (data_root / "silver" / "retro-mester" / _KEY / "manifest_retro.json").exists()
 
 
 # ---------------------------------------------------------------------------
