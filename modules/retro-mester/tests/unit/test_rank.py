@@ -274,3 +274,42 @@ class TestRankChanges:
 
         assert recs == []
         assert math.isclose(ratio, 0.0, abs_tol=1e-9)
+
+
+class TestRankInsufficientCoverage:
+    """T009: insufficient (근거부족) units count as permanently-uncovered.
+
+    The coverage denominator must include insufficient units so the reported
+    uncovered_ratio is honest (lower coverage), per FR-002.
+    """
+
+    def test_insufficient_lowers_coverage_via_denominator(self) -> None:
+        """근거부족 단원이 분모에 포함되어 커버리지가 정직하게 낮아짐."""
+        # 3 gaps, all covered (< 5) → without insufficient, ratio == 0.0.
+        gaps = [_make_gap(chapter=f"{i}장", n_below=5) for i in range(1, 4)]
+        config = _make_config()
+
+        _, ratio_no_insuf = rank_changes(gaps, config, insufficient_count=0)
+        _, ratio_with_insuf = rank_changes(gaps, config, insufficient_count=2)
+
+        # Without insufficient: all 3 covered → 0.0.
+        assert math.isclose(ratio_no_insuf, 0.0, abs_tol=1e-9)
+        # With 2 insufficient: total=5, uncovered=(3-3)+2=2 → 2/5.
+        assert math.isclose(ratio_with_insuf, 2 / 5, rel_tol=1e-9)
+
+    def test_empty_gaps_with_insufficient_ratio_is_one(self) -> None:
+        """No gaps but insufficient_count>0 → uncovered_ratio == 1.0, not 0.0."""
+        config = _make_config()
+        recs, ratio = rank_changes([], config, insufficient_count=3)
+
+        assert recs == []
+        assert math.isclose(ratio, 1.0, abs_tol=1e-9)
+
+    def test_uncovered_gaps_plus_insufficient(self) -> None:
+        """uncovered_ratio counts both uncovered gaps and insufficient units."""
+        # 7 gaps → 5 covered, 2 uncovered.  +1 insufficient → total=8, uncov=3.
+        gaps = [_make_gap(chapter=f"{i}장", n_below=i) for i in range(1, 8)]
+        config = _make_config()
+        _, ratio = rank_changes(gaps, config, insufficient_count=1)
+
+        assert math.isclose(ratio, 3 / 8, rel_tol=1e-9)
