@@ -926,8 +926,6 @@ def _run_distribute(args: argparse.Namespace) -> int:
     Raises:
         LocatedInputError: On boundary failures (caught by ``app`` → exit 2).
     """
-    import re
-
     from metric_codex.distribute.bundles import group_by_advisor, write_advisor_bundles
     from metric_codex.distribute.roster import load_roster
     from metric_codex.distribute.summary import build_summary, write_unassigned_report
@@ -946,27 +944,15 @@ def _run_distribute(args: argparse.Namespace) -> int:
     roster_path: Path = args.roster or (own_bronze / "지도교수배정.yaml")
     roster = load_roster(roster_path)
 
-    # 2) Group student md files by advisor; identify unassigned.
-    per_advisor, unassigned = group_by_advisor(gold_dir=own_gold, roster=roster)
+    # 2) Group student md files by advisor; identify unassigned (single 학생별
+    #    walk also yields the {student_id: name} map — no second glob needed).
+    per_advisor, unassigned, names = group_by_advisor(gold_dir=own_gold, roster=roster)
+    all_student_ids = sorted(names)
 
-    # 3) Write per-advisor bundles (atomic, no cross-leak).
+    # 3) Write per-advisor bundles (atomic, whole-tree clear, no cross-leak).
     write_advisor_bundles(gold_dir=own_gold, per_advisor=per_advisor)
 
     # 4) Build summary and write unassigned report.
-    student_dir = own_gold / "학생별"
-    all_md_files = sorted(student_dir.glob("*.md"))
-    all_student_ids = []
-    _sid_re = re.compile(r"^(\d{10})")
-    names: dict[str, str | None] = {}
-    for md_path in all_md_files:
-        stem = md_path.stem
-        m = _sid_re.match(stem)
-        if m:
-            sid = m.group(1)
-            all_student_ids.append(sid)
-            parts = stem.split("_", 1)
-            names[sid] = parts[1] if len(parts) == 2 and parts[1] else None
-
     summary = build_summary(
         all_student_ids=all_student_ids,
         per_advisor=per_advisor,

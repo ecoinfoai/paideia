@@ -391,3 +391,171 @@ class TestDistributeIndexFile:
         )
         text = index.read_text(encoding="utf-8")
         assert _SID_A in text
+
+
+class TestDistributePathTraversal:
+    """CRITICAL: advisor_id='../evil' must NOT escape 지도교수별/ into rmtree."""
+
+    def test_path_traversal_roster_exits_2(self, generated_data_root, tmp_path):
+        """A roster with advisor_id='../evil' → exit 2 (LocatedInputError)."""
+        evil_roster = tmp_path / "evil.yaml"
+        evil_roster.write_text(
+            textwrap.dedent(f"""\
+                assignments:
+                  - student_id: "{_SID_A}"
+                    advisor_id: "../evil"
+            """),
+            encoding="utf-8",
+        )
+        rc = app([
+            "distribute",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(generated_data_root),
+            "--roster", str(evil_roster),
+            "--now", "2026-06-02T00:00:00Z",
+        ])
+        assert rc == 2
+
+    def test_path_traversal_does_not_delete_sibling(self, generated_data_root, tmp_path):
+        """The destructive rmtree must NOT touch 학생별/ or 미배정.md siblings."""
+        gold = generated_data_root / "gold" / "metric-codex" / _KEY
+        student_dir = gold / "학생별"
+        before = sorted(p.name for p in student_dir.glob("*.md"))
+        assert before, "precondition: 학생별 has md files before the evil run"
+
+        evil_roster = tmp_path / "evil.yaml"
+        evil_roster.write_text(
+            textwrap.dedent(f"""\
+                assignments:
+                  - student_id: "{_SID_A}"
+                    advisor_id: "../evil"
+            """),
+            encoding="utf-8",
+        )
+        app([
+            "distribute",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(generated_data_root),
+            "--roster", str(evil_roster),
+            "--now", "2026-06-02T00:00:00Z",
+        ])
+
+        # 학생별/ untouched (no destructive escape).
+        after = sorted(p.name for p in student_dir.glob("*.md"))
+        assert after == before, "학생별/ was modified by a path-traversal advisor_id"
+        # No 'evil' directory created as a sibling of 지도교수별/.
+        assert not (gold / "evil").exists()
+
+
+class TestDistributeStaleRemovedAdvisor:
+    """I-2: an advisor in a prior roster but not the new one must not linger."""
+
+    def test_removed_advisor_dir_gone(self, generated_data_root, tmp_path):
+        bundle_root = (
+            generated_data_root / "gold" / "metric-codex" / _KEY / "지도교수별"
+        )
+
+        # First run: roster {A, B}.
+        roster_ab = tmp_path / "roster_ab.yaml"
+        _make_roster(roster_ab)
+        rc = _run_distribute(generated_data_root, roster_ab)
+        assert rc == 0
+        assert (bundle_root / _ADV_B).is_dir(), "B should exist after first run"
+
+        # Second run: roster {A only} — B is removed.
+        roster_a = tmp_path / "roster_a.yaml"
+        roster_a.write_text(
+            textwrap.dedent(f"""\
+                assignments:
+                  - student_id: "{_SID_A}"
+                    advisor_id: "{_ADV_A}"
+            """),
+            encoding="utf-8",
+        )
+        rc = _run_distribute(generated_data_root, roster_a)
+        assert rc == 0
+
+        # B's stale bundle must be gone (FR-017: no cross-leak across runs).
+        assert not (bundle_root / _ADV_B).exists(), (
+            "removed advisor B's stale bundle lingered"
+        )
+        assert (bundle_root / _ADV_A).is_dir()
+
+
+class TestDistributeNoNameStudent:
+    """M-4: a {student_id}.md (no name) student distributes + reports correctly."""
+
+    def test_no_name_student_unassigned_reported(self, generated_data_root, tmp_path):
+        """A bare {sid}.md student absent from the roster appears in 미배정.md."""
+        gold = generated_data_root / "gold" / "metric-codex" / _KEY
+        student_dir = gold / "학생별"
+        # Add a no-name student md (bare student_id stem).
+        bare_sid = "2026000099"
+        (student_dir / f"{bare_sid}.md").write_text(
+            "# 무명 학생\n\n근거 없음\n", encoding="utf-8"
+        )
+
+        roster_a = tmp_path / "roster_a.yaml"
+        roster_a.write_text(
+            textwrap.dedent(f"""\
+                assignments:
+                  - student_id: "{_SID_A}"
+                    advisor_id: "{_ADV_A}"
+            """),
+            encoding="utf-8",
+        )
+        rc = _run_distribute(generated_data_root, roster_a)
+        assert rc == 0
+
+        mibaejeong = (gold / "미배정.md").read_text(encoding="utf-8")
+        assert bare_sid in mibaejeong
+
+    def test_no_name_student_assigned_in_bundle(self, generated_data_root, tmp_path):
+        """A bare {sid}.md student in the roster lands in the advisor bundle."""
+        gold = generated_data_root / "gold" / "metric-codex" / _KEY
+        student_dir = gold / "학생별"
+        bare_sid = "2026000099"
+        (student_dir / f"{bare_sid}.md").write_text(
+            "# 무명 학생\n\n근거 없음\n", encoding="utf-8"
+        )
+
+        roster = tmp_path / "roster.yaml"
+        roster.write_text(
+            textwrap.dedent(f"""\
+                assignments:
+                  - student_id: "{bare_sid}"
+                    advisor_id: "{_ADV_A}"
+            """),
+            encoding="utf-8",
+        )
+        rc = _run_distribute(generated_data_root, roster)
+        assert rc == 0
+
+        adv_dir = gold / "지도교수별" / _ADV_A
+        assert (adv_dir / f"{bare_sid}.md").is_file()
+        index = (adv_dir / "_index.md").read_text(encoding="utf-8")
+        assert bare_sid in index
+
+
+class TestDistributeMissingStudentDir:
+    """M-5: missing 학생별/ → LocatedInputError (exit 2), not silent empty bundles."""
+
+    def test_missing_student_dir_exits_2(self, tmp_path):
+        data_root = tmp_path / "data"
+        bronze = data_root / "bronze" / "metric-codex" / _KEY
+        bronze.mkdir(parents=True)
+        roster = bronze / "지도교수배정.yaml"
+        _make_roster(roster)
+
+        # No generate run → no gold/학생별/.
+        rc = app([
+            "distribute",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--roster", str(roster),
+            "--now", "2026-06-02T00:00:00Z",
+        ])
+        assert rc == 2

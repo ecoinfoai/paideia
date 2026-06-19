@@ -37,10 +37,10 @@ def build_summary(
     """
     total = len(all_student_ids)
     assigned_count = total - len(unassigned)
-    advisor_count = sum(1 for paths in per_advisor.values() if paths)
-    per_advisor_counts = {
-        advisor_id: len(paths) for advisor_id, paths in per_advisor.items() if paths
-    }
+    # per_advisor only ever holds advisors with ≥1 advisee (group_by_advisor
+    # never inserts an empty list), so the count is just the key cardinality.
+    advisor_count = len(per_advisor)
+    per_advisor_counts = {advisor_id: len(paths) for advisor_id, paths in per_advisor.items()}
 
     return AdvisorBundleSummary(
         total_students_with_codex=total,
@@ -65,7 +65,8 @@ def write_unassigned_report(
 
     Args:
         gold_dir: The Gold-layer directory for the semester/course.
-        unassigned: Sorted list of unassigned student_ids.
+        unassigned: Unassigned student_ids, already ASC-sorted by
+            :func:`group_by_advisor`.
         names: ``{student_id: name_kr | None}`` — names are displayed when
             known, ``"(이름 미확인)"`` otherwise.
     """
@@ -73,7 +74,7 @@ def write_unassigned_report(
 
     if unassigned:
         lines = ["# 미배정 학생\n\n"]
-        for sid in sorted(unassigned):
+        for sid in unassigned:
             name = names.get(sid)
             display = name if name else "(이름 미확인)"
             lines.append(f"- {sid} {display}\n")

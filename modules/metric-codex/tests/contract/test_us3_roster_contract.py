@@ -66,6 +66,18 @@ class TestAdvisorRosterEntryValid:
         with pytest.raises(ValidationError):
             AdvisorRosterEntry(student_id="2026000001", advisor_id="")
 
+    def test_advisor_id_path_traversal_rejected(self):
+        """advisor_id with '..' / slashes / NUL must be rejected (path traversal)."""
+        for bad in ("../evil", "..", "a/b", "a\\b", "/abs", ".hidden", "a\x00b"):
+            with pytest.raises(ValidationError):
+                AdvisorRosterEntry(student_id="2026000001", advisor_id=bad)
+
+    def test_advisor_id_safe_values_allowed(self):
+        """Legitimate advisor identifiers must still validate."""
+        for ok in ("prof-kim", "prof.kim", "ADV001", "20260001", "a"):
+            entry = AdvisorRosterEntry(student_id="2026000001", advisor_id=ok)
+            assert entry.advisor_id == ok
+
 
 # ---------------------------------------------------------------------------
 # load_roster happy path
