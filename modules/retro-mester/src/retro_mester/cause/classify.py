@@ -134,7 +134,9 @@ def classify_cause(
         if config.group_roster.get(row.student_id) == config.baseline_segment
         and chapter in row.chapter_correct_rates
     ]
-    baseline_segment_mean_rate = sum(baseline_rates) / len(baseline_rates) if baseline_rates else 0.0
+    baseline_segment_mean_rate = (
+        sum(baseline_rates) / len(baseline_rates) if baseline_rates else 0.0
+    )
 
     signals: dict[str, float] = {
         "hard_share": hard_share,
