@@ -205,21 +205,25 @@ def _find_git_root_with_content(path: Path) -> Path | None:
     return None
 
 
-def _is_git_ignored(path: Path) -> bool:
+def _is_git_ignored(path: Path, *, git_root: Path) -> bool:
     """Return True if ``path`` is covered by a .gitignore rule.
 
-    Runs ``git check-ignore -q <path>`` (exit 0 = ignored, non-zero = not).
-    Only valid for paths inside a git repository.
+    Runs ``git check-ignore -q <path>`` from inside the path's own repository
+    (``cwd=git_root``).  Running it from a different repo's working directory
+    makes git reject the path as "outside repository" — so the cwd MUST be the
+    git root that actually contains ``path``.
 
     Args:
         path: An absolute filesystem path to check.
+        git_root: The git repository root that contains ``path``.
 
     Returns:
-        True when git considers the path ignored.
+        True when git considers the path ignored (exit 0); False otherwise.
     """
     try:
         result = subprocess.run(  # noqa: S603
             ["git", "check-ignore", "-q", str(path)],  # noqa: S607
+            cwd=str(git_root),
             capture_output=True,
         )
         return result.returncode == 0
@@ -251,14 +255,15 @@ def check_priv04_gitignored(data_root: Path) -> list[Violation]:
     # Only run the check when data_root is inside a real git repository.
     # An empty .git dir (e.g. /tmp/.git on some systems) is not considered
     # a real repo — we require HEAD or config to be present inside .git.
-    if _find_git_root_with_content(data_root) is None:
+    git_root = _find_git_root_with_content(data_root)
+    if git_root is None:
         return []
 
     violations: list[Violation] = []
     check_paths = [data_root / "silver", data_root / "gold"]
     for path in check_paths:
         target = path if path.exists() else data_root
-        if not _is_git_ignored(target):
+        if not _is_git_ignored(target, git_root=git_root):
             violations.append(
                 Violation(
                     invariant_id="PRIV-04",
