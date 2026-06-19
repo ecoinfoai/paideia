@@ -13,7 +13,33 @@ Gold output; this module does not modify the bundle.
 
 from __future__ import annotations
 
+import math
+
 from metric_codex.generate.bundle import StudentBundle
+
+
+def _format_value(value: float | str) -> str:
+    """Format a citation value for markdown, integer-collapsing finite floats.
+
+    A finite float equal to its floor renders without a trailing ``.0``
+    (``85.0`` → ``85``); other finite floats render via ``%g``.  Non-finite
+    floats (``nan``/``inf``/``-inf``) and strings render through ``str`` — the
+    formatter never evaluates ``int()``/``==`` on a non-finite float (which
+    would raise).
+
+    Args:
+        value: The numeric or text value from an EvidenceCitation.
+
+    Returns:
+        A display string suitable for inline markdown.
+    """
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return str(value)
+        if value == math.floor(value):
+            return f"{value:g}"
+        return str(value)
+    return str(value)
 
 
 def render_template(bundle: StudentBundle) -> str:
@@ -45,13 +71,7 @@ def render_template(bundle: StudentBundle) -> str:
             lines.append("근거 없음")
         else:
             for citation in bq.answer.citations:
-                value_str = (
-                    str(citation.value)
-                    if not isinstance(citation.value, float)
-                    else f"{citation.value:g}"
-                    if citation.value == int(citation.value)
-                    else str(citation.value)
-                )
+                value_str = _format_value(citation.value)
                 lines.append(
                     f"- {citation.key}: {value_str}"
                     f" (출처: {citation.source_id}, {citation.layer})"

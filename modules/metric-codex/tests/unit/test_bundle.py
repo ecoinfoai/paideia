@@ -20,6 +20,7 @@ from metric_codex.errors import LocatedInputError
 
 # The imports below will fail (RED) until generate/bundle.py exists.
 from metric_codex.generate.bundle import (
+    BundleQuestion,
     StudentBundle,
     assert_no_pii,
     build_bundles,
@@ -27,7 +28,7 @@ from metric_codex.generate.bundle import (
 )
 from metric_codex.retrieve.query import CanonicalQuestion, QuestionSet
 from paideia_shared.schemas import PseudonymMapEntry
-from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind
+from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind, QueryAnswer
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -366,6 +367,75 @@ class TestWriteStaging:
         write_staging(own_silver, bundles)
         assert (own_silver / "staging").is_dir()
 
+    def test_armed_name_scan_raises_if_name_leaks_into_payload(self, tmp_path):
+        """If a name string were somehow present in a bundle payload, armed
+        write_staging must raise LocatedInputError (PRIV-01 enforcement layer).
+
+        Simulates an upstream regression by injecting a name into a question_text
+        field (which is normally PII-free Korean question text).
+        """
+        # Build a bundle whose question_text carries a leaked name.
+        leaked_bundle = StudentBundle(
+            pseudonym="S001",
+            available_layers=["minimal"],
+            questions=[
+                BundleQuestion(
+                    question_id="q1",
+                    question_text=f"{_NAME_A} 학생의 총점?",  # name leaked here
+                    answer=QueryAnswer(
+                        student_pseudonym="S001",
+                        question_id="q1",
+                        citations=[],
+                        available_layers=["minimal"],
+                        no_evidence=True,
+                    ),
+                )
+            ],
+        )
+        own_silver = tmp_path / "silver"
+        with pytest.raises(LocatedInputError):
+            write_staging(
+                own_silver,
+                [leaked_bundle],
+                known_names=frozenset([_NAME_A, _NAME_B]),
+            )
+
+    def test_armed_name_scan_does_not_write_leaked_file(self, tmp_path):
+        """When the armed name scan raises, no staging file is written (atomicity)."""
+        leaked_bundle = StudentBundle(
+            pseudonym="S001",
+            available_layers=["minimal"],
+            questions=[
+                BundleQuestion(
+                    question_id="q1",
+                    question_text=f"{_NAME_A} 학생의 총점?",
+                    answer=QueryAnswer(
+                        student_pseudonym="S001",
+                        question_id="q1",
+                        citations=[],
+                        available_layers=["minimal"],
+                        no_evidence=True,
+                    ),
+                )
+            ],
+        )
+        own_silver = tmp_path / "silver"
+        with pytest.raises(LocatedInputError):
+            write_staging(own_silver, [leaked_bundle], known_names=frozenset([_NAME_A]))
+        # No staging JSON should exist for the rejected bundle.
+        staging = own_silver / "staging"
+        assert not (staging / "S001.json").exists()
+
+    def test_clean_bundle_passes_armed_scan(self, tmp_path):
+        """A genuinely PII-free bundle passes the armed scan and is written."""
+        bundles = self._bundles_single()
+        own_silver = tmp_path / "silver"
+        paths = write_staging(
+            own_silver, bundles, known_names=frozenset([_NAME_A, _NAME_B])
+        )
+        assert len(paths) == 1
+        assert paths[0].is_file()
+
     def test_creates_one_file_per_bundle(self, tmp_path):
         entries = [_entry(_SID_A), _entry(_SID_B)]
         pmap = _pseudonym_map([(_SID_A, _NAME_A), (_SID_B, _NAME_B)])
@@ -497,5 +567,4 @@ class TestStudentBundleSchema:
         b = self._make_bundle()
         bq = b.questions[0]
         assert hasattr(bq, "answer")
-        from paideia_shared.schemas.metric_codex import QueryAnswer
         assert isinstance(bq.answer, QueryAnswer)

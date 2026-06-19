@@ -26,11 +26,14 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from paideia_shared.schemas import AdvisorBundleSummary
+from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry
+from paideia_shared.schemas.metric_codex import CodexEntry
 
 from metric_codex.errors import LocatedInputError
 from metric_codex.ingest.bronze_copies import (
@@ -444,10 +447,33 @@ def _run_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_store_and_map(
+    own_silver: Path,
+    pseudonym_path: Path,
+) -> tuple[list[CodexEntry], list[PseudonymMapEntry]]:
+    """Load the Silver codex store and pseudonym map for a semester/course.
+
+    Shared by the ``query``, ``dry-run`` (and later ``generate``) handlers.
+
+    Args:
+        own_silver: metric-codex Silver directory for this semester/course.
+        pseudonym_path: Path to ``pseudonym_map.parquet`` in that directory.
+
+    Returns:
+        ``(entries, pseudonym_map)`` — all CodexEntry rows and the full map.
+
+    Raises:
+        LocatedInputError: If a present store/map file fails to read or validate.
+    """
+    entries, _ = read_existing_store(own_silver)
+    pseudonym_map = read_pseudonym_map(pseudonym_path)
+    return entries, pseudonym_map
+
+
 def _resolve_student(
     student_arg: str,
-    entries: list,
-    pseudonym_map: list,
+    entries: list[CodexEntry],
+    pseudonym_map: list[PseudonymMapEntry],
 ) -> tuple[str, str, str | None]:
     """Resolve --student to (student_id, pseudonym, name_kr).
 
@@ -464,8 +490,6 @@ def _resolve_student(
     Raises:
         LocatedInputError: If the student is not found in the store or map.
     """
-    import re as _re
-
     sid_to_pseudonym: dict[str, tuple[str, str | None]] = {
         e.student_id: (e.pseudonym, e.name_kr) for e in pseudonym_map
     }
@@ -473,7 +497,7 @@ def _resolve_student(
         e.pseudonym: (e.student_id, e.name_kr) for e in pseudonym_map
     }
 
-    if _re.fullmatch(r"\d{10}", student_arg):
+    if re.fullmatch(r"\d{10}", student_arg):
         # student_id branch
         if student_arg not in sid_to_pseudonym:
             raise LocatedInputError(
@@ -483,7 +507,7 @@ def _resolve_student(
             )
         pseudonym, name_kr = sid_to_pseudonym[student_arg]
         student_id = student_arg
-    elif _re.fullmatch(r"S\d{3,}", student_arg):
+    elif re.fullmatch(r"S\d{3,}", student_arg):
         # pseudonym branch
         if student_arg not in pseudonym_to_sid:
             raise LocatedInputError(
@@ -540,8 +564,7 @@ def _run_query(args: argparse.Namespace) -> int:
     own_bronze = bronze_dir(semester, course, data_root=data_root)
     pseudonym_path = own_silver / "pseudonym_map.parquet"
 
-    entries, _ = read_existing_store(own_silver)
-    pmap = read_pseudonym_map(pseudonym_path)
+    entries, pmap = _load_store_and_map(own_silver, pseudonym_path)
 
     student_id, pseudonym, name_kr = _resolve_student(args.student, entries, pmap)
 
@@ -564,9 +587,9 @@ def _run_query(args: argparse.Namespace) -> int:
     elif args.text is not None:
         qa = answer_question(student_entries, pseudonym=pseudonym, freeform_text=args.text)
     else:
-        # Neither --question-id nor --text supplied — validated by argparse mutual
-        # exclusion; this branch is unreachable if argparse is configured correctly.
-        # However, if neither is given and argparse is non-strict, emit an error.
+        # Neither --question-id nor --text supplied.  The argparse group is
+        # required=False, so this branch IS reachable when the user omits both;
+        # fail fast with a located error (→ exit 2).
         raise LocatedInputError(
             "one of --question-id or --text must be provided",
             expected="--question-id ID or --text TEXT",
@@ -590,10 +613,9 @@ def _run_query(args: argparse.Namespace) -> int:
     # Optional JSON output.
     if args.json_out is not None:
         json_path: Path = args.json_out
-        import json as _json
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(
-            _json.dumps(qa.model_dump(), sort_keys=True, ensure_ascii=False),
+            json.dumps(qa.model_dump(), sort_keys=True, ensure_ascii=False),
             encoding="utf-8",
         )
 
@@ -627,8 +649,7 @@ def _run_dry_run(args: argparse.Namespace) -> int:
     own_bronze = bronze_dir(semester, course, data_root=data_root)
     pseudonym_path = own_silver / "pseudonym_map.parquet"
 
-    entries, _ = read_existing_store(own_silver)
-    pmap = read_pseudonym_map(pseudonym_path)
+    entries, pmap = _load_store_and_map(own_silver, pseudonym_path)
 
     qs_path: Path = args.question_set or (own_bronze / "question_set.yaml")
     qs = load_question_set(qs_path)
@@ -639,7 +660,10 @@ def _run_dry_run(args: argparse.Namespace) -> int:
         question_set=qs,
     )
 
-    written = write_staging(own_silver, bundles)
+    # Arm the name scan with every known name from the local pseudonym map so a
+    # leaked name fails fast before the staging file is written (PRIV-01).
+    known_names = frozenset(e.name_kr for e in pmap if e.name_kr)
+    written = write_staging(own_silver, bundles, known_names=known_names)
 
     print(f"dry-run: {len(written)} staging bundle(s) written")
     for p in written:

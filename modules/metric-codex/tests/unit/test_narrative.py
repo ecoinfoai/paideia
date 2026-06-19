@@ -27,9 +27,7 @@ from paideia_shared.schemas.metric_codex import (
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_SID = "2026000001"
 _PSEUDONYM = "S001"
-_SEM = "2026-1"
 
 
 def _citation(**kwargs) -> EvidenceCitation:
@@ -182,6 +180,49 @@ class TestRenderTemplateCitations:
         bq = _bq("q1", "총점?", _answer_with_evidence(c))
         result = render_template(_bundle([bq]))
         assert "minimal" in result
+
+
+# ---------------------------------------------------------------------------
+# TestRenderTemplateNonFiniteFloat — render must not crash on nan/inf
+# ---------------------------------------------------------------------------
+
+
+class TestRenderTemplateNonFiniteFloat:
+    """render_template is a pure formatter; it must not crash on non-finite floats.
+
+    Even though NaN is normally None-coerced upstream, the formatter must be
+    robust: ``value == int(value)`` raises on nan/inf, so the implementation
+    guards with math.isfinite.
+    """
+
+    def test_nan_value_does_not_crash(self):
+        c = _citation(key="z_score", value=float("nan"), layer="rich",
+                      source_id="immersio:학생지표.parquet", observed_at=None)
+        bq = _bq("q1", "z?", _answer_with_evidence(c))
+        # Must not raise.
+        result = render_template(_bundle([bq]))
+        assert isinstance(result, str)
+
+    def test_nan_value_rendered_as_string_sentinel(self):
+        c = _citation(key="z_score", value=float("nan"), layer="rich",
+                      source_id="immersio:학생지표.parquet", observed_at=None)
+        bq = _bq("q1", "z?", _answer_with_evidence(c))
+        result = render_template(_bundle([bq]))
+        # str(float('nan')) == 'nan' — the sentinel appears verbatim.
+        assert "nan" in result
+
+    def test_inf_value_does_not_crash(self):
+        c = _citation(key="z_score", value=float("inf"), layer="rich",
+                      source_id="immersio:학생지표.parquet", observed_at=None)
+        bq = _bq("q1", "z?", _answer_with_evidence(c))
+        result = render_template(_bundle([bq]))
+        assert "inf" in result
+
+    def test_finite_non_integer_float_preserved(self):
+        c = _citation(key="score_percent", value=90.5)
+        bq = _bq("q1", "환산?", _answer_with_evidence(c))
+        result = render_template(_bundle([bq]))
+        assert "90.5" in result
 
 
 # ---------------------------------------------------------------------------

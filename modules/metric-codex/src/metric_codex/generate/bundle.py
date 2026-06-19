@@ -15,8 +15,9 @@ Scanning strategy for assert_no_pii:
   over the full payload to avoid false positives on legitimate Korean evidence
   text (question text, chapter labels, freetext categories).  The set-membership
   approach catches exactly the names we know about and nothing else.
-  The caller supplies the known names as an optional parameter; write_staging
-  passes them automatically.
+  The caller passes the known names to ``write_staging`` (which forwards them to
+  ``assert_no_pii``); the CLI ``dry-run`` handler computes them from the
+  pseudonym map's ``name_kr`` values.  The 10-digit and email scans always run.
 """
 
 from __future__ import annotations
@@ -240,6 +241,8 @@ def build_bundles(
 def write_staging(
     silver_dir: Path,
     bundles: list[StudentBundle],
+    *,
+    known_names: frozenset[str] | None = None,
 ) -> list[Path]:
     """Serialize bundles to deterministic JSON and write to staging directory.
 
@@ -251,6 +254,10 @@ def write_staging(
     Args:
         silver_dir: metric-codex Silver directory for this semester/course.
         bundles: Pseudonymized student bundles to write.
+        known_names: Korean names to scan for (typically the name_kr values from
+            the pseudonym map).  When provided, any name appearing in a bundle
+            payload raises before that file is written.  The 10-digit id and
+            email scans always run regardless.
 
     Returns:
         List of written paths, one per bundle, in pseudonym order.
@@ -261,21 +268,18 @@ def write_staging(
     staging_dir = silver_dir / "staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract known names from the bundles themselves — note: bundles contain NO
-    # names by construction, so we extract them from nothing.  The known_names
-    # set is empty since bundles are already PII-free; but we still scan for
-    # 10-digit ids and emails as a belt-and-suspenders guard.
-    # (The caller of build_bundles is responsible for not injecting names;
-    # write_staging adds the assertion layer.)
+    # Bundles are PII-free by construction (build_bundles operates in pseudonym
+    # space).  write_staging adds an enforcement layer: it scans for 10-digit
+    # ids and emails unconditionally, and for the supplied known_names, so any
+    # upstream regression that leaked a name fails fast before it hits disk.
     written: list[Path] = []
 
     for bundle in bundles:
         # model_dump → sort_keys for byte-identical output.
         payload = json.dumps(bundle.model_dump(), sort_keys=True, ensure_ascii=False)
 
-        # PII scan BEFORE writing.  No known_names set needed here because the
-        # bundle model guarantees no names were ever placed in the struct.
-        assert_no_pii(payload)
+        # PII scan BEFORE writing.
+        assert_no_pii(payload, known_names=known_names)
 
         dest = staging_dir / f"{bundle.pseudonym}.json"
 

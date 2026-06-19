@@ -383,6 +383,23 @@ class TestQueryArgparseBoundaries:
         # Should exit 2 (argparse mutual exclusion)
         assert rc == 2
 
+    def test_neither_question_id_nor_text_exits_two(self, tmp_path):
+        """Omitting both --question-id and --text → located error → exit 2.
+
+        The mutually-exclusive group is required=False, so this branch is
+        reachable in the handler (M-5/M-6).
+        """
+        data_root = _build_ingested_data_root(tmp_path)
+        rc = app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            # neither --question-id nor --text
+        ])
+        assert rc == 2
+
 
 # ---------------------------------------------------------------------------
 # TestQueryJsonOutput
