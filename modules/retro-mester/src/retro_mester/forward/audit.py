@@ -15,6 +15,71 @@ from typing import Any
 
 import yaml
 from paideia_shared.schemas import BaselineSnapshotRow
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from retro_mester.load.errors import InputError
+
+
+class _PriorYearContract(BaseModel):
+    """Structural contract for a prior-year ``차년도방향.yaml`` document.
+
+    Validated at the ``audit_prior`` boundary so a malformed prior file
+    fails fast as an ``InputError`` (exit 2) rather than surfacing as a raw
+    ``KeyError`` deep inside the matching logic.  Per-entry detail is left to
+    the existing ``ImprovementLedgerEntry`` / ``BaselineSnapshotRow`` schemas;
+    this contract only guards the top-level shape.
+
+    Attributes:
+        schema_version: Prior forward-plan schema version string.
+        semester: Prior-year semester code.
+        course_slug: Course slug.
+        created_for_year: Year the prior plan targeted.
+        ledger: Improvement-ledger entry dicts.
+        baseline: Baseline-snapshot row dicts.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str
+    semester: str
+    course_slug: str
+    created_for_year: str
+    ledger: list[dict]
+    baseline: list[dict]
+
+
+def _load_prior_contract(prior_yaml_path: Path) -> _PriorYearContract:
+    """Load and structurally validate a prior-year ``차년도방향.yaml``.
+
+    Args:
+        prior_yaml_path: Path to the prior-year forward-plan YAML.
+
+    Returns:
+        A validated ``_PriorYearContract``.
+
+    Raises:
+        InputError: If the file is missing, fails to parse as YAML, has a
+            non-mapping top level, or fails the ``_PriorYearContract`` schema.
+    """
+    if not prior_yaml_path.exists():
+        raise InputError(f"Prior-year forward yaml not found: {prior_yaml_path}")
+
+    try:
+        raw = yaml.safe_load(prior_yaml_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise InputError(f"YAML parse error in prior-year file {prior_yaml_path}: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise InputError(
+            f"Prior-year file {prior_yaml_path} must be a YAML mapping; got {type(raw).__name__}"
+        )
+
+    try:
+        return _PriorYearContract.model_validate(raw)
+    except ValidationError as exc:
+        raise InputError(
+            f"Prior-year file {prior_yaml_path} failed structure validation: {exc}"
+        ) from exc
 
 
 def audit_prior(
@@ -50,10 +115,15 @@ def audit_prior(
                     ...
                 ],
             }
+
+    Raises:
+        InputError: If ``prior_yaml_path`` is missing, fails to parse as
+            YAML, has a non-mapping top level, or violates the
+            ``_PriorYearContract`` structure (FR-008).
     """
-    raw = yaml.safe_load(prior_yaml_path.read_text(encoding="utf-8"))
-    prior_year: str = raw["semester"]
-    ledger_dicts: list[dict] = raw.get("ledger", [])
+    contract = _load_prior_contract(prior_yaml_path)
+    prior_year: str = contract.semester
+    ledger_dicts: list[dict] = contract.ledger
 
     # Build lookup: (segment, chapter) → correct_rate for current year.
     current_lookup: dict[tuple[str, str], float] = {
