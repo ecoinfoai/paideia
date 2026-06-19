@@ -16,7 +16,6 @@ import pytest
 from paideia_shared.schemas import InsufficientEvidenceUnit
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -71,10 +70,10 @@ def test_v1_evidence_n_nonzero_raises() -> None:
 
 
 def test_v1_evidence_n_negative_raises() -> None:
-    """V1: negative evidence_n also raises ValidationError."""
+    """Negative evidence_n is rejected by the ge=0 field constraint."""
     kw = _valid_kwargs()
     kw["evidence_n"] = -1
-    with pytest.raises(ValidationError, match="V1"):
+    with pytest.raises(ValidationError):
         InsufficientEvidenceUnit(**kw)
 
 

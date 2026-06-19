@@ -32,6 +32,8 @@ import datetime
 import hashlib
 from pathlib import Path
 
+from paideia_shared.schemas import InputProvenance
+
 from retro_mester.align.alignment import build_alignment
 from retro_mester.align.cliff import chapter_item_type_rates, detect_cliff, dominant_failing_level
 from retro_mester.align.interest_gap import interest_aversion_findings
@@ -53,8 +55,6 @@ from retro_mester.load import (
     load_items,
     reconcile_config,
 )
-from paideia_shared.schemas import InputProvenance
-
 from retro_mester.output.figures import render_all_figures
 from retro_mester.output.manager import archive_existing, atomic_write_text
 from retro_mester.output.manifest import build_manifest, write_manifest

@@ -8,7 +8,7 @@ least one measured student must go through UnitGap, not here.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -39,6 +39,7 @@ class InsufficientEvidenceUnit(BaseModel):
     segment: SegmentKey
     evidence_n: int = Field(
         ...,
+        ge=0,
         description="Number of students with valid data; must be 0 for a 근거부족 unit.",
     )
     reason: Literal["근거부족-자료없음"]
@@ -48,7 +49,7 @@ class InsufficientEvidenceUnit(BaseModel):
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def _v1_evidence_n_must_be_zero(self) -> "InsufficientEvidenceUnit":
+    def _v1_evidence_n_must_be_zero(self) -> Self:
         """V1: evidence_n must equal 0; nonzero data belongs in UnitGap."""
         if self.evidence_n != 0:
             raise ValueError(
