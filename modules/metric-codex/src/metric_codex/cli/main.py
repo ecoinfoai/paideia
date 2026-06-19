@@ -36,6 +36,7 @@ from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry
 from paideia_shared.schemas.metric_codex import CodexEntry
 
 from metric_codex.errors import LocatedInputError
+from metric_codex.generate.backend import BackendUnreachableError
 from metric_codex.ingest.bronze_copies import (
     load_blueprint,
     load_curriculum_map,
@@ -245,6 +246,49 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_common_args(gen_p)
+    gen_p.add_argument(
+        "--backend",
+        choices=("none", "subscription", "api"),
+        default="none",
+        help="LLM 백엔드 (기본: none → 결정론 template; 헌장 I 오프라인 완주)",
+    )
+    gen_p.add_argument(
+        "--model",
+        type=str,
+        default="claude-sonnet-4-6",
+        metavar="ID",
+        help="api 백엔드 모델 id (기본: claude-sonnet-4-6)",
+    )
+    gen_p.add_argument(
+        "--question-set",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="question_set.yaml 경로 (기본: Bronze question_set.yaml)",
+    )
+    gen_p.add_argument(
+        "--responses-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="subscription 백엔드 응답 디렉터리 (기본: Silver staging_responses/)",
+    )
+    gen_p.add_argument(
+        "--require-llm",
+        action="store_true",
+        default=False,
+        help="api 백엔드 도달 실패 시 template 폴백 없이 종료 코드 4 (기본: 폴백)",
+    )
+    gen_p.add_argument(
+        "--now",
+        type=str,
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "manifest generated_at 으로 주입할 ISO-8601 UTC 타임스탬프. "
+            "미지정 시 datetime.now(UTC) — 비결정적이므로 재현 테스트에는 명시 권장."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # distribute
@@ -673,8 +717,166 @@ def _run_dry_run(args: argparse.Namespace) -> int:
 
 
 def _run_generate(args: argparse.Namespace) -> int:
-    """Stub handler for ``generate``. CodexEntry generation TBD."""
-    raise NotImplementedError("generate pipeline not yet implemented")
+    """Handle the ``generate`` subcommand: per-student narrative + re-identification.
+
+    Loads the Silver store + pseudonym map, validates the map for bijection FIRST
+    (PRIV-05 — a corrupt/non-bijective map aborts before ANY Gold write), builds
+    pseudonymized StudentBundles, and renders one Gold markdown per student.
+
+    With ``--backend none`` the deterministic template path runs offline (헌장 I).
+    With ``--backend api``/``subscription`` the pseudonymized evidence is asserted
+    PII-free, then polished through an ``InputHashCache``-wrapped backend.  If the
+    api backend is unreachable: ``--require-llm`` propagates (exit 4); otherwise
+    the run falls back to the template and continues (no hard stop — SC-009).
+
+    Args:
+        args: Parsed CLI arguments for the ``generate`` subcommand.
+
+    Returns:
+        ``0`` on success (or ``4`` only when api + unreachable + ``--require-llm``).
+
+    Raises:
+        LocatedInputError: On boundary failures (caught by ``app`` → exit 2).
+        BackendUnreachableError: api + unreachable + ``--require-llm`` (→ exit 4).
+    """
+    from metric_codex.generate.backend import (
+        ApiBackend,
+        BackendUnreachableError,
+        GenerationRequest,
+        InputHashCache,
+        SubscriptionBackend,
+    )
+    from metric_codex.generate.bundle import assert_no_pii, build_bundles
+    from metric_codex.generate.narrative import render_template
+    from metric_codex.generate.reidentify import (
+        reidentify_and_write,
+        validate_pseudonym_map,
+    )
+    from metric_codex.output.paths import gold_dir
+    from metric_codex.retrieve.query import load_question_set
+
+    semester: str = args.semester
+    course: str = args.course
+    data_root: Path = args.data_root
+    backend_mode: str = args.backend
+
+    now: str = args.now or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    own_silver = silver_dir(semester, course, data_root=data_root)
+    own_bronze = bronze_dir(semester, course, data_root=data_root)
+    own_gold = gold_dir(semester, course, data_root=data_root)
+    pseudonym_path = own_silver / "pseudonym_map.parquet"
+
+    entries, pmap = _load_store_and_map(own_silver, pseudonym_path)
+
+    # PRIV-05: validate the map for bijection BEFORE any Gold byte is written.
+    pseudonym_index = validate_pseudonym_map(pmap)
+
+    qs_path: Path = args.question_set or (own_bronze / "question_set.yaml")
+    qs = load_question_set(qs_path)
+
+    bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+
+    # Names armed for the LLM-boundary PII scan (PRIV-01).
+    known_names = frozenset(e.name_kr for e in pmap if e.name_kr)
+
+    # Optional LLM polish wiring (api/subscription).  None for --backend none.
+    cache: InputHashCache | None = None
+    if backend_mode in ("api", "subscription"):
+        cache_dir = own_silver / "cache"
+        if backend_mode == "api":
+            backend = ApiBackend(model=args.model)
+        else:
+            responses_dir: Path = args.responses_dir or (own_silver / "staging_responses")
+            backend = SubscriptionBackend(
+                staging_dir=own_silver / "staging",
+                responses_dir=responses_dir,
+            )
+        cache = InputHashCache(backend=backend, cache_dir=cache_dir)
+
+    llm_used = False
+    written: list[Path] = []
+
+    for bundle in bundles:
+        # The deterministic cited evidence (template) is BOTH the offline output
+        # AND the PII-free 'facts' an LLM polishes — never raw codex rows.
+        facts = render_template(bundle)
+
+        if cache is None:
+            narrative = facts
+        else:
+            # PRIV-01: defense at the LLM boundary — re-assert no PII on the
+            # pseudonymized facts before constructing the request.
+            assert_no_pii(facts, known_names=known_names)
+            request = GenerationRequest(
+                slot_id=bundle.pseudonym,
+                prompt=(
+                    "다음은 한 학생의 가명화된 학습 근거 요약이다. "
+                    "근거에 없는 사실을 추가하지 말고, 지도교수가 읽기 쉽도록 "
+                    "한국어로 다듬어라:\n\n" + facts
+                ),
+                facts=facts,
+                model=args.model,
+                mode=backend_mode,
+            )
+            try:
+                response = cache.generate(request)
+            except BackendUnreachableError:
+                if args.require_llm:
+                    raise
+                # 헌장 I — no hard stop: fall back to the template and continue.
+                cache = None
+                narrative = facts
+            else:
+                narrative = response.raw_text
+                llm_used = True
+
+        out = reidentify_and_write(
+            gold_dir=own_gold,
+            pseudonym=bundle.pseudonym,
+            narrative=narrative,
+            pseudonym_index=pseudonym_index,
+        )
+        written.append(out)
+
+    # Manifest update — keep the ingest-stage bundle_summary; re-derive counts.
+    student_ids = sorted({e.student_id for e in entries})
+    student_count = len(student_ids)
+    bundle_summary = AdvisorBundleSummary(
+        total_students_with_codex=student_count,
+        assigned_count=0,
+        unassigned_sids=student_ids,
+        advisor_count=0,
+        per_advisor_counts={},
+    )
+
+    if backend_mode == "none" or not llm_used:
+        manifest_backend = "none(template)"
+        manifest_model = None
+    else:
+        manifest_backend = backend_mode
+        manifest_model = args.model
+
+    manifest = build_manifest(
+        semester=semester,
+        course_slug=course,
+        input_hashes={},
+        config_ids={},
+        generated_at=now,
+        llm_backend=manifest_backend,
+        llm_model=manifest_model,
+        cache_hit_rate=cache.cache_hit_rate() if cache is not None else None,
+        student_count=student_count,
+        entry_count=len(entries),
+        bundle_summary=bundle_summary,
+    )
+    write_manifest(own_silver / "manifest_metric-codex.json", manifest)
+
+    print(f"generate: {len(written)} student narrative(s) written ({manifest_backend})")
+    for p in written:
+        print(f"  {p}")
+
+    return 0
 
 
 def _run_distribute(args: argparse.Namespace) -> int:
@@ -742,9 +944,12 @@ def app(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"ERROR [metric-codex]: input/config validation error — {exc}", file=sys.stderr)
         return 2
-    # TODO(U2b/generate): add `except BackendUnreachableError: return 4` when the
-    # api backend is wired (BackendUnreachableError subclasses RuntimeError, so it
-    # must be caught BEFORE the RuntimeError branch below — order matters).
+    except BackendUnreachableError as exc:
+        # BackendUnreachableError subclasses RuntimeError, so it MUST be caught
+        # before the RuntimeError branch below — order matters (exit 4 only when
+        # the api backend is unreachable and --require-llm was set).
+        print(f"ERROR [metric-codex]: LLM backend unreachable — {exc}", file=sys.stderr)
+        return 4
     except RuntimeError as exc:
         print(f"ERROR [metric-codex]: pipeline step failed — {exc}", file=sys.stderr)
         return 3

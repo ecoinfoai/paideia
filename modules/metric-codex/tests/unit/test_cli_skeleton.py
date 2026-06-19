@@ -20,8 +20,8 @@ import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
 # Subcommands still backed by a NotImplementedError stub.
-# query and dry-run are now wired (T041/T042/T045).
-_STUB_SUBCOMMANDS = ["generate", "distribute", "verify", "build"]
+# query, dry-run, and generate are now wired (T041/T042/T045).
+_STUB_SUBCOMMANDS = ["distribute", "verify", "build"]
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +138,9 @@ def test_subcommand_help_exits_zero(subcommand: str) -> None:
 def test_app_stub_handler_returns_three() -> None:
     """app() catches a stub handler's NotImplementedError and returns exit 3.
 
-    Uses 'generate' which is still a stub (query and dry-run are now wired).
+    Uses 'distribute' which is still a stub (query/dry-run/generate are wired).
     """
     from metric_codex.cli.main import app
 
-    result = app(["generate", "--semester", "2026-1", "--course", "x"])
+    result = app(["distribute", "--semester", "2026-1", "--course", "x"])
     assert result == 3

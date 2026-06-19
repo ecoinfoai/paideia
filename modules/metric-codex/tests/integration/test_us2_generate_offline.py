@@ -265,9 +265,85 @@ class TestDryRunOfflineNoPii:
 
 
 # ---------------------------------------------------------------------------
-# TODO(U2b-2): generate --backend none tests go here.
-# When implement: test that Gold md/yaml are produced without LLM.
+# T036 (generate part): generate --backend none offline path (SC-009/DET-02)
 # ---------------------------------------------------------------------------
 
-# TODO(U2b-2): add TestGenerateBackendNone class here when implementing
-# the generate handler.  This file currently covers dry-run only.
+
+def _run_generate_offline(data_root: Path, question_set_path: Path) -> int:
+    return app([
+        "generate",
+        "--semester", _SEM,
+        "--course", _COURSE,
+        "--data-root", str(data_root),
+        "--question-set", str(question_set_path),
+        "--backend", "none",
+        "--now", "2026-06-20T00:00:00Z",
+    ])
+
+
+class TestGenerateBackendNone:
+    """generate --backend none renders Gold md per student via template, no LLM."""
+
+    def test_generate_exits_zero(self, ingested_data_root, question_set_path):
+        rc = _run_generate_offline(ingested_data_root, question_set_path)
+        assert rc == 0
+
+    def test_one_md_per_student(self, ingested_data_root, question_set_path):
+        _run_generate_offline(ingested_data_root, question_set_path)
+        student_dir = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        )
+        mds = sorted(student_dir.glob("*.md"))
+        # 2 students ingested → one re-identified md each (SC-009: every student).
+        assert len(mds) == 2
+
+    def test_md_named_by_reidentified_student(self, ingested_data_root, question_set_path):
+        _run_generate_offline(ingested_data_root, question_set_path)
+        student_dir = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        )
+        names = {f.name for f in student_dir.glob("*.md")}
+        # Gold is local → the re-identified name legitimately appears in the path.
+        assert f"{_SID_A}_{_NAME_A}.md" in names
+        assert f"{_SID_B}_{_NAME_B}.md" in names
+
+    def test_md_contains_citation_or_no_evidence(self, ingested_data_root, question_set_path):
+        _run_generate_offline(ingested_data_root, question_set_path)
+        student_dir = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        )
+        for f in student_dir.glob("*.md"):
+            text = f.read_text(encoding="utf-8")
+            assert "출처:" in text or "근거 없음" in text, (
+                f"{f.name} has neither a citation nor the no-evidence sentinel"
+            )
+
+    def test_gold_md_legitimately_contains_name(self, ingested_data_root, question_set_path):
+        """Gold (re-identified, local) carries the name; staging (LLM-bound) did not."""
+        _run_generate_offline(ingested_data_root, question_set_path)
+        gold_a = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY
+            / "학생별" / f"{_SID_A}_{_NAME_A}.md"
+        )
+        assert gold_a.is_file()
+
+    def test_generate_deterministic_second_run(self, ingested_data_root, question_set_path):
+        """Same --now → byte-identical Gold md on re-run (DET-02)."""
+        student_dir = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        )
+        _run_generate_offline(ingested_data_root, question_set_path)
+        first = {f.name: f.read_bytes() for f in student_dir.glob("*.md")}
+        _run_generate_offline(ingested_data_root, question_set_path)
+        second = {f.name: f.read_bytes() for f in student_dir.glob("*.md")}
+        assert first == second, "generate offline path is not deterministic"
+
+    def test_manifest_records_template_backend(self, ingested_data_root, question_set_path):
+        _run_generate_offline(ingested_data_root, question_set_path)
+        manifest_path = (
+            ingested_data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["llm_backend"] == "none(template)"
+        assert manifest["generated_at"] == "2026-06-20T00:00:00Z"
