@@ -101,6 +101,16 @@ def reidentify_and_write(
             actual=pseudonym,
         )
 
+    # name_kr has no pattern constraint at the schema level, so a '/' or NUL
+    # could escape 학생별/.  Fail-fast (consistent with PRIV-05) before any write.
+    if entry.name_kr is not None and ("/" in entry.name_kr or "\x00" in entry.name_kr):
+        raise LocatedInputError(
+            f"name_kr for student {entry.student_id!r} contains illegal path character",
+            file="pseudonym_map.parquet",
+            expected="name without '/' or NUL",
+            actual=entry.name_kr,
+        )
+
     student_dir = gold_dir / "학생별"
     student_dir.mkdir(parents=True, exist_ok=True)
 

@@ -38,7 +38,9 @@ from pathlib import Path
 from typing import Literal
 
 from paideia_shared.schemas import AdvisorBundleSummary, MetricCodexManifest
+from pydantic import ValidationError
 
+from metric_codex.errors import LocatedInputError
 from metric_codex.output.determinism import atomic_write
 
 
@@ -128,4 +130,42 @@ def write_manifest(path: Path, manifest: MetricCodexManifest) -> None:
     atomic_write(path, _write)
 
 
-__all__ = ["build_manifest", "write_manifest"]
+def read_manifest(path: Path) -> MetricCodexManifest:
+    """Read and validate a metric-codex manifest from disk.
+
+    Used by the ``generate`` (and later ``distribute``) stages to carry the
+    ingest-stage provenance (``input_hashes``/``config_ids``/``bundle_summary``)
+    through unchanged instead of clobbering it (constitution V).
+
+    Args:
+        path: Path to ``manifest_metric-codex.json``.
+
+    Returns:
+        Validated MetricCodexManifest.
+
+    Raises:
+        LocatedInputError: If the file is missing, is not valid JSON, or fails
+            schema validation.
+    """
+    if not path.is_file():
+        raise LocatedInputError(
+            "manifest file not found",
+            file=str(path),
+            expected="an existing manifest_metric-codex.json",
+            actual="missing",
+        )
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise LocatedInputError(
+            f"manifest is not valid JSON: {exc}", file=str(path)
+        ) from exc
+    try:
+        return MetricCodexManifest.model_validate(raw)
+    except ValidationError as exc:
+        raise LocatedInputError(
+            f"manifest validation failed: {exc}", file=str(path)
+        ) from exc
+
+
+__all__ = ["build_manifest", "read_manifest", "write_manifest"]

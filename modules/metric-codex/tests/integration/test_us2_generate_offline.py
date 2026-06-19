@@ -347,3 +347,72 @@ class TestGenerateBackendNone:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["llm_backend"] == "none(template)"
         assert manifest["generated_at"] == "2026-06-20T00:00:00Z"
+
+    def test_generate_preserves_ingest_provenance(self, ingested_data_root, question_set_path):
+        """#7/Constitution V: generate must NOT clobber the ingest provenance."""
+        manifest_path = (
+            ingested_data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        ingest_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        ingest_input_hashes = ingest_manifest["input_hashes"]
+        ingest_config_ids = ingest_manifest["config_ids"]
+        # Sanity: ingest recorded at least one source hash + one config digest.
+        assert ingest_input_hashes
+        assert ingest_config_ids
+
+        _run_generate_offline(ingested_data_root, question_set_path)
+
+        gen_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert gen_manifest["input_hashes"] == ingest_input_hashes
+        assert gen_manifest["config_ids"] == ingest_config_ids
+
+
+class TestGenerateApiFallback:
+    """M3: api backend unreachable + no --require-llm → offline template fallback."""
+
+    def test_api_unreachable_falls_back_to_template(
+        self, ingested_data_root, question_set_path, monkeypatch
+    ):
+        from metric_codex.generate.backend import BackendUnreachableError
+
+        def _broken_generate(self, request):
+            raise BackendUnreachableError("cannot reach anthropic")
+
+        # ApiBackend.__init__ instantiates anthropic.Anthropic(); stub it so no
+        # client is constructed, and make generate() always raise (unreachable).
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic", lambda **_: object()
+        )
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.ApiBackend.generate", _broken_generate
+        )
+
+        rc = app([
+            "generate",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(ingested_data_root),
+            "--question-set", str(question_set_path),
+            "--backend", "api",
+            "--now", "2026-06-20T00:00:00Z",
+        ])
+        # No --require-llm → no hard stop (헌장 I / SC-009).
+        assert rc == 0
+
+        student_dir = (
+            ingested_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        )
+        mds = sorted(student_dir.glob("*.md"))
+        assert len(mds) == 2
+        for f in mds:
+            text = f.read_text(encoding="utf-8")
+            assert "출처:" in text or "근거 없음" in text
+
+        manifest_path = (
+            ingested_data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        # Fell back to the template → backend downgraded.
+        assert manifest["llm_backend"] == "none(template)"

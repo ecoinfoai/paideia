@@ -45,7 +45,7 @@ from metric_codex.ingest.bronze_copies import (
 from metric_codex.ingest.paideia_sources import read_paideia_sources
 from metric_codex.ingest.result import SourceReadResult
 from metric_codex.ingest.school_excel import read_school_excel
-from metric_codex.output.manifest import build_manifest, write_manifest
+from metric_codex.output.manifest import build_manifest, read_manifest, write_manifest
 from metric_codex.output.paths import bronze_dir, silver_dir
 from metric_codex.output.sha256 import compute_sha256
 from metric_codex.store.codex import accumulate, read_existing_store, write_store
@@ -839,16 +839,29 @@ def _run_generate(args: argparse.Namespace) -> int:
         )
         written.append(out)
 
-    # Manifest update — keep the ingest-stage bundle_summary; re-derive counts.
+    # Manifest update — preserve the ingest-stage provenance (input_hashes /
+    # config_ids / bundle_summary) unchanged (헌장 V); update ONLY the
+    # generate-owned fields.  When no prior manifest exists (generate run before
+    # ingest), fall back to empty provenance + a recomputed bundle_summary.
     student_ids = sorted({e.student_id for e in entries})
     student_count = len(student_ids)
-    bundle_summary = AdvisorBundleSummary(
-        total_students_with_codex=student_count,
-        assigned_count=0,
-        unassigned_sids=student_ids,
-        advisor_count=0,
-        per_advisor_counts={},
-    )
+
+    manifest_path = own_silver / "manifest_metric-codex.json"
+    if manifest_path.is_file():
+        prior = read_manifest(manifest_path)
+        input_hashes = prior.input_hashes
+        config_ids = prior.config_ids
+        bundle_summary = prior.bundle_summary
+    else:
+        input_hashes = {}
+        config_ids = {}
+        bundle_summary = AdvisorBundleSummary(
+            total_students_with_codex=student_count,
+            assigned_count=0,
+            unassigned_sids=student_ids,
+            advisor_count=0,
+            per_advisor_counts={},
+        )
 
     if backend_mode == "none" or not llm_used:
         manifest_backend = "none(template)"
@@ -860,8 +873,8 @@ def _run_generate(args: argparse.Namespace) -> int:
     manifest = build_manifest(
         semester=semester,
         course_slug=course,
-        input_hashes={},
-        config_ids={},
+        input_hashes=input_hashes,
+        config_ids=config_ids,
         generated_at=now,
         llm_backend=manifest_backend,
         llm_model=manifest_model,
@@ -870,7 +883,7 @@ def _run_generate(args: argparse.Namespace) -> int:
         entry_count=len(entries),
         bundle_summary=bundle_summary,
     )
-    write_manifest(own_silver / "manifest_metric-codex.json", manifest)
+    write_manifest(manifest_path, manifest)
 
     print(f"generate: {len(written)} student narrative(s) written ({manifest_backend})")
     for p in written:

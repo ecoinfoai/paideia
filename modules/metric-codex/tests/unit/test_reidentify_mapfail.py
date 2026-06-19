@@ -98,3 +98,33 @@ class TestReidentifyAndWrite:
 
         assert out == gold / "학생별" / "2026000002.md"
         assert out.is_file()
+
+    def test_name_kr_with_slash_raises_and_writes_nothing(self, tmp_path: Path) -> None:
+        """I2: a name_kr with a path separator must fail fast (no escape from 학생별/)."""
+        gold = tmp_path / "gold"
+        index = validate_pseudonym_map([_entry("2026000003", "S003", "a/b")])
+
+        with pytest.raises(LocatedInputError):
+            reidentify_and_write(
+                gold_dir=gold,
+                pseudonym="S003",
+                narrative="본문",
+                pseudonym_index=index,
+            )
+
+        student_dir = gold / "학생별"
+        written = list(student_dir.glob("*.md")) if student_dir.is_dir() else []
+        assert written == []
+
+    def test_name_kr_with_nul_raises(self, tmp_path: Path) -> None:
+        """I2: a name_kr with a NUL byte must fail fast."""
+        gold = tmp_path / "gold"
+        index = validate_pseudonym_map([_entry("2026000004", "S004", "a\x00b")])
+
+        with pytest.raises(LocatedInputError):
+            reidentify_and_write(
+                gold_dir=gold,
+                pseudonym="S004",
+                narrative="본문",
+                pseudonym_index=index,
+            )

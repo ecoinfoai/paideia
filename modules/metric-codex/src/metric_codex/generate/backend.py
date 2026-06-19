@@ -201,7 +201,10 @@ class InputHashCache:
         )
         # Atomic write so a crash mid-write can never leave a corrupt cache .json
         # that a later run would read and skip the backend (헌장 V: no partial output).
-        atomic_write(cache_file, lambda tmp: tmp.write_text(serialized, encoding="utf-8"))
+        def _write_cache(tmp: Path) -> None:
+            tmp.write_text(serialized, encoding="utf-8")
+
+        atomic_write(cache_file, _write_cache)
         return response
 
     def cache_hit_rate(self) -> float:
@@ -263,7 +266,11 @@ class SubscriptionBackend(LLMBackend):
         }
         bundle_file = self._staging_dir / f"{request.slot_id}.json"
         bundle_content = json.dumps(bundle_data, sort_keys=True, ensure_ascii=False, indent=2)
-        bundle_file.write_text(bundle_content, encoding="utf-8")
+
+        def _write_bundle(tmp: Path) -> None:
+            tmp.write_text(bundle_content, encoding="utf-8")
+
+        atomic_write(bundle_file, _write_bundle)
 
         resp_file = self._responses_dir / f"{request.slot_id}.json"
         if not resp_file.exists():

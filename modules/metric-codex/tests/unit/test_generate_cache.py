@@ -125,7 +125,7 @@ class TestApiBackend:
         from metric_codex.generate.backend import ApiBackend, BackendUnreachableError
 
         class _BrokenMessages:
-            def create(self, **kwargs: object) -> None:
+            def create(self, **_kwargs: object) -> None:
                 raise ConnectionError("cannot reach anthropic")
 
         class _BrokenClient:
