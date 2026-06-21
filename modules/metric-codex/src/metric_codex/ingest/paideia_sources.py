@@ -366,6 +366,7 @@ def read_student_metrics(
     path: Path,
     *,
     semester: str,
+    course_slug: str,
     ingested_at: str,
     source_path: str,
 ) -> SourceReadResult:
@@ -374,6 +375,9 @@ def read_student_metrics(
     Args:
         path: Real filesystem path to the parquet file.
         semester: Academic semester code embedded in every emitted entry.
+            Each row's ``semester`` and ``course_slug`` are compared against
+            these keys; a mismatch raises ``LocatedInputError``.
+        course_slug: Course slug used for the per-row key-match check.
         ingested_at: ISO-8601 UTC timestamp for the SourceRecord.
         source_path: Repo-relative path string recorded verbatim in the
             SourceRecord (caller-supplied for cross-machine determinism).
@@ -383,8 +387,9 @@ def read_student_metrics(
         ``identities`` map of student_id → name_kr.
 
     Raises:
-        LocatedInputError: On unreadable parquet or any row that fails the
-            ``StudentExamMetrics`` contract.
+        LocatedInputError: On unreadable parquet, any row that fails the
+            ``StudentExamMetrics`` contract, or a row whose semester/course_slug
+            does not match the requested key.
     """
     source_id = "immersio:학생지표"
     df = _read_parquet(path)
@@ -393,8 +398,21 @@ def read_student_metrics(
     entries: list[CodexEntry] = []
     identities: dict[str, str | None] = {}
     for offset, row in enumerate(rows):
-        sid = normalize_student_id(row.student_id, source=path.name, row=offset + 1)
-        cohort_year = _cohort_year(sid, filename=path.name, row=offset + 1)
+        # Per-row key-match: reject a row whose semester/course_slug doesn't
+        # match the requested key (avoids ingesting cross-course Silver data).
+        row_num = offset + 1
+        if row.semester != semester or row.course_slug != course_slug:
+            raise LocatedInputError(
+                f"row semester/course_slug mismatch: "
+                f"expected ({semester!r}, {course_slug!r}), "
+                f"got ({row.semester!r}, {row.course_slug!r})",
+                file=path.name,
+                row=row_num,
+                expected=f"semester={semester!r} course_slug={course_slug!r}",
+                actual=f"semester={row.semester!r} course_slug={row.course_slug!r}",
+            )
+        sid = normalize_student_id(row.student_id, source=path.name, row=row_num)
+        cohort_year = _cohort_year(sid, filename=path.name, row=row_num)
         identities[sid] = row.name_kr
         entries.extend(
             _emit_percentile_z_domain(
@@ -763,6 +781,7 @@ def read_combined_analysis(
     path: Path,
     *,
     semester: str,
+    course_slug: str,
     ingested_at: str,
     source_path: str,
 ) -> SourceReadResult:
@@ -774,18 +793,25 @@ def read_combined_analysis(
     cluster_assignment).  None values are skipped per the same rules as the
     individual readers.
 
+    Off-roster rows (``on_roster=False``) are skipped entirely — parity with
+    :func:`read_factor_scores`.
+
     Args:
         path: Real filesystem path to the parquet file.
         semester: Academic semester code embedded in every emitted entry.
+            Each row's ``semester`` and ``course_slug`` are compared against
+            these keys; a mismatch raises ``LocatedInputError``.
+        course_slug: Course slug used for the per-row key-match check.
         ingested_at: ISO-8601 UTC timestamp for the SourceRecord.
         source_path: Repo-relative path string for the SourceRecord.
 
     Returns:
-        A ``SourceReadResult``; identities map student_id → name_kr.
+        A ``SourceReadResult``; identities map on-roster student_id → name_kr.
 
     Raises:
-        LocatedInputError: On unreadable parquet or any row that fails the
-            ``CombinedAnalysisRow`` contract.
+        LocatedInputError: On unreadable parquet, any row that fails the
+            ``CombinedAnalysisRow`` contract, or a row whose semester/course_slug
+            does not match the requested key.
     """
     source_id = "immersio:진단×시험결합"
     rows = _validate_rows(_read_parquet(path), CombinedAnalysisRow, filename=path.name)
@@ -793,8 +819,25 @@ def read_combined_analysis(
     entries: list[CodexEntry] = []
     identities: dict[str, str | None] = {}
     for offset, row in enumerate(rows):
-        sid = normalize_student_id(row.student_id, source=path.name, row=offset + 1)
-        cohort_year = _cohort_year(sid, filename=path.name, row=offset + 1)
+        if not row.on_roster:
+            continue  # off-roster — parity with read_factor_scores
+
+        row_num = offset + 1
+        # Per-row key-match: reject a row whose semester/course_slug doesn't
+        # match the requested key.
+        if row.semester != semester or row.course_slug != course_slug:
+            raise LocatedInputError(
+                f"row semester/course_slug mismatch: "
+                f"expected ({semester!r}, {course_slug!r}), "
+                f"got ({row.semester!r}, {row.course_slug!r})",
+                file=path.name,
+                row=row_num,
+                expected=f"semester={semester!r} course_slug={course_slug!r}",
+                actual=f"semester={row.semester!r} course_slug={row.course_slug!r}",
+            )
+
+        sid = normalize_student_id(row.student_id, source=path.name, row=row_num)
+        cohort_year = _cohort_year(sid, filename=path.name, row=row_num)
         identities[sid] = row.name_kr
 
         entries.extend(
@@ -854,6 +897,7 @@ def read_paideia_sources(
     immersio_silver_dir: Path | None,
     needsmap_silver_dir: Path | None,
     semester: str,
+    course_slug: str,
     data_root: Path,
     ingested_at: str,
 ) -> list[SourceReadResult]:
@@ -877,6 +921,10 @@ def read_paideia_sources(
         needsmap_silver_dir: Directory holding needs-map Silver parquet files,
             or ``None`` if no needs-map Silver is available.
         semester: Academic semester code embedded in every emitted entry.
+            Each row's ``semester`` and ``course_slug`` in readers that carry
+            these fields are checked against this value; a mismatch raises.
+        course_slug: Course slug for the per-row key-match check in readers that
+            carry a ``course_slug`` column (학생지표, 진단×시험결합).
         data_root: The ``data/`` root; each file's ``source_path`` is derived as
             ``path.relative_to(data_root)`` for cross-machine determinism.
         ingested_at: ISO-8601 UTC timestamp for every SourceRecord.
@@ -886,7 +934,8 @@ def read_paideia_sources(
         by ``source_id``.
 
     Raises:
-        LocatedInputError: On any present-but-malformed Silver file.
+        LocatedInputError: On any present-but-malformed Silver file or a row
+            whose semester/course_slug does not match the requested key.
     """
     results: list[SourceReadResult] = []
 
@@ -904,6 +953,7 @@ def read_paideia_sources(
                 read_combined_analysis(
                     combined,
                     semester=semester,
+                    course_slug=course_slug,
                     ingested_at=ingested_at,
                     source_path=_sp(combined),
                 )
@@ -915,6 +965,7 @@ def read_paideia_sources(
                     read_student_metrics(
                         metrics,
                         semester=semester,
+                        course_slug=course_slug,
                         ingested_at=ingested_at,
                         source_path=_sp(metrics),
                     )

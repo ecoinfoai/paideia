@@ -35,7 +35,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry
+from paideia_shared.schemas._common import CourseSlug, SemesterCode
 from paideia_shared.schemas.metric_codex import CodexEntry
+from pydantic import TypeAdapter
 
 from metric_codex.errors import LocatedInputError
 from metric_codex.generate.backend import BackendUnreachableError
@@ -522,6 +524,7 @@ def _run_ingest(args: argparse.Namespace) -> int:
         immersio_silver_dir=immersio_dir_arg,
         needsmap_silver_dir=needsmap_dir_arg,
         semester=semester,
+        course_slug=course,
         data_root=data_root,
         ingested_at=now,
     )
@@ -1312,6 +1315,37 @@ def app(argv: list[str] | None = None) -> int:
         parser.error(f"unknown command: {args.command}")
 
     try:
+        # Eager boundary validation of --semester and --course BEFORE any handler
+        # runs (and therefore before any path interpolation or filesystem access).
+        # All subcommands declare both flags as required=True, but we guard for
+        # None in case a future subcommand legitimately omits one.
+        # Placed inside the ValueError-catching try block so the exit-2 mapping
+        # applies the same way as all other LocatedInputError raises.
+        _ta_semester: TypeAdapter[SemesterCode] = TypeAdapter(SemesterCode)
+        _ta_course: TypeAdapter[CourseSlug] = TypeAdapter(CourseSlug)
+        semester_arg: str | None = getattr(args, "semester", None)
+        course_arg: str | None = getattr(args, "course", None)
+        if semester_arg is not None:
+            try:
+                _ta_semester.validate_python(semester_arg)
+            except Exception as _exc:  # noqa: BLE001 — pydantic wraps in ValidationError
+                raise LocatedInputError(
+                    f"--semester {semester_arg!r} does not match SemesterCode pattern "
+                    r"'^\d{4}-[12SW]$' (e.g. '2026-1')",
+                    expected=r"^\d{4}-[12SW]$",
+                    actual=semester_arg,
+                ) from _exc
+        if course_arg is not None:
+            try:
+                _ta_course.validate_python(course_arg)
+            except Exception as _exc:  # noqa: BLE001 — pydantic wraps in ValidationError
+                raise LocatedInputError(
+                    f"--course {course_arg!r} does not match CourseSlug pattern "
+                    r"'^[a-z][a-z0-9-]{1,39}$' (e.g. 'anatomy')",
+                    expected=r"^[a-z][a-z0-9-]{1,39}$",
+                    actual=course_arg,
+                ) from _exc
+
         return handler(args)
     except NotImplementedError:
         # Stub handlers — pipeline not yet wired. Treat as a pipeline step

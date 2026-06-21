@@ -774,8 +774,19 @@ def run_all_checks(
             from metric_codex.distribute.roster import load_roster
 
             roster = load_roster(effective_roster_path)
-        except LocatedInputError:
-            roster = None  # SKIP-03 will handle the missing-roster case.
+        except LocatedInputError as exc:
+            # A present-but-unparseable roster must emit a SKIP-03 Violation
+            # naming the roster file (not silently degrade to roster=None —
+            # that would swallow the parse error and make the cross-leak check
+            # unable to detect the failure's location; T033 / FR-013).
+            violations.append(
+                Violation(
+                    invariant_id="SKIP-03",
+                    message=f"roster file could not be parsed: {exc.message}",
+                    file=str(effective_roster_path),
+                    detail=str(exc) if exc.expected or exc.actual else None,
+                )
+            )
 
     # --- Run checks ---
     violations += check_priv01_no_staging_pii(own_silver, pseudonym_map)

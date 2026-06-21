@@ -572,3 +572,50 @@ def test_source_read_result_is_frozen(one_student_result: SourceReadResult) -> N
     """SourceReadResult is immutable."""
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
         one_student_result.entries = []  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# T025 — duplicate student_id → located LocatedInputError naming the second row
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_student_id_raises_located_on_second_row(tmp_path: Path) -> None:
+    """Two rows with the same student_id and conflicting totals → LocatedInputError.
+
+    RED: before T030 fix, the second row silently overwrites the first in
+    ``identities`` and appends a second score entry — last-write-wins.  The fix
+    must raise immediately on the duplicate id naming the second row number.
+    """
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점"],
+            [2026000001, "테스트A", 85],
+            [2026000001, "테스트A다른이름", 99],  # same id, conflicting total
+        ],
+    )
+    with pytest.raises(LocatedInputError) as exc_info:
+        _read(path)
+
+    msg = str(exc_info.value)
+    # Must name the second row (row 3, 1-based, in the sheet).
+    assert "3" in msg, f"expected row 3 in error; got: {msg!r}"
+    # Must include the duplicate student_id value.
+    assert "2026000001" in msg, f"expected student_id in error; got: {msg!r}"
+
+
+def test_duplicate_student_id_raises_for_full_map(tmp_path: Path) -> None:
+    """Duplicate id raises even when all three score columns are mapped (FULL_MAP)."""
+    path = _make_workbook(
+        tmp_path,
+        [
+            ["학번", "이름", "총점", "환산점수", "출석"],
+            [2026000002, "홍길동", 70, 75.0, 12],
+            [2026000002, "홍길동복사", 80, 85.0, 14],  # duplicate
+        ],
+    )
+    with pytest.raises(LocatedInputError) as exc_info:
+        _read(path, _FULL_EXCEL_MAP)
+
+    msg = str(exc_info.value)
+    assert "2026000002" in msg

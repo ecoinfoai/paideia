@@ -357,6 +357,7 @@ def test_student_metrics_percentiles_and_domain(tmp_path: Path) -> None:
     result = read_student_metrics(
         path,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         ingested_at=_INGESTED_AT,
         source_path=str(path.relative_to(data_root)),
     )
@@ -523,6 +524,7 @@ def test_combined_analysis_derives_all(tmp_path: Path) -> None:
     result = read_combined_analysis(
         path,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         ingested_at=_INGESTED_AT,
         source_path=str(path.relative_to(data_root)),
     )
@@ -566,6 +568,7 @@ def test_orchestrator_individual_path(tmp_path: Path) -> None:
         immersio_silver_dir=immersio_dir,
         needsmap_silver_dir=needsmap_dir,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         data_root=data_root,
         ingested_at=_INGESTED_AT,
     )
@@ -599,6 +602,7 @@ def test_orchestrator_combined_preference(tmp_path: Path) -> None:
         immersio_silver_dir=immersio_dir,
         needsmap_silver_dir=needsmap_dir,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         data_root=data_root,
         ingested_at=_INGESTED_AT,
     )
@@ -638,6 +642,7 @@ def test_orchestrator_degrade_missing_files(tmp_path: Path) -> None:
         immersio_silver_dir=immersio_dir,
         needsmap_silver_dir=needsmap_dir,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         data_root=data_root,
         ingested_at=_INGESTED_AT,
     )
@@ -651,6 +656,7 @@ def test_orchestrator_none_dirs(tmp_path: Path) -> None:
         immersio_silver_dir=None,
         needsmap_silver_dir=None,
         semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
         data_root=data_root,
         ingested_at=_INGESTED_AT,
     )
@@ -663,8 +669,8 @@ def test_determinism_two_reads(tmp_path: Path) -> None:
     _write_student_metrics(path)
     sp = str(path.relative_to(data_root))
 
-    r1 = read_student_metrics(path, semester=_SEMESTER, ingested_at=_INGESTED_AT, source_path=sp)
-    r2 = read_student_metrics(path, semester=_SEMESTER, ingested_at=_INGESTED_AT, source_path=sp)
+    r1 = read_student_metrics(path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp)
+    r2 = read_student_metrics(path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp)
     assert r1.entries == r2.entries
     # Sorted by (student_id, entry_kind, key).
     keys = [(e.student_id, e.entry_kind.value, e.key) for e in r1.entries]
@@ -701,6 +707,7 @@ def test_malformed_parquet_raises_located(tmp_path: Path) -> None:
         read_student_metrics(
             path,
             semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
             ingested_at=_INGESTED_AT,
             source_path=str(path.relative_to(data_root)),
         )
@@ -773,6 +780,7 @@ def test_corrupted_dict_cell_raises_located(tmp_path: Path) -> None:
         read_student_metrics(
             path,
             semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
             ingested_at=_INGESTED_AT,
             source_path=str(path.relative_to(data_root)),
         )
@@ -947,6 +955,7 @@ def test_combined_malformed_row_raises_located(tmp_path: Path) -> None:
         read_combined_analysis(
             path,
             semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
             ingested_at=_INGESTED_AT,
             source_path=str(path.relative_to(data_root)),
         )
@@ -962,10 +971,205 @@ def test_non_parquet_file_raises_located(tmp_path: Path) -> None:
         read_student_metrics(
             path,
             semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
             ingested_at=_INGESTED_AT,
             source_path=str(path.relative_to(data_root)),
         )
     assert "학생지표.parquet" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# I-4 — exam_result must not span multiple course_slug values (key collision)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# T026 — off-roster row in combined reader skipped (parity with factor_scores)
+# ---------------------------------------------------------------------------
+
+
+def _write_combined_with_off_roster(path: Path) -> None:
+    """Write a combined parquet with one on-roster and one off-roster student.
+
+    The off-roster row has with_axes=True so it WOULD emit axis_score_z entries
+    if the reader doesn't skip it — this makes the on_roster skip observable
+    even when no exam scores are present.
+    """
+    rows = [
+        _combined_row(_SID_A, exam_taken=True, with_axes=True),
+        # Off-roster row: on_roster=False, section=None.  with_axes=True so the
+        # row WOULD produce axis_score_z entries if processed — making the skip
+        # distinguishable from an empty-data degrade.
+        {
+            **_combined_row(_SID_OFF, exam_taken=False, with_axes=True),
+            "on_roster": False,
+            "section": None,  # off-roster must have section=None
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def test_combined_reader_skips_off_roster_row(tmp_path: Path) -> None:
+    """read_combined_analysis must skip rows where on_roster=False.
+
+    The off-roster fixture row has with_axes=True: it WOULD emit axis_score_z
+    entries (7 axes) for _SID_OFF if not skipped.  RED: before T031 fix, those
+    entries appear because the loop has no on_roster guard.
+
+    After fix: only _SID_A entries are emitted; _SID_OFF entries are absent.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "진단×시험결합.parquet"
+    _write_combined_with_off_roster(path)
+
+    result = read_combined_analysis(
+        path,
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        ingested_at=_INGESTED_AT,
+        source_path=str(path.relative_to(data_root)),
+    )
+    # Only on-roster student _SID_A should produce entries.
+    student_ids_emitted = {e.student_id for e in result.entries}
+    assert _SID_OFF not in student_ids_emitted, (
+        f"off-roster student {_SID_OFF!r} must be skipped; "
+        f"found entries for: {student_ids_emitted}"
+    )
+    assert _SID_A in student_ids_emitted, (
+        f"on-roster student {_SID_A!r} must produce entries"
+    )
+
+
+def test_combined_off_roster_identity_not_in_identities(tmp_path: Path) -> None:
+    """The off-roster row must not be included in the identities map either.
+
+    Factor_scores silently omits off-roster from identities (no identity entry).
+    Combined reader must follow the same convention after the T031 fix.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "진단×시험결합.parquet"
+    _write_combined_with_off_roster(path)
+
+    result = read_combined_analysis(
+        path,
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        ingested_at=_INGESTED_AT,
+        source_path=str(path.relative_to(data_root)),
+    )
+    assert _SID_OFF not in result.identities, (
+        f"off-roster student {_SID_OFF!r} must not appear in identities"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T027 — per-row semester/course_slug key-match rejection (D10b)
+# ---------------------------------------------------------------------------
+
+
+def _write_student_metrics_wrong_course(path: Path) -> None:
+    """Write a 학생지표 parquet whose row has course_slug='physiology', not 'anatomy'."""
+    rows = [
+        {
+            "student_id": _SID_A,
+            "name_kr": "김철수",
+            "section": "A",
+            "semester": _SEMESTER,
+            "course_slug": "physiology",  # wrong course
+            "exam_taken": True,
+            "total_score": 80.0,
+            "score_percent": 80.0,
+            "section_percentile": 75.0,
+            "cohort_percentile": 70.0,
+            "z_score": 1.2,
+            "chapter_correct_rates": json.dumps({"순환": 0.9}, ensure_ascii=False),
+            "source_correct_rates": json.dumps({}, ensure_ascii=False),
+            "difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+            "expected_difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+            "item_type_correct_rates": json.dumps({}, ensure_ascii=False),
+            "interest_chapters_correct_rate": None,
+            "aversion_chapters_correct_rate": None,
+        },
+    ]
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def test_student_metrics_wrong_course_slug_raises(tmp_path: Path) -> None:
+    """A 학생지표 row with course_slug != the requested key → LocatedInputError.
+
+    RED: before T032 fix, read_student_metrics has no per-row key-match check.
+    After fix: caller passes course_slug='anatomy'; a 'physiology' row raises.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "학생지표.parquet"
+    _write_student_metrics_wrong_course(path)
+
+    with pytest.raises(LocatedInputError) as exc_info:
+        read_student_metrics(
+            path,
+            semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    msg = str(exc_info.value)
+    assert "physiology" in msg or "course_slug" in msg or "anatomy" in msg, (
+        f"error must mention the slug mismatch; got: {msg!r}"
+    )
+
+
+def _write_combined_wrong_course(path: Path) -> None:
+    """Write a combined parquet with course_slug='physiology'."""
+    row = _combined_row(_SID_A, exam_taken=True, with_axes=True)
+    row = dict(row)
+    row["course_slug"] = "physiology"
+    pd.DataFrame([row]).to_parquet(path)
+
+
+def test_combined_wrong_course_slug_raises(tmp_path: Path) -> None:
+    """read_combined_analysis with a mismatched course_slug row → LocatedInputError.
+
+    RED: before T032 fix, no per-row key-match is performed.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "진단×시험결합.parquet"
+    _write_combined_wrong_course(path)
+
+    with pytest.raises(LocatedInputError) as exc_info:
+        read_combined_analysis(
+            path,
+            semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
+            ingested_at=_INGESTED_AT,
+            source_path=str(path.relative_to(data_root)),
+        )
+    msg = str(exc_info.value)
+    assert "physiology" in msg or "course_slug" in msg or "anatomy" in msg, (
+        f"error must mention the slug mismatch; got: {msg!r}"
+    )
+
+
+def test_read_paideia_sources_wrong_course_raises(tmp_path: Path) -> None:
+    """read_paideia_sources with course_slug='anatomy' on physiology data → error.
+
+    Ensures the course_slug kwarg propagates from the orchestrator through to the
+    individual readers where the per-row check fires.
+    """
+    data_root, immersio_dir, _ = _silver_dirs(tmp_path)
+    path = immersio_dir / "학생지표.parquet"
+    _write_student_metrics_wrong_course(path)  # row has course_slug='physiology'
+
+    with pytest.raises(LocatedInputError) as exc_info:
+        read_paideia_sources(
+            immersio_silver_dir=immersio_dir,
+            needsmap_silver_dir=None,
+            semester=_SEMESTER,
+            course_slug=_COURSE_SLUG,
+            data_root=data_root,
+            ingested_at=_INGESTED_AT,
+        )
+    msg = str(exc_info.value)
+    assert "physiology" in msg or "course_slug" in msg or "anatomy" in msg
 
 
 # ---------------------------------------------------------------------------

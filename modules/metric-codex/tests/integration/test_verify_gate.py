@@ -723,3 +723,106 @@ class TestVerifyPriv04Gitignored:
         assert rc == 3, (
             f"verify should exit 3 on PRIV-04 (data/ not ignored), got rc={rc}"
         )
+
+
+# ---------------------------------------------------------------------------
+# T028 — present-but-unparseable roster → located Violation, not silent None
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyUnparseableRoster:
+    """FR-013 (T033): a present roster that raises on parse must emit a
+    SKIP-03 located Violation instead of silently degrading to roster=None.
+
+    Before T033 fix: the except branch sets ``roster = None`` so the
+    ``지도교수별`` check cannot run and no violation is emitted about the
+    parse failure — the error is swallowed.
+
+    After T033 fix: the LocatedInputError from load_roster is caught and
+    appended as a SKIP-03 Violation naming the roster file.
+    """
+
+    def _build_pipeline_with_bad_roster(self, tmp_path: Path) -> tuple[Path, Path]:
+        """Run ingest+generate+distribute with a valid roster, then corrupt it.
+
+        Returns (data_root, roster_path) so the caller can trigger verify.
+        """
+        data_root = tmp_path / "data"
+        bronze = data_root / "bronze" / "metric-codex" / _KEY
+        bronze.mkdir(parents=True)
+
+        _make_school_excel(bronze / "성적출석.xlsx")
+        _make_school_map(bronze / "성적출석_map.yaml")
+        qs_path = bronze / "question_set.yaml"
+        _make_question_set(qs_path)
+
+        assert app([
+            "ingest", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
+        ]) == 0
+
+        assert app([
+            "generate", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--question-set", str(qs_path),
+            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
+        ]) == 0
+
+        roster_path = bronze / "지도교수배정.yaml"
+        _make_roster(roster_path)
+
+        assert app([
+            "distribute", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--roster", str(roster_path),
+            "--now", "2026-06-01T02:00:00Z",
+        ]) == 0
+
+        # Corrupt the roster AFTER distribute (so 지도교수별/ dir exists).
+        roster_path.write_text(
+            "assignments: [UNPARSEABLE: {bad yaml {{{\n",
+            encoding="utf-8",
+        )
+        return data_root, roster_path
+
+    def test_unparseable_roster_emits_skip03_violation_with_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """A present-but-unparseable roster must emit a SKIP-03 Violation naming the file.
+
+        RED: before T033 fix, the except branch in run_all_checks sets
+        ``roster = None`` and re-raises no violation about the parse failure.
+        The subsequent check_skip03_no_cross_leak sees roster=None and emits
+        the generic "no roster was supplied" message pointing to 지도교수별,
+        NOT to the roster file that failed to parse.
+
+        After T033 fix: the LocatedInputError from load_roster is caught and
+        appended as a SKIP-03 Violation whose ``.file`` attribute names the
+        roster path — the file-parse failure is located, not silent.
+        """
+        data_root, roster_path = self._build_pipeline_with_bad_roster(tmp_path)
+
+        rc = app([
+            "verify",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--roster", str(roster_path),
+        ])
+        captured = capsys.readouterr()
+
+        # Must exit 3 (violation detected).
+        assert rc == 3, (
+            f"verify should exit 3 when roster is unparseable; got rc={rc}"
+        )
+        # Must name SKIP-03 as the invariant category.
+        assert "SKIP-03" in captured.err, (
+            f"expected SKIP-03 Violation in stderr; got: {captured.err!r}"
+        )
+        # KEY: the Violation must name the roster FILE (not just 지도교수별 dir).
+        # Before fix: the only SKIP-03 message points to the bundle dir and says
+        # "no roster was supplied".  After fix: the message points to the roster
+        # file itself as the parse failure location.
+        roster_name = roster_path.name
+        assert roster_name in captured.err or str(roster_path) in captured.err, (
+            f"SKIP-03 Violation must name the roster file (not just 지도교수별); "
+            f"roster={roster_path.name!r}, stderr={captured.err!r}"
+        )

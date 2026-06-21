@@ -237,6 +237,8 @@ def read_school_excel(
         source_id = f"school_excel:{filename}"
         entries: list[CodexEntry] = []
         identities: dict[str, str | None] = {}
+        # Track which student_ids have been seen to detect duplicates (T030).
+        seen_student_ids: set[str] = set()
 
         student_id_idx = col_indices[cols.student_id]
 
@@ -258,6 +260,20 @@ def read_school_excel(
                 source=filename,
                 row=row_num,
             )
+
+            # Fail-fast on duplicate student_id (last-write-wins would silently
+            # discard conflicting scores — an audit-integrity violation).
+            if student_id in seen_student_ids:
+                raise LocatedInputError(
+                    f"duplicate student_id {student_id!r} — each student must appear "
+                    "exactly once per source file",
+                    file=filename,
+                    row=row_num,
+                    column=cols.student_id,
+                    expected="unique student_id per row",
+                    actual=student_id,
+                )
+            seen_student_ids.add(student_id)
 
             # Capture identity.
             name_kr_val: str | None = None
