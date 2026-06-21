@@ -834,6 +834,55 @@ class TestVerifyUnparseableRoster:
             f"roster={roster_path.name!r}, stderr={captured.err!r}"
         )
 
+    def test_unparseable_roster_does_not_double_emit_skip03(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Carry-over (c) dedup: a present-but-unparseable roster must emit ONLY the
+        located parse-failure SKIP-03, NOT the generic "no roster was supplied" note.
+
+        Pins the ``if not roster_parse_failed:`` guard in run_all_checks: when the
+        roster exists but fails to parse, we record one located parse-failure
+        Violation naming the file and SKIP the second, redundant cross-leak note
+        ("no roster was supplied" → points to 지도교수별).  Without the guard, BOTH
+        fire — two SKIP-03 lines for one root cause.
+
+        A future edit deleting the guard would re-introduce the duplicate and this
+        test would fail (the sibling
+        ``test_unparseable_roster_emits_skip03_violation_with_file`` would NOT,
+        since it only asserts *a* SKIP-03 naming the file is present).
+        """
+        data_root, roster_path = self._build_pipeline_with_bad_roster(tmp_path)
+
+        rc = app([
+            "verify",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--roster", str(roster_path),
+        ])
+        captured = capsys.readouterr()
+
+        assert rc == 3, (
+            f"verify should exit 3 when roster is unparseable; got rc={rc}"
+        )
+        # The redundant generic note must NOT appear (dedup guard active).
+        assert "no roster was supplied" not in captured.err, (
+            "the generic 'no roster was supplied' SKIP-03 note must be suppressed "
+            "when a located parse-failure Violation was already recorded; "
+            f"stderr={captured.err!r}"
+        )
+        # Exactly one SKIP-03 line is emitted (the located parse-failure).
+        skip03_lines = [ln for ln in captured.err.splitlines() if "[SKIP-03]" in ln]
+        assert len(skip03_lines) == 1, (
+            f"expected exactly one SKIP-03 line (the located parse failure), "
+            f"got {len(skip03_lines)}: {skip03_lines!r}"
+        )
+        # And that single line is the located parse failure naming the roster file.
+        assert "could not be parsed" in skip03_lines[0], (
+            f"the sole SKIP-03 line must be the located parse failure; "
+            f"got: {skip03_lines[0]!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # T035 RED — PRIV-01: PII in cache/*.json and staging_responses/*.json
@@ -1256,6 +1305,58 @@ class TestVerifyEvid02PerQuestion:
         )
         assert "EVID-02" in captured.err, (
             f"EVID-02 must appear in stderr; got: {captured.err!r}"
+        )
+
+    def test_inline_phrase_does_not_mask_missing_standalone_sentinel(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Issue 2: an inline '근거 없음' must NOT compensate for a missing standalone one.
+
+        render_template emits the sentinel ONLY as a standalone line.  A free-text
+        citation value/key that literally contained the phrase inline would inflate
+        a whole-file substring count and mask a genuinely-missing standalone sentinel.
+
+        Here we remove ONE of the two standalone sentinels and inject the phrase
+        INLINE inside another line (simulating a free-text value containing it).
+        With the OLD substring ``.count`` the total stays 2 → EVID-02 would PASS
+        vacuously.  With the exact-line-match, the standalone count is 1 → EVID-02
+        must still fire for the missing question.
+        """
+        data_root = self._build_pipeline_two_no_evidence(tmp_path)
+        md = self._student_md(data_root)
+        content = md.read_text(encoding="utf-8")
+
+        # Remove the FIRST standalone sentinel, then embed the phrase inline on a
+        # NON-standalone line so a substring count would still see two occurrences.
+        first_pos = content.index("근거 없음")
+        without_first = (
+            content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음"):]
+        )
+        # Inject an inline occurrence (the phrase is part of a longer line, not standalone).
+        mutated = without_first + "\n- 메모: 군집 라벨 '근거 없음 후보군' (출처: x, rich)\n"
+
+        # Sanity: a naive substring count still finds 2, but standalone lines == 1.
+        assert mutated.count("근거 없음") == 2, (
+            "precondition: substring count must remain 2 (one standalone + one inline)"
+        )
+        standalone = sum(1 for ln in mutated.splitlines() if ln.strip() == "근거 없음")
+        assert standalone == 1, (
+            f"precondition: exactly 1 standalone sentinel line must remain, got {standalone}"
+        )
+        md.write_text(mutated, encoding="utf-8")
+
+        rc = app([
+            "verify", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root),
+        ])
+        captured = capsys.readouterr()
+
+        assert rc == 3, (
+            f"verify must exit 3 — the inline phrase must not mask the missing "
+            f"standalone sentinel; got rc={rc}"
+        )
+        assert "EVID-02" in captured.err, (
+            f"EVID-02 must fire despite the inline occurrence; got: {captured.err!r}"
         )
 
     def test_both_sentinels_present_exits_zero(self, tmp_path: Path) -> None:

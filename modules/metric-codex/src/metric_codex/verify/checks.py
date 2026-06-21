@@ -502,8 +502,16 @@ def check_evidence_grounding(
         # substring hit from the first passes the check for the second too.
         # Fix: count expected sentinels (one per no_evidence question) vs occurrences
         # in the file; emit one Violation per missing sentinel, naming the question.
+        #
+        # Exact line-match (not substring): render_template emits the sentinel ONLY
+        # as a standalone line (``lines.append("근거 없음")``).  A substring count
+        # would be inflated by a citation key/value (free-text str) that happened to
+        # contain the phrase inline, masking a genuinely-missing standalone sentinel.
+        # Matching the emitter 1:1 (stripped-line equality) avoids that false PASS.
         no_evidence_questions = [bq for bq in bundle.questions if bq.answer.no_evidence]
-        sentinel_count_in_file = on_disk.count(_SENTINEL_NO_EVIDENCE)
+        sentinel_count_in_file = sum(
+            1 for ln in on_disk.splitlines() if ln.strip() == _SENTINEL_NO_EVIDENCE
+        )
         missing_count = len(no_evidence_questions) - sentinel_count_in_file
         if missing_count > 0:
             # Emit one violation per missing sentinel, attributing to the questions
