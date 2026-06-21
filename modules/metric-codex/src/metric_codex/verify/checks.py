@@ -26,8 +26,10 @@ prose but must not treat a legitimately LLM-rendered Gold as a violation.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -115,8 +117,6 @@ def check_priv01_no_staging_pii(
     Returns:
         List of Violation (empty if no dirs exist or no PII found).
     """
-    import json as _json
-
     known_names: frozenset[str] = frozenset(
         e.name_kr for e in pseudonym_map if e.name_kr
     )
@@ -146,7 +146,7 @@ def check_priv01_no_staging_pii(
             continue
         for json_path in sorted(subdir.glob("*.json")):
             try:
-                doc = _json.loads(json_path.read_text(encoding="utf-8"))
+                doc = json.loads(json_path.read_text(encoding="utf-8"))
             except Exception:  # noqa: BLE001,S112 — boundary: unreadable file, skip
                 continue
             raw_text = doc.get("raw_text")
@@ -444,10 +444,11 @@ def check_evidence_grounding(
             # Note: this is report-only — it must NOT append a Violation (which
             # would trigger exit 3).  The PII boundary is separately enforced by
             # check_priv01_no_staging_pii scanning staging/cache/staging_responses.
-            import sys as _sys
+            # TODO(US8): return as a structured non-fatal note instead of
+            # printing; align stream with other diagnostics.
             print(
                 f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)",
-                file=_sys.stdout,
+                file=sys.stdout,
             )
 
         # EVID-02: every no_evidence question → "근거 없음" in the md.

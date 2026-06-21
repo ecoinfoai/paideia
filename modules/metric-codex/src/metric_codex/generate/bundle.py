@@ -148,14 +148,26 @@ def redact_bundle_for_llm(bundle: StudentBundle) -> StudentBundle:
     stripped from the payload that flows to the staging JSON AND to the LLM
     facts string (``render_template``).
 
-    Redacts:
+    Redacts EVERY string field ``render_template`` emits to the LLM prompt:
     - ``question.question_text``.
+    - each ``citation.key`` (e.g. ``freetext:{item_id}:{category}`` — the
+      category string can carry the same name as ``value``).
     - each ``citation.value`` when it is a ``str`` (the ``value_text`` path);
       numeric values are passed through unchanged.
+    - each ``citation.source_id``.
+    (``citation.layer`` is a constrained ``Literal`` — no name possible — so it
+    is left untouched.)
+
+    Redacting all of key/value/source_id keeps the redaction CONSISTENT across
+    entry kinds: a ``freetext_category`` whose category lands in both ``key`` and
+    ``value`` is fully scrubbed, so the downstream ``assert_no_pii`` guard never
+    trips on a surviving token — the run redacts-and-continues (no hard stop —
+    Principle I), the same as ``cluster_label`` (value-only).
 
     The redaction is applied to a NEW bundle object built from copies — the
     persisted Silver ``CodexEntry`` / ``EvidenceCitation`` are NOT mutated, so
-    the operator's re-identification view retains the original name.  Apply this
+    the operator's re-identification view AND the persisted ``source_id`` (used
+    by the US3 LINEAGE check) keep the un-redacted originals.  Apply this
     immediately before ``write_staging`` and before assembling the LLM facts.
 
     Args:
@@ -173,7 +185,15 @@ def redact_bundle_for_llm(bundle: StudentBundle) -> StudentBundle:
                 new_value: float | str = redact_third_party_names(c.value)
             else:
                 new_value = c.value
-            redacted_citations.append(c.model_copy(update={"value": new_value}))
+            redacted_citations.append(
+                c.model_copy(
+                    update={
+                        "key": redact_third_party_names(c.key),
+                        "value": new_value,
+                        "source_id": redact_third_party_names(c.source_id),
+                    }
+                )
+            )
 
         redacted_answer = bq.answer.model_copy(
             update={"citations": redacted_citations}

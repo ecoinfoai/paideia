@@ -103,6 +103,34 @@ def _cluster_entry(student_id: str, label: str, **overrides) -> CodexEntry:
     return CodexEntry(**base)
 
 
+def _freetext_entry(student_id: str, category: str, **overrides) -> CodexEntry:
+    """Build a rich-layer freetext_category entry whose ``category`` lands in
+    BOTH ``key`` and ``value_text``.
+
+    Mirrors the real construction in ingest/paideia_sources.py
+    (``key=f"freetext:{item_id}:{category}"``, ``value_text=category``): the
+    SAME category string appears in two LLM-facing fields, so a surname+role
+    category must be redacted in both or the un-redacted key trips assert_no_pii.
+    """
+    item_id = "q1"
+    base: dict = dict(
+        student_id=student_id,
+        semester=_SEM,
+        cohort_year=2026,
+        layer="rich",
+        entry_kind=EntryKind.freetext_category,
+        domain=item_id,
+        item_ref=None,
+        key=f"freetext:{item_id}:{category}",
+        value_num=None,
+        value_text=category,
+        source_id="needs-map:free_text_categorization",
+        observed_at=None,
+    )
+    base.update(overrides)
+    return CodexEntry(**base)
+
+
 def _pseudonym_map(sids_names: list[tuple[str, str | None]]) -> list[PseudonymMapEntry]:
     """Build a pseudonym map sorted by student_id (S001, S002, …)."""
     sorted_sids = sorted(sids_names, key=lambda t: t[0])
@@ -382,6 +410,83 @@ class TestThirdPartyNameRedactionEndToEnd:
         assert "박교수" in template_facts, (
             "the un-redacted template (Gold/verify path) must keep the original"
         )
+
+
+# ---------------------------------------------------------------------------
+# T034 END-TO-END — freetext_category category in BOTH key AND value
+# ---------------------------------------------------------------------------
+
+
+class TestFreetextCategoryKeyAndValueRedactionEndToEnd:
+    """FR-014 consistency: a freetext_category whose category embeds a
+    surname+role (so it lands in BOTH citation.key and citation.value) must be
+    redacted in BOTH LLM-facing fields, and the wired build_bundles →
+    write_staging path must COMPLETE without raising (no exit-2 hard stop).
+
+    Before the key/source_id fix, value redacts but the un-redacted key trips
+    assert_no_pii → exit 2 — inconsistent with cluster_label (value-only) and a
+    Principle-I hard-stop.  This test pins the consistency fix.
+    """
+
+    _CATEGORY = "박교수 추천"  # surname+role inside a freetext category
+
+    def _scenario(
+        self,
+    ) -> tuple[list[CodexEntry], list[PseudonymMapEntry], QuestionSet]:
+        entries = [
+            _entry(_SID_A),
+            _freetext_entry(_SID_A, self._CATEGORY),
+        ]
+        pmap = _pseudonym_map([(_SID_A, _NAME_A)])
+        qs = _question_set(
+            ("q_free", "자유응답 범주를 알려주세요.", [EntryKind.freetext_category]),
+        )
+        return entries, pmap, qs
+
+    def test_completes_and_redacts_both_key_and_value(self, tmp_path):
+        """The wired path completes (no raise) AND redacts key + value."""
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
+        known_names = frozenset(e.name_kr for e in pmap if e.name_kr)
+        # MUST NOT raise — both key and value are redacted before the PII scan.
+        paths = write_staging(own_silver, bundles, known_names=known_names)
+        assert len(paths) == 1
+        staging_text = paths[0].read_text(encoding="utf-8")
+        # The surname+role token must be gone from the WHOLE payload (key + value).
+        assert "박교수" not in staging_text, (
+            f"3rd-party name leaked into staging JSON (key or value): {staging_text!r}"
+        )
+        assert "[REDACTED]" in staging_text, (
+            f"redaction marker missing from staging JSON: {staging_text!r}"
+        )
+
+    def test_redacted_bundle_key_and_value_both_scrubbed(self, tmp_path):
+        """The redacted bundle COPY scrubs both citation.key and citation.value."""
+        from metric_codex.generate.bundle import redact_bundle_for_llm
+
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        redacted = redact_bundle_for_llm(bundles[0])
+        citation = redacted.questions[0].answer.citations[0]
+        assert "박교수" not in citation.key, (
+            f"citation.key not redacted: {citation.key!r}"
+        )
+        assert "박교수" not in str(citation.value), (
+            f"citation.value not redacted: {citation.value!r}"
+        )
+
+    def test_silver_codex_retains_original_key_and_value(self, tmp_path):
+        """(c) The source CodexEntry keeps the original key AND value_text."""
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
+        write_staging(own_silver, bundles, known_names=frozenset({_NAME_A}))
+        ft = next(e for e in entries if e.entry_kind == EntryKind.freetext_category)
+        # The persisted codex entry must retain the original in BOTH fields
+        # (operator re-identification + LINEAGE).
+        assert "박교수" in ft.key
+        assert ft.value_text == self._CATEGORY
 
 
 # ---------------------------------------------------------------------------
