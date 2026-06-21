@@ -1702,7 +1702,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic" },
+    { name = "anthropic", specifier = ">=0.97.0" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "paideia-shared", editable = "shared/paideia_shared" },
     { name = "pandas", specifier = ">=2.0" },
