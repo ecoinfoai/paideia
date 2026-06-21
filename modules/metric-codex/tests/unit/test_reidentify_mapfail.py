@@ -157,11 +157,11 @@ class TestReadPseudonymMapDuplicateDetection:
         with pytest.raises(LocatedInputError) as exc_info:
             read_pseudonym_map(path)
 
-        # Error must be located (reference the file or pseudonym).
+        # Error is located at the offending row and names the duplicate pseudonym.
         err = exc_info.value
-        assert err.file is not None or "S001" in str(err), (
-            "error must identify the duplicate pseudonym"
-        )
+        assert err.file == "pseudonym_map.parquet"
+        assert err.row == 2
+        assert "S001" in str(err)
 
     def test_duplicate_student_id_raises_located_error(self, tmp_path: Path) -> None:
         """Two rows sharing the same student_id must be rejected at the boundary."""
@@ -174,7 +174,8 @@ class TestReadPseudonymMapDuplicateDetection:
         with pytest.raises(LocatedInputError) as exc_info:
             read_pseudonym_map(path)
 
+        # Error is located at the offending row and names the duplicate student_id.
         err = exc_info.value
-        assert err.file is not None or "2026000001" in str(err), (
-            "error must identify the duplicate student_id"
-        )
+        assert err.file == "pseudonym_map.parquet"
+        assert err.row == 2
+        assert "2026000001" in str(err)

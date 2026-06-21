@@ -57,10 +57,9 @@ def build_pseudonym_map(
     _prior: dict[str, str] = prior or {}
 
     # Determine the highest N already in use so new assignments start above it.
-    max_n: int = 0
-    for pseudonym in _prior.values():
-        if pseudonym.startswith("S") and pseudonym[1:].isdigit():
-            max_n = max(max_n, int(pseudonym[1:]))
+    # prior comes only from read_pseudonym_map, which validates each value
+    # against the S{NNN} schema, so int(p[1:]) is always safe.
+    max_n: int = max((int(p[1:]) for p in _prior.values()), default=0)
 
     # New ids: those in identities but absent from prior, sorted ascending.
     new_ids = sorted(sid for sid in identities if sid not in _prior)
@@ -73,7 +72,7 @@ def build_pseudonym_map(
 
     entries: list[PseudonymMapEntry] = []
     for student_id in sorted(identities):
-        pseudonym = _prior.get(student_id) or new_assignments[student_id]
+        pseudonym = _prior[student_id] if student_id in _prior else new_assignments[student_id]
         entries.append(
             PseudonymMapEntry(
                 student_id=student_id,
