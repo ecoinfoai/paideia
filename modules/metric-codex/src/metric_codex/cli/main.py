@@ -902,7 +902,11 @@ def _run_generate(args: argparse.Namespace) -> int:
         InputHashCache,
         SubscriptionBackend,
     )
-    from metric_codex.generate.bundle import assert_no_pii, build_bundles
+    from metric_codex.generate.bundle import (
+        assert_no_pii,
+        build_bundles,
+        redact_bundle_for_llm,
+    )
     from metric_codex.generate.narrative import render_template
     from metric_codex.generate.reidentify import (
         reidentify_and_write,
@@ -965,22 +969,31 @@ def _run_generate(args: argparse.Namespace) -> int:
     for bundle in bundles:
         # The deterministic cited evidence (template) is BOTH the offline output
         # AND the PII-free 'facts' an LLM polishes — never raw codex rows.
+        # Template-path facts use the UN-redacted bundle so the operator-facing
+        # Gold preserves legitimate Korean evidence and stays byte-identical to
+        # the verify-gate's render_template(bundle) (EVID-01).
         facts = render_template(bundle)
 
         if cache is None:
             narrative = facts
         else:
+            # FR-014: facts that cross the LLM boundary are rendered from a
+            # REDACTED bundle so an incidental 3rd-party name+role token (e.g. a
+            # cluster label "박교수 추천반" in a citation value) never reaches the
+            # model.  Silver/codex retains the original (redact_bundle_for_llm
+            # copies); only this LLM-facing facts string is redacted.
+            llm_facts = render_template(redact_bundle_for_llm(bundle))
             # PRIV-01: defense at the LLM boundary — re-assert no PII on the
-            # pseudonymized facts before constructing the request.
-            assert_no_pii(facts, known_names=known_names)
+            # pseudonymized + redacted facts before constructing the request.
+            assert_no_pii(llm_facts, known_names=known_names)
             request = GenerationRequest(
                 slot_id=bundle.pseudonym,
                 prompt=(
                     "다음은 한 학생의 가명화된 학습 근거 요약이다. "
                     "근거에 없는 사실을 추가하지 말고, 지도교수가 읽기 쉽도록 "
-                    "한국어로 다듬어라:\n\n" + facts
+                    "한국어로 다듬어라:\n\n" + llm_facts
                 ),
-                facts=facts,
+                facts=llm_facts,
                 model=args.model,
                 mode=backend_mode,
             )

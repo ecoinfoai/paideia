@@ -79,6 +79,30 @@ def _rich_entry(student_id: str, **overrides) -> CodexEntry:
     )
 
 
+def _cluster_entry(student_id: str, label: str, **overrides) -> CodexEntry:
+    """Build a rich-layer cluster_label entry whose value_text carries ``label``.
+
+    Mirrors ``_cluster_label_entry`` in ingest/paideia_sources.py: a cluster
+    label such as "박교수 추천반" is a free-text value_text (XOR value_num).
+    """
+    base: dict = dict(
+        student_id=student_id,
+        semester=_SEM,
+        cohort_year=2026,
+        layer="rich",
+        entry_kind=EntryKind.cluster_label,
+        domain=None,
+        item_ref=None,
+        key="cluster_label",
+        value_num=None,
+        value_text=label,
+        source_id="needs-map:cluster_assignment.parquet",
+        observed_at="2026-05-20",
+    )
+    base.update(overrides)
+    return CodexEntry(**base)
+
+
 def _pseudonym_map(sids_names: list[tuple[str, str | None]]) -> list[PseudonymMapEntry]:
     """Build a pseudonym map sorted by student_id (S001, S002, …)."""
     sorted_sids = sorted(sids_names, key=lambda t: t[0])
@@ -253,6 +277,114 @@ class TestBuildBundlesPiiInvariant:
 
 
 # ---------------------------------------------------------------------------
+# T034 END-TO-END — 3rd-party name redaction wired through write_staging
+# ---------------------------------------------------------------------------
+
+
+class TestThirdPartyNameRedactionEndToEnd:
+    """FR-014 wired: a cluster_label value_text "박교수 추천반" is redacted in the
+    staging payload (and the LLM facts), the run COMPLETES (no exit 2 / no
+    assert_no_pii raise), and the persisted Silver CodexEntry keeps the original.
+
+    This drives the REAL chokepoint (build_bundles → write_staging → the wired
+    redact_bundle_for_llm), not the redaction function in isolation.
+    """
+
+    _LABEL = "박교수 추천반"
+
+    def _scenario(
+        self,
+    ) -> tuple[list[CodexEntry], list[PseudonymMapEntry], QuestionSet]:
+        """One student with a cluster_label entry carrying a 3rd-party name."""
+        entries = [
+            _entry(_SID_A),
+            _cluster_entry(_SID_A, self._LABEL),
+        ]
+        pmap = _pseudonym_map([(_SID_A, _NAME_A)])
+        qs = _question_set(
+            ("q_cluster", "군집을 알려주세요.", [EntryKind.cluster_label]),
+        )
+        return entries, pmap, qs
+
+    def test_staging_json_redacts_third_party_name(self, tmp_path):
+        """(a) The written staging JSON contains [REDACTED], not 박교수."""
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
+        known_names = frozenset(e.name_kr for e in pmap if e.name_kr)
+        # (b) The wired path must COMPLETE — no raise (redact-then-scan).
+        paths = write_staging(own_silver, bundles, known_names=known_names)
+        assert len(paths) == 1
+        staging_text = paths[0].read_text(encoding="utf-8")
+        # (a) name+role token gone; redaction marker present.
+        assert "박교수" not in staging_text, (
+            f"3rd-party name leaked into staging JSON: {staging_text!r}"
+        )
+        assert "[REDACTED]" in staging_text, (
+            f"redaction marker missing from staging JSON: {staging_text!r}"
+        )
+
+    def test_run_completes_no_assert_no_pii_raise(self, tmp_path):
+        """(b) write_staging does not raise (no exit 2 / no hard stop)."""
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
+        known_names = frozenset(e.name_kr for e in pmap if e.name_kr)
+        # Must NOT raise — the redaction strips the name before the PII scan.
+        written = write_staging(own_silver, bundles, known_names=known_names)
+        assert (own_silver / "staging" / "S001.json").is_file()
+        assert len(written) == 1
+
+    def test_silver_codex_retains_original_name(self, tmp_path):
+        """(c) The in-memory Silver CodexEntry keeps the original 박교수 label.
+
+        Redaction is applied to a COPY for the LLM-facing payload; the source
+        CodexEntry (the operator's re-identification record) is untouched.
+        """
+        entries, pmap, qs = self._scenario()
+        # Build + write (the redaction happens inside write_staging).
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
+        write_staging(own_silver, bundles, known_names=frozenset({_NAME_A}))
+        # The original codex entry must STILL carry the full label.
+        cluster_entry = next(
+            e for e in entries if e.entry_kind == EntryKind.cluster_label
+        )
+        assert cluster_entry.value_text == self._LABEL, (
+            "Silver CodexEntry.value_text must retain the original 박교수 label"
+        )
+        assert "박교수" in cluster_entry.value_text
+
+    def test_llm_facts_render_redacted(self, tmp_path):
+        """(a') The LLM facts string (render_template of the redacted bundle)
+        contains [REDACTED], not 박교수 — proving the render path is redacted."""
+        from metric_codex.generate.bundle import redact_bundle_for_llm
+        from metric_codex.generate.narrative import render_template
+
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        llm_facts = render_template(redact_bundle_for_llm(bundles[0]))
+        assert "박교수" not in llm_facts, (
+            f"3rd-party name leaked into LLM facts: {llm_facts!r}"
+        )
+        assert "[REDACTED]" in llm_facts
+
+    def test_unredacted_bundle_facts_retain_original(self, tmp_path):
+        """The UN-redacted template (operator-facing Gold / verify byte-match)
+        keeps the original label — redaction is LLM-facing only, so EVID-01
+        byte-grounding against render_template(bundle) is preserved."""
+        from metric_codex.generate.narrative import render_template
+
+        entries, pmap, qs = self._scenario()
+        bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
+        template_facts = render_template(bundles[0])
+        # The operator-facing template retains the original name.
+        assert "박교수" in template_facts, (
+            "the un-redacted template (Gold/verify path) must keep the original"
+        )
+
+
+# ---------------------------------------------------------------------------
 # TestBuildBundlesMissingPseudonym — fail-fast guard
 # ---------------------------------------------------------------------------
 
@@ -333,29 +465,55 @@ class TestAssertNoPii:
     def test_passes_on_korean_freetext_category(self):
         """Korean free-text category values (e.g., health) are not PII.
 
-        Updated (T034/W2): also confirms that the new 3rd-party name+role
-        redaction pattern leaves legitimate category labels untouched.
-        '건강,진로' contains no surname+role token, so no redaction occurs.
+        Updated (T034/W2): also confirms that the anchored 3rd-party name+role
+        redaction pattern leaves legitimate category labels untouched, including
+        borderline mid-word inputs where a role token appears INSIDE a longer
+        legitimate Korean word ('경영학박사' = MBA — must NOT slice '영학박사';
+        '방사선생물학' = radiation biology — must NOT slice '방사선생').
         """
+        from metric_codex.generate.bundle import redact_third_party_names
+
         payload = json.dumps(
             {"pseudonym": "S001", "value_text": "건강,진로"},
             ensure_ascii=False,
         )
-        assert_no_pii(payload)
-        # W2 guard: legit Korean must survive the PII scan unchanged (no raise).
+        assert_no_pii(payload)  # no raise — legit Korean survives the scan.
+
+        # W2 boundary pins: anchored pattern must NOT match mid-word role tokens.
+        for legit in ("건강,진로", "경영학박사", "방사선생물학", "방사선"):
+            assert redact_third_party_names(legit) == legit, (
+                f"W2: legit Korean {legit!r} must not be redacted (mid-word slice)"
+            )
+            assert_no_pii(
+                json.dumps({"pseudonym": "S001", "value_text": legit}, ensure_ascii=False)
+            )
 
     def test_passes_on_domain_name_in_korean(self):
         """Korean chapter/domain labels like '순환' are not PII.
 
         Updated (T034/W2): '순환' is a bare anatomy chapter name, not a
-        surname+role token — the new redaction pattern must leave it untouched.
+        surname+role token — the anchored pattern must leave it untouched.  Also
+        pins additional bare chapter labels that contain no role token at all.
         """
+        from metric_codex.generate.bundle import redact_third_party_names
+
         payload = json.dumps(
             {"pseudonym": "S001", "key": "chapter_correct_rate:순환"},
             ensure_ascii=False,
         )
-        assert_no_pii(payload)
-        # W2 guard: domain labels must pass without false-positive redaction.
+        assert_no_pii(payload)  # no raise — domain labels are legitimate.
+
+        # W2 boundary pins: bare chapter labels never redact.
+        for label in ("순환", "호흡", "신경", "근골격"):
+            assert redact_third_party_names(label) == label, (
+                f"W2: chapter label {label!r} must not be redacted"
+            )
+            assert_no_pii(
+                json.dumps(
+                    {"pseudonym": "S001", "key": f"chapter_correct_rate:{label}"},
+                    ensure_ascii=False,
+                )
+            )
 
     # --- T034 RED: 3rd-party surname+role in value_text must be redacted ---
 
@@ -374,21 +532,16 @@ class TestAssertNoPii:
         with pytest.raises(LocatedInputError):
             assert_no_pii(payload)
 
-    def test_third_party_name_role_redacted_in_bundle_facts(self):
-        """A 박교수-bearing value_text is redacted before staging/LLM payload.
-
-        T034 RED: the LLM-facing facts string (render_template output) must NOT
-        contain '박교수' when the codex entry carries it as value_text.  The
-        Silver/codex entry retains the original; only the LLM-facing payload is
-        redacted.
-        """
+    def test_redact_third_party_names_matches_real_name_roles(self):
+        """W2: real surname+role tokens ARE redacted (positive boundary)."""
         from metric_codex.generate.bundle import redact_third_party_names
-        raw = "박교수 추천반"
-        redacted = redact_third_party_names(raw)
-        # Must not contain the original name+role token.
-        assert "박교수" not in redacted
-        # The redaction marker must be present to flag the substitution.
-        assert "[REDACTED]" in redacted or len(redacted) < len(raw)
+
+        for name_role in ("박교수", "김선생", "이조교", "최선생님", "정박사", "한쌤"):
+            redacted = redact_third_party_names(f"{name_role} 추천반")
+            assert name_role not in redacted, (
+                f"W2: {name_role!r} must be redacted from the LLM-facing payload"
+            )
+            assert "[REDACTED]" in redacted
 
 
 # ---------------------------------------------------------------------------

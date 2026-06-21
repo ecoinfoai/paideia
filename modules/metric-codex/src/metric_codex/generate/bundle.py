@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Literal
 
 from paideia_shared.schemas import PseudonymMapEntry
-from paideia_shared.schemas.metric_codex import CodexEntry, QueryAnswer
+from paideia_shared.schemas.metric_codex import CodexEntry, EvidenceCitation, QueryAnswer
 from pydantic import BaseModel, ConfigDict, Field
 
 from metric_codex.errors import LocatedInputError
@@ -54,12 +54,18 @@ _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 # Targeted 3rd-party name+role pattern (W2 precision constraint):
 # Matches 1-2 Hangul syllables (a Korean surname) immediately followed by one
 # of the role tokens: 교수|선생님|선생|박사|쌤|조교.
-# Bare Korean syllables like "순환" (chapter label) do NOT match because they
-# are not followed by a role token.  Two-syllable names like "박지수" without
-# a role suffix also do NOT match, preventing false positives on student names
-# already guarded by the known-name set.
+# Hangul word-boundary lookarounds ``(?<![가-힣])`` / ``(?![가-힣])`` prevent
+# mid-word slicing: "방사선생물학" / "경영학박사" / "방사선" do NOT match because
+# the candidate is flanked by other Hangul.  Bare chapter labels like "순환" do
+# NOT match (no role token); two-syllable student names like "박지수" without a
+# role suffix also do NOT match (guarded separately by the known-name set).
+# Accepted W2 heuristic tradeoff: a genuine noun+role title such as "의학박사"
+# (medical doctorate) still matches — a regex cannot distinguish "김박사" (Dr.Kim)
+# from "의학박사".  With redaction wired into the LLM-facing payload this is a
+# SAFE over-redaction (the LLM sees "[REDACTED]"; no crash, no leak); such titles
+# are rare as cluster labels in this domain.
 _THIRD_PARTY_NAME_ROLE_PATTERN = re.compile(
-    r"[가-힣]{1,2}(?:교수|선생님|선생|박사|쌤|조교)"
+    r"(?<![가-힣])[가-힣]{1,2}(?:교수|선생님|선생|박사|쌤|조교)(?![가-힣])"
 )
 
 
@@ -126,6 +132,62 @@ class StudentBundle(BaseModel):
     pseudonym: str = Field(..., pattern=r"^S\d{3,}$")
     available_layers: list[Literal["minimal", "rich"]]
     questions: list[BundleQuestion]
+
+
+# ---------------------------------------------------------------------------
+# LLM-facing bundle redaction (FR-014 chokepoint)
+# ---------------------------------------------------------------------------
+
+
+def redact_bundle_for_llm(bundle: StudentBundle) -> StudentBundle:
+    """Return an LLM-facing copy of ``bundle`` with 3rd-party names redacted.
+
+    FR-014 chokepoint: this is the single point where an incidental 3rd-party
+    name+role token (e.g. a cluster label ``박교수 추천반`` carried in a
+    citation's ``value`` text, or a name embedded in ``question_text``) is
+    stripped from the payload that flows to the staging JSON AND to the LLM
+    facts string (``render_template``).
+
+    Redacts:
+    - ``question.question_text``.
+    - each ``citation.value`` when it is a ``str`` (the ``value_text`` path);
+      numeric values are passed through unchanged.
+
+    The redaction is applied to a NEW bundle object built from copies — the
+    persisted Silver ``CodexEntry`` / ``EvidenceCitation`` are NOT mutated, so
+    the operator's re-identification view retains the original name.  Apply this
+    immediately before ``write_staging`` and before assembling the LLM facts.
+
+    Args:
+        bundle: The pseudonymized StudentBundle built from the Silver store.
+
+    Returns:
+        A redacted StudentBundle (same shape; 3rd-party name+role tokens
+        replaced by ``[REDACTED]`` in text fields).
+    """
+    redacted_questions: list[BundleQuestion] = []
+    for bq in bundle.questions:
+        redacted_citations: list[EvidenceCitation] = []
+        for c in bq.answer.citations:
+            if isinstance(c.value, str):
+                new_value: float | str = redact_third_party_names(c.value)
+            else:
+                new_value = c.value
+            redacted_citations.append(c.model_copy(update={"value": new_value}))
+
+        redacted_answer = bq.answer.model_copy(
+            update={"citations": redacted_citations}
+        )
+        redacted_questions.append(
+            bq.model_copy(
+                update={
+                    "question_text": redact_third_party_names(bq.question_text),
+                    "answer": redacted_answer,
+                }
+            )
+        )
+
+    return bundle.model_copy(update={"questions": redacted_questions})
 
 
 # ---------------------------------------------------------------------------
@@ -328,8 +390,16 @@ def write_staging(
     written: list[Path] = []
 
     for bundle in bundles:
+        # FR-014 chokepoint: redact incidental 3rd-party name+role tokens from
+        # the LLM-facing payload BEFORE serialization.  The persisted Silver
+        # store is untouched (redact_bundle_for_llm builds a copy); only this
+        # staging JSON is redacted.  Redact-then-scan means a 박교수-style label
+        # becomes [REDACTED], so assert_no_pii passes and the run continues
+        # (no hard stop — Principle I).
+        redacted = redact_bundle_for_llm(bundle)
+
         # model_dump → sort_keys for byte-identical output.
-        payload = json.dumps(bundle.model_dump(), sort_keys=True, ensure_ascii=False)
+        payload = json.dumps(redacted.model_dump(), sort_keys=True, ensure_ascii=False)
 
         # PII scan BEFORE writing.
         assert_no_pii(payload, known_names=known_names)
@@ -350,6 +420,7 @@ __all__ = [
     "StudentBundle",
     "assert_no_pii",
     "build_bundles",
+    "redact_bundle_for_llm",
     "redact_third_party_names",
     "write_staging",
 ]
