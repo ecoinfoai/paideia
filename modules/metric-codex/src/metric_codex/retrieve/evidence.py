@@ -87,13 +87,20 @@ def retrieve_evidence(
     # as sort keys so no tie can leak input-row ordering through.
     # observed_at=None is mapped to "" which sorts before any ISO date string
     # (total-order convention: None → first, v1 limit documented in docstring).
+    #
+    # INVARIANT (load-bearing): the citation total-order holds ONLY because every
+    # CodexEntry.key uniquely encodes its entry_kind (and item_ref where present) —
+    # see the ingest key-construction. EvidenceCitation drops entry_kind/item_ref,
+    # so (layer, key, source_id, str(value), observed_at) is a TOTAL order under
+    # that convention. A new EntryKind whose key omits the kind would silently
+    # break determinism here (no test would fail). Keep keys kind-unique.
     matched.sort(
         key=lambda c: (
             c.layer,
             c.key,
             c.source_id,
             str(c.value),
-            c.observed_at or "",
+            "" if c.observed_at is None else c.observed_at,
         )
     )
 

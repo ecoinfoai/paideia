@@ -260,9 +260,6 @@ class TestCohortYear:
 # T053 RED — V4: value_num finite guard (FR-023)
 # ---------------------------------------------------------------------------
 
-import math  # noqa: E402 — import inside module body for test-file locality
-
-
 class TestValueNumFiniteGuard:
     """V4: value_num must be finite (NaN / ±inf rejected).
 
@@ -296,4 +293,4 @@ class TestValueNumFiniteGuard:
     def test_negative_finite_accepted(self):
         """A negative finite value must be accepted."""
         entry = CodexEntry(**_valid_entry(value_num=-3.14))
-        assert math.isfinite(entry.value_num)
+        assert entry.value_num == -3.14
