@@ -9,10 +9,15 @@ Invariants covered:
   and staging_responses/ (raw_text field of captured LLM I/O).
 - PRIV-03/05: pseudonym map present and bijective.
 - PRIV-04: silver and gold output dirs are gitignored (static repo check).
+  Fail-closed: when git binary is absent (FileNotFoundError), a located
+  PRIV-04 violation is emitted (cannot-determine) rather than silently passing.
 - EVID-01/02/03: evidence grounding (template-mode: byte-match; llm: report-
   only "not grounding-verified (template-only)" note, exit 0 — LLM prose is a
   sanctioned path; byte-match grounding is template-only by design).
+  EVID-02 is checked per-question: each no_evidence question must have its
+  own '근거 없음' sentinel (counted, not just whole-file substring).
 - SKIP-02: manifest count invariant (assigned + unassigned == total).
+- SKIP-02 (MC-U33): every unassigned_sids entry must appear in 미배정.md.
 - SKIP-03: no cross-advisor leak in 지도교수별 bundles.
 - MANIFEST: input_hashes and config_ids non-empty (provenance present).
 
@@ -22,12 +27,29 @@ Note (T042): EVID byte-grounding is template-only.  For LLM-rendered Gold
 This aligns with ``specs/014-metric-codex-v0-1-1/contracts/privacy.md``:
 LLM polish is a sanctioned path; the gate must not claim grounding for LLM
 prose but must not treat a legitimately LLM-rendered Gold as a violation.
+
+Notes mechanism: ``run_all_checks`` collects non-fatal notes from
+``check_evidence_grounding`` (the LLM-rendered path) and emits them to
+**stderr** as a single pass at the end of gate aggregation — not scattered
+``print`` calls inside individual checks.  Notes are report-only (exit 0);
+a Violation triggers exit 3, a note does not.
+
+DET-01/02/03 determinism (PYTHONHASHSEED=0 required): covered by dedicated
+determinism tests in ``tests/unit/test_determinism.py`` and
+``tests/contract/test_narrative_determinism.py``.  Those tests set
+``PYTHONHASHSEED=0`` explicitly in their environment; this gate does not
+re-run them.
+
+FR-008/FR-020 boundary (source-selection): the gate verifies post-hoc
+invariants on already-generated Gold.  It does NOT re-check source-selection
+boundaries (FR-008 Bronze-own-copy, FR-020 Silver-consumption gating) — those
+are enforced at the pipeline stage (ingest/generate) and are a stated limit
+of the gate's scope (U30).
 """
 
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -46,9 +68,10 @@ from metric_codex.retrieve.query import QuestionSet, load_question_set
 from metric_codex.store.codex import read_existing_store
 from metric_codex.store.pseudonym import read_pseudonym_map
 
-_SID_PATTERN = re.compile(r"\b\d{10}\b")
 _ADVISOR_BUNDLE_DIR = "지도교수별"
 _STUDENT_DIR = "학생별"
+_UNASSIGNED_MD = "미배정.md"
+_SENTINEL_NO_EVIDENCE = "근거 없음"
 
 
 # ---------------------------------------------------------------------------
@@ -247,20 +270,25 @@ def _find_git_root_with_content(path: Path) -> Path | None:
     return None
 
 
-def _is_git_ignored(path: Path, *, git_root: Path) -> bool:
-    """Return True if ``path`` is covered by a .gitignore rule.
+def _is_git_ignored(path: Path, *, git_root: Path) -> bool | None:
+    """Return whether ``path`` is covered by a .gitignore rule, or None if undetermined.
 
     Runs ``git check-ignore -q <path>`` from inside the path's own repository
     (``cwd=git_root``).  Running it from a different repo's working directory
     makes git reject the path as "outside repository" — so the cwd MUST be the
     git root that actually contains ``path``.
 
+    Fail-closed: when the git binary is absent (FileNotFoundError), returns None
+    to signal that the ignored status cannot be determined — callers must surface
+    a violation rather than silently passing (FR-022 / MC-U19).
+
     Args:
         path: An absolute filesystem path to check.
         git_root: The git repository root that contains ``path``.
 
     Returns:
-        True when git considers the path ignored (exit 0); False otherwise.
+        True when git considers the path ignored (exit 0); False when not ignored
+        (exit 1); None when git binary is absent (cannot determine).
     """
     try:
         result = subprocess.run(  # noqa: S603
@@ -270,8 +298,9 @@ def _is_git_ignored(path: Path, *, git_root: Path) -> bool:
         )
         return result.returncode == 0
     except FileNotFoundError:
-        # git not available — skip the check conservatively.
-        return True
+        # git binary absent — return None to signal cannot-determine.
+        # Caller must fail CLOSED (surface a violation), not silently pass.
+        return None
 
 
 def check_priv04_gitignored(data_root: Path) -> list[Violation]:
@@ -291,8 +320,9 @@ def check_priv04_gitignored(data_root: Path) -> list[Violation]:
         data_root: The ``--data-root`` directory (the repo's ``data/`` root).
 
     Returns:
-        List of Violation (empty if paths are ignored, outside a repo, or
-        git is unavailable).
+        List of Violation.  Empty if paths are ignored or outside a git repo.
+        A PRIV-04 violation with "cannot determine" is emitted when git binary
+        is absent (fail-closed per FR-022 / MC-U19, T055).
     """
     # Only run the check when data_root is inside a real git repository.
     # An empty .git dir (e.g. /tmp/.git on some systems) is not considered
@@ -305,7 +335,22 @@ def check_priv04_gitignored(data_root: Path) -> list[Violation]:
     check_paths = [data_root / "silver", data_root / "gold"]
     for path in check_paths:
         target = path if path.exists() else data_root
-        if not _is_git_ignored(target, git_root=git_root):
+        ignored = _is_git_ignored(target, git_root=git_root)
+        if ignored is None:
+            # git binary absent — fail CLOSED: cannot determine gitignore status
+            # so we must not silently pass (FR-022 / MC-U19, T055).
+            violations.append(
+                Violation(
+                    invariant_id="PRIV-04",
+                    message=(
+                        f"cannot determine gitignore status for {target} — "
+                        "git binary unavailable; run in an environment with git installed"
+                    ),
+                    file=str(target),
+                    detail="expected: git binary available to verify .gitignore coverage",
+                )
+            )
+        elif not ignored:
             violations.append(
                 Violation(
                     invariant_id="PRIV-04",
@@ -329,7 +374,7 @@ def check_evidence_grounding(
     question_set: QuestionSet,
     *,
     llm_backend: str | None,
-) -> list[Violation]:
+) -> tuple[list[Violation], list[str]]:
     """Check evidence grounding for per-student Gold narratives (EVID-01/02/03).
 
     For ``llm_backend == "none(template)"`` (offline path):
@@ -338,16 +383,16 @@ def check_evidence_grounding(
       EVID-01/EVID-03 violation (the file must equal the cited template).
     - Independently checks EVID-02: every bundle that declares
       ``no_evidence=True`` for a question must have the literal "근거 없음"
-      in the on-disk md.
+      in the on-disk md — checked per-question (T054 / MC-U17).
 
     For LLM backends (free prose):
     - Skips the byte-match (LLM prose is non-deterministic).
     - Checks that the staging bundle for each student (the sole LLM context)
       is PII-free (PRIV-01 / EVID-03).
-    - Note: citation resolution of LLM prose is not verifiable post-hoc
-      because LLM prose is free-form.  The bundle construction guarantee
-      (build_bundles produces only evidence-grounded facts) covers EVID-03
-      at the pipeline stage.
+    - Collects a report-only NOTE (not a Violation) for each student stating
+      "not grounding-verified (template-only)".  The caller (``run_all_checks``)
+      emits all notes to stderr in a single pass — the check itself does NOT
+      print anything.  Notes are exit-0 (report-only).
 
     Args:
         gold_dir: Gold tier directory containing ``학생별/*.md``.
@@ -357,13 +402,17 @@ def check_evidence_grounding(
         llm_backend: The ``llm_backend`` value from the manifest.
 
     Returns:
-        List of Violation (empty if all narratives pass the checks).
+        Tuple of (violations, notes).  ``violations`` is non-empty only when
+        an invariant is broken (exits 3).  ``notes`` contains human-readable
+        informational strings that must be emitted to stderr by the caller but
+        must NOT trigger a non-zero exit code.
     """
     violations: list[Violation] = []
+    notes: list[str] = []
     student_dir = gold_dir / _STUDENT_DIR
     if not student_dir.is_dir():
         # generate not yet run — nothing to check.
-        return []
+        return [], []
 
     # Build pseudonym index and group entries by student_id.
     entries_by_sid: dict[str, list[CodexEntry]] = {}
@@ -399,7 +448,7 @@ def check_evidence_grounding(
                 message=f"bundle construction failed: {exc}",
             )
         )
-        return violations
+        return violations, []
 
     # Build a pseudonym → bundle map for quick lookup.
     bundle_by_pseudonym = {b.pseudonym: b for b in bundles}
@@ -439,34 +488,47 @@ def check_evidence_grounding(
                 )
         else:
             # LLM-rendered Gold (api | subscription): byte-match is not applicable
-            # (LLM prose is non-deterministic).  Emit a NON-FATAL informational
-            # note; the gate exits 0 for legitimately LLM-rendered Gold (T040).
-            # Note: this is report-only — it must NOT append a Violation (which
-            # would trigger exit 3).  The PII boundary is separately enforced by
-            # check_priv01_no_staging_pii scanning staging/cache/staging_responses.
-            # TODO(US8): return as a structured non-fatal note instead of
-            # printing; align stream with other diagnostics.
-            print(
-                f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)",
-                file=sys.stdout,
+            # (LLM prose is non-deterministic).  Collect a report-only NOTE (not a
+            # Violation) so the caller can emit it to stderr without triggering exit 3.
+            # The PII boundary is separately enforced by check_priv01_no_staging_pii
+            # scanning staging/cache/staging_responses.
+            notes.append(
+                f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)"
             )
 
-        # EVID-02: every no_evidence question → "근거 없음" in the md.
-        for bq in bundle.questions:
-            if bq.answer.no_evidence and "근거 없음" not in on_disk:
+        # EVID-02: every no_evidence question must have its own '근거 없음' sentinel.
+        # Per-question check (T054 / MC-U17): a whole-file substring test fails when
+        # two no_evidence questions exist but only one emits the sentinel — the
+        # substring hit from the first passes the check for the second too.
+        # Fix: count expected sentinels (one per no_evidence question) vs occurrences
+        # in the file; emit one Violation per missing sentinel, naming the question.
+        no_evidence_questions = [bq for bq in bundle.questions if bq.answer.no_evidence]
+        sentinel_count_in_file = on_disk.count(_SENTINEL_NO_EVIDENCE)
+        missing_count = len(no_evidence_questions) - sentinel_count_in_file
+        if missing_count > 0:
+            # Emit one violation per missing sentinel, attributing to the questions
+            # that are most likely to be missing (last N in list — we cannot match
+            # individual questions to specific sections without full section parsing,
+            # but naming each no_evidence question individually is the most useful).
+            for bq in no_evidence_questions[-missing_count:]:
                 violations.append(
                     Violation(
                         invariant_id="EVID-02",
                         message=(
-                            f"Gold md for pseudonym {pseudonym!r} lacks '근거 없음' "
-                            f"for question {bq.question_id!r} where no_evidence=True"
+                            f"Gold md for pseudonym {pseudonym!r} has "
+                            f"{sentinel_count_in_file} '근거 없음' sentinel(s) but "
+                            f"{len(no_evidence_questions)} no_evidence question(s); "
+                            f"question {bq.question_id!r} may be missing its sentinel"
                         ),
                         file=str(md_path),
+                        detail=(
+                            f"expected: {len(no_evidence_questions)} sentinel(s), "
+                            f"got: {sentinel_count_in_file}"
+                        ),
                     )
                 )
-                break  # one violation per file is sufficient
 
-    return violations
+    return violations, notes
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +592,68 @@ def check_skip02_count_invariant(
         ]
 
     return []
+
+
+# ---------------------------------------------------------------------------
+# SKIP-02 (MC-U33): unassigned_sids entries present in 미배정.md
+# ---------------------------------------------------------------------------
+
+
+def check_skip02_unassigned_in_mibajeong(
+    gold_dir: Path,
+    manifest_path: Path,
+) -> list[Violation]:
+    """Check that every manifest.unassigned_sids entry appears in 미배정.md (MC-U33).
+
+    The SKIP-02 count invariant (assigned + unassigned == total) is separately
+    checked by ``check_skip02_count_invariant``.  This check adds the forward
+    lookup: every student_id in ``unassigned_sids`` must be present (as a
+    substring) in ``gold_dir/미배정.md``.
+
+    A mismatch means the manifest claims a student is unassigned but their SID
+    does not appear in the Gold unassigned bundle — either the manifest was
+    hand-edited or distribute was never run for that student.
+
+    Skipped when:
+    - The manifest cannot be loaded (SKIP-02 count check already reports it).
+    - ``미배정.md`` does not exist (distribute not yet run).
+
+    Args:
+        gold_dir: Gold tier directory for the semester/course.
+        manifest_path: Path to ``manifest_metric-codex.json``.
+
+    Returns:
+        List of Violation — one per unassigned SID absent from 미배정.md.
+    """
+    mibaj_md = gold_dir / _UNASSIGNED_MD
+    if not mibaj_md.is_file():
+        # distribute not yet run — nothing to check.
+        return []
+
+    try:
+        manifest = read_manifest(manifest_path)
+    except LocatedInputError:
+        # manifest load failure is already surfaced by check_skip02_count_invariant.
+        return []
+
+    mibaj_content = mibaj_md.read_text(encoding="utf-8")
+    unassigned_sids: list[str] = list(manifest.bundle_summary.unassigned_sids)
+
+    violations: list[Violation] = []
+    for sid in unassigned_sids:
+        if sid not in mibaj_content:
+            violations.append(
+                Violation(
+                    invariant_id="SKIP-02",
+                    message=(
+                        f"unassigned_sids entry {sid!r} is not present in 미배정.md — "
+                        "manifest and Gold bundle are inconsistent"
+                    ),
+                    file=str(mibaj_md),
+                    detail=f"expected: {sid!r} to appear as a substring in 미배정.md",
+                )
+            )
+    return violations
 
 
 # ---------------------------------------------------------------------------
@@ -736,6 +860,10 @@ def run_all_checks(
     - No question_set → EVID checks skipped.
     - No manifest → SKIP-02 / MANIFEST checks skipped.
 
+    Non-fatal notes (e.g. LLM-rendered Gold not grounding-verified) are emitted
+    to stderr at the end of this function in a single pass.  Notes are exit-0;
+    only Violation objects trigger exit 3.
+
     Args:
         data_root: The ``--data-root`` directory (repo's ``data/``).
         semester: Semester code (e.g. ``"2026-1"``).
@@ -817,6 +945,7 @@ def run_all_checks(
 
     # Load roster (needed for SKIP-03).
     roster = None
+    roster_parse_failed = False  # True when the roster file exists but failed to parse.
     effective_roster_path = roster_path or (own_bronze / "지도교수배정.yaml")
     if effective_roster_path.is_file():
         try:
@@ -828,6 +957,7 @@ def run_all_checks(
             # naming the roster file (not silently degrade to roster=None —
             # that would swallow the parse error and make the cross-leak check
             # unable to detect the failure's location; T033 / FR-013).
+            roster_parse_failed = True
             violations.append(
                 Violation(
                     invariant_id="SKIP-03",
@@ -845,6 +975,8 @@ def run_all_checks(
     if manifest_path.is_file():
         violations += check_skip02_count_invariant(manifest_path)
         violations += check_manifest_hashes(manifest_path)
+        # MC-U33: every unassigned_sids entry must appear in 미배정.md.
+        violations += check_skip02_unassigned_in_mibajeong(own_gold, manifest_path)
 
     # LINEAGE-01: every codex source_id must resolve in input_hashes ∪ ledger.
     # Run when the manifest file exists and the store has any content.  If the
@@ -860,16 +992,31 @@ def run_all_checks(
 
     # M-001: skip the byte-match when llm_backend is None (corrupt/absent manifest).
     # The manifest failure is already reported by SKIP-02/MANIFEST checks above.
+    notes: list[str] = []
     if question_set is not None and pseudonym_map and llm_backend is not None:
-        violations += check_evidence_grounding(
+        evid_violations, evid_notes = check_evidence_grounding(
             own_gold,
             codex_entries,
             pseudonym_map,
             question_set,
             llm_backend=llm_backend,
         )
+        violations += evid_violations
+        notes += evid_notes
 
-    violations += check_skip03_no_cross_leak(own_gold, roster)
+    # Carry-over (c): suppress the redundant "no roster supplied" SKIP-03 note from
+    # check_skip03_no_cross_leak when the roster file existed but failed to parse.
+    # In that case we already emitted a located parse-failure Violation above; the
+    # second "no roster was supplied" emission would be a duplicate root-cause report.
+    if not roster_parse_failed:
+        violations += check_skip03_no_cross_leak(own_gold, roster)
+
+    # Emit report-only notes to stderr (exit-0; not Violations).
+    # This is the single intentional emit point for LLM-rendered Gold notes so
+    # that (a) the note reaches the same stream as real violations (stderr), and
+    # (b) individual check functions remain pure violation-collectors (no prints).
+    for note in notes:
+        print(f"[note] {note}", file=sys.stderr)
 
     return violations
 
@@ -882,6 +1029,7 @@ __all__ = [
     "check_evidence_grounding",
     "check_lineage",
     "check_skip02_count_invariant",
+    "check_skip02_unassigned_in_mibajeong",
     "check_skip03_no_cross_leak",
     "check_manifest_hashes",
     "run_all_checks",

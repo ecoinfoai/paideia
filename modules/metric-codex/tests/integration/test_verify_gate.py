@@ -9,13 +9,20 @@ synthetic fixture, then exercises ``metric-codex verify`` for:
    - PRIV-03: pseudonym_map.parquet rewritten with a duplicate pseudonym.
    - SKIP-02: manifest JSON hand-edited so count invariant breaks.
    - SKIP-03: a foreign student md dropped into an advisor's 지도교수별 dir.
+
+T055: PRIV-04 git-absent → fail-closed (located violation, not vacuous pass).
+T054: EVID-02 per-question sentinel check (not whole-file substring).
+T059: unassigned_sids entry absent from 미배정.md → located SKIP-02 violation.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import textwrap
 from pathlib import Path
+from unittest.mock import patch
 
 import openpyxl
 import pandas as pd
@@ -982,4 +989,380 @@ class TestVerifyEvid03LlmReportOnly:
         rc = _run_verify(full_pipeline_root)
         assert rc == 0, (
             f"verify must exit 0 for subscription-rendered Gold, got rc={rc}"
+        )
+
+    def test_note_goes_to_stderr_not_stdout(
+        self,
+        full_pipeline_root: Path,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """T-E carry-over (a): after refactor the note must go to stderr, not stdout.
+
+        The old implementation printed to sys.stdout via print(..., file=sys.stdout).
+        After the refactor, the note is emitted to stderr by run_all_checks so that
+        it stays on the same stream as real violations (stderr) while remaining
+        exit 0 (report-only, no Violation object).
+        """
+        manifest_path = self._manifest_path(full_pipeline_root)
+        self._set_llm_backend(manifest_path, "api")
+
+        _run_verify(full_pipeline_root)
+        captured = capsys.readouterr()
+        assert "not grounding-verified" in captured.err, (
+            f"note must appear on stderr after refactor; "
+            f"stdout={captured.out!r} stderr={captured.err!r}"
+        )
+        # The note must NOT appear on stdout (it was the old behaviour).
+        assert "not grounding-verified" not in captured.out, (
+            f"note must NOT appear on stdout after refactor; "
+            f"stdout={captured.out!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T055 RED — PRIV-04 git-absent → fail-closed (FR-022 / MC-U19)
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyPriv04GitAbsent:
+    """T055 RED: when git binary is absent (FileNotFoundError), PRIV-04 must
+    fail CLOSED — emit a located Violation stating the check could not be
+    determined — instead of the old fail-OPEN behaviour (return True → silent pass).
+
+    The old behaviour: _is_git_ignored catches FileNotFoundError and returns True
+    (treated as "ignored") so check_priv04_gitignored finds no violations even
+    though it cannot actually verify gitignore status.
+
+    After fix: FileNotFoundError → a PRIV-04 Violation("cannot determine gitignore
+    status") is surfaced, making the gate fail closed.
+    """
+
+    def _git_init(self, repo: Path) -> None:
+        repo.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "init", "-q"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+    def test_git_absent_emits_priv04_violation(self, tmp_path: Path) -> None:
+        """T055 RED: patching PATH so git is not found → PRIV-04 Violation fired."""
+        from metric_codex.verify.checks import check_priv04_gitignored
+
+        repo = tmp_path / "repo"
+        self._git_init(repo)
+        # Add .gitignore so the check would normally pass — this proves the
+        # failure is from git-absent, not from a missing gitignore rule.
+        (repo / ".gitignore").write_text("data/\n", encoding="utf-8")
+        data_root = repo / "data"
+        (data_root / "silver").mkdir(parents=True)
+        (data_root / "gold").mkdir(parents=True)
+
+        # Strip PATH so subprocess.run(["git", ...]) raises FileNotFoundError.
+        with (
+            patch.dict(os.environ, {"PATH": ""}, clear=False),
+            patch("metric_codex.verify.checks.subprocess.run", side_effect=FileNotFoundError),
+        ):
+            violations = check_priv04_gitignored(data_root)
+
+        assert violations, (
+            "expected a PRIV-04 violation when git is absent (fail-closed), "
+            "got no violations"
+        )
+        assert all(v.invariant_id == "PRIV-04" for v in violations), (
+            f"all violations must be PRIV-04; got {violations}"
+        )
+        # The message must communicate that the status CANNOT BE DETERMINED,
+        # not that the path is definitively not-ignored.
+        combined_msg = " ".join(v.message for v in violations)
+        assert any(
+            phrase in combined_msg
+            for phrase in ("cannot determine", "unavailable", "git not found", "git binary")
+        ), (
+            f"violation message must say git check could not run; got: {combined_msg!r}"
+        )
+
+    def test_git_absent_exits_three_end_to_end(self, tmp_path: Path) -> None:
+        """T055 RED: end-to-end verify in a real git repo with git unavailable → exit 3.
+
+        Without the fix: check_priv04_gitignored(data_root) called inside
+        run_all_checks returns [] (fail-open) so verify exits 0.
+        After fix: at least one PRIV-04 violation is collected → exit 3.
+        """
+        repo = tmp_path / "repo"
+        self._git_init(repo)
+        (repo / ".gitignore").write_text("data/\n", encoding="utf-8")
+        data_root = repo / "data"
+        bronze = data_root / "bronze" / "metric-codex" / _KEY
+        bronze.mkdir(parents=True)
+
+        _make_school_excel(bronze / "성적출석.xlsx")
+        _make_school_map(bronze / "성적출석_map.yaml")
+        qs_path = bronze / "question_set.yaml"
+        _make_question_set(qs_path)
+
+        assert app([
+            "ingest", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
+        ]) == 0
+        assert app([
+            "generate", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--question-set", str(qs_path),
+            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
+        ]) == 0
+
+        # Simulate git binary absent during verify.
+        with patch("metric_codex.verify.checks.subprocess.run", side_effect=FileNotFoundError):
+            rc = app([
+                "verify", "--semester", _SEM, "--course", _COURSE,
+                "--data-root", str(data_root),
+            ])
+
+        assert rc == 3, (
+            f"verify must exit 3 when git is absent (fail-closed); got rc={rc}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T054 RED — EVID-02 per-question sentinel (FR-024 / MC-U17)
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyEvid02PerQuestion:
+    """T054 RED: the EVID-02 check must verify '근거 없음' PER no-evidence
+    question, not as a single whole-file substring.
+
+    The old behaviour:
+        for bq in bundle.questions:
+            if bq.answer.no_evidence and "근거 없음" not in on_disk:
+                violations.append(...)
+                break
+    This means: if the file contains "근거 없음" at all (from ANY question),
+    the check passes for ALL — a second no-evidence question that is missing
+    its sentinel is silently skipped.
+
+    After fix: the check counts how many times "근거 없음" appears and compares
+    it to the number of no_evidence questions (or does per-question section
+    matching).  A Gold file that has one sentinel but should have two must emit
+    exactly one EVID-02 violation for the missing question.
+    """
+
+    def _make_question_set_two_no_evidence(self, path: Path) -> None:
+        """Write a question_set with TWO rich-layer questions (both → no_evidence).
+
+        q_zscore (z_score) and q_pctile (percentile_cohort) are both rich-layer
+        kinds that the school-Excel-only students lack → both yield no_evidence=True
+        in the bundle → the template emits '근거 없음' TWICE.
+        """
+        path.write_text(
+            textwrap.dedent("""\
+                questions:
+                  - id: q_total
+                    text: "총점을 알려주세요."
+                    entry_kinds:
+                      - score_total
+                    domain: null
+                  - id: q_zscore
+                    text: "표준점수를 알려주세요."
+                    entry_kinds:
+                      - z_score
+                    domain: null
+                  - id: q_pctile
+                    text: "전체 백분위를 알려주세요."
+                    entry_kinds:
+                      - percentile_cohort
+                    domain: null
+            """),
+            encoding="utf-8",
+        )
+
+    def _build_pipeline_two_no_evidence(self, tmp_path: Path) -> Path:
+        """Run ingest + generate with a question_set that has 2 no_evidence questions."""
+        data_root = tmp_path / "data"
+        bronze = data_root / "bronze" / "metric-codex" / _KEY
+        bronze.mkdir(parents=True)
+
+        _make_school_excel(bronze / "성적출석.xlsx")
+        _make_school_map(bronze / "성적출석_map.yaml")
+        qs_path = bronze / "question_set.yaml"
+        self._make_question_set_two_no_evidence(qs_path)
+
+        assert app([
+            "ingest", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
+        ]) == 0
+        assert app([
+            "generate", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root), "--question-set", str(qs_path),
+            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
+        ]) == 0
+        return data_root
+
+    def _student_md(self, data_root: Path) -> Path:
+        student_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        md = student_dir / f"{_SID_A}_{_NAME_A}.md"
+        assert md.is_file(), f"precondition: {md} must exist after generate"
+        return md
+
+    def test_precondition_two_sentinels_in_clean_gold(
+        self, tmp_path: Path
+    ) -> None:
+        """Precondition: the clean template emits '근거 없음' TWICE for 2 no_evidence questions."""
+        data_root = self._build_pipeline_two_no_evidence(tmp_path)
+        md = self._student_md(data_root)
+        content = md.read_text(encoding="utf-8")
+        count = content.count("근거 없음")
+        assert count == 2, (
+            f"precondition: expect 2 occurrences of '근거 없음' for 2 no_evidence "
+            f"questions, got {count}; md content:\n{content}"
+        )
+
+    def test_one_missing_sentinel_emits_evid02_violation(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """T054 RED: Gold has 2 no_evidence questions; only 1 '근거 없음' in file.
+
+        Before fix: whole-file check finds one '근거 없음' → passes vacuously.
+        After fix: per-question check detects second question is missing → EVID-02.
+        """
+        data_root = self._build_pipeline_two_no_evidence(tmp_path)
+        md = self._student_md(data_root)
+        content = md.read_text(encoding="utf-8")
+
+        # Remove exactly ONE occurrence of '근거 없음', leaving the other intact.
+        # This preserves the EVID-01 byte-match violation too, but we also need
+        # EVID-02 — the key test is that *per-question* detection fires.
+        first_pos = content.index("근거 없음")
+        mutated = content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음"):]
+        assert mutated.count("근거 없음") == 1, (
+            "precondition: after mutation exactly 1 '근거 없음' must remain"
+        )
+        md.write_text(mutated, encoding="utf-8")
+
+        manifest_path = (
+            data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        # Use template backend so byte-match also fires — but EVID-02 must ALSO fire.
+        rc = app([
+            "verify", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root),
+        ])
+        captured = capsys.readouterr()
+
+        assert rc == 3, (
+            f"verify must exit 3 on EVID-02 missing per-question sentinel; got rc={rc}"
+        )
+        assert "EVID-02" in captured.err, (
+            f"EVID-02 must appear in stderr; got: {captured.err!r}"
+        )
+
+    def test_both_sentinels_present_exits_zero(self, tmp_path: Path) -> None:
+        """When both sentinels are present the gate is clean (no EVID-02)."""
+        data_root = self._build_pipeline_two_no_evidence(tmp_path)
+        # Do not mutate anything — clean pipeline must exit 0.
+        rc = app([
+            "verify", "--semester", _SEM, "--course", _COURSE,
+            "--data-root", str(data_root),
+        ])
+        assert rc == 0, (
+            f"clean 2-no_evidence pipeline must exit 0; got rc={rc}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T059 RED — unassigned_sids missing from 미배정.md (FR-024 / MC-U33)
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyUnassignedInMibajeong:
+    """T059 RED: every student_id in manifest.bundle_summary.unassigned_sids
+    must appear in the 미배정.md Gold file.
+
+    Before fix: verify checks the count invariant (SKIP-02) but never confirms
+    that each unassigned SID is actually mentioned in 미배정.md — a manifest
+    that lists a SID as unassigned but omits it from 미배정.md is silently
+    accepted.
+
+    After fix: a SKIP-02 (or dedicated) Violation is raised for each
+    unassigned SID that is absent from 미배정.md.
+    """
+
+    def _manifest_path(self, data_root: Path) -> Path:
+        return (
+            data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+
+    def _gold_dir(self, data_root: Path) -> Path:
+        return data_root / "gold" / "metric-codex" / _KEY
+
+    def test_precondition_mibajeong_md_contains_unassigned_sid(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """Precondition: after distribute, 미배정.md contains SID_C (the unassigned student)."""
+        gold_dir = self._gold_dir(full_pipeline_root)
+        mibaj_md = gold_dir / "미배정.md"
+        assert mibaj_md.is_file(), f"precondition: {mibaj_md} must exist after distribute"
+        content = mibaj_md.read_text(encoding="utf-8")
+        assert _SID_C in content, (
+            f"precondition: 미배정.md must contain unassigned SID {_SID_C!r}; "
+            f"content:\n{content}"
+        )
+
+    def test_missing_unassigned_sid_emits_violation(
+        self, full_pipeline_root: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """T059 RED: inject a ghost SID into unassigned_sids that is NOT in 미배정.md.
+
+        The manifest lists '2026000099' as unassigned (a valid-format 10-digit SID
+        that sorts after the real SID_C='2026000003', so all Pydantic validators
+        on AdvisorBundleSummary still pass), but 미배정.md only contains SID_C.
+
+        Before fix: no violation emitted — the gate checks the count invariant
+        (SKIP-02) but never confirms each unassigned_sids entry is present in
+        미배정.md.
+        After fix: a located violation names the ghost SID.
+        """
+        manifest_path = self._manifest_path(full_pipeline_root)
+        gold_dir = self._gold_dir(full_pipeline_root)
+        mibaj_md = gold_dir / "미배정.md"
+
+        # Inject a ghost unassigned SID that passes Pydantic validators:
+        #   - matches ^[0-9]{10}$ (CanonicalStudentId)
+        #   - sorts after '2026000003' (ASC-sorted invariant)
+        #   - total_students_with_codex bumped to keep count invariant
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        ghost_sid = "2026000099"
+        raw["bundle_summary"]["unassigned_sids"].append(ghost_sid)
+        raw["bundle_summary"]["total_students_with_codex"] += 1
+        manifest_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+        # Confirm 미배정.md does NOT mention the ghost SID (it shouldn't).
+        assert ghost_sid not in mibaj_md.read_text(encoding="utf-8"), (
+            f"precondition: {ghost_sid!r} must NOT be in 미배정.md"
+        )
+
+        rc = _run_verify(full_pipeline_root)
+        captured = capsys.readouterr()
+
+        assert rc == 3, (
+            f"verify must exit 3 when an unassigned_sids entry is absent from "
+            f"미배정.md; got rc={rc}"
+        )
+        # The violation message must name the missing SID.
+        assert ghost_sid in captured.err, (
+            f"violation message must name the missing SID {ghost_sid!r}; "
+            f"stderr={captured.err!r}"
+        )
+
+    def test_all_unassigned_sids_present_exits_zero(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """Clean pipeline: all unassigned SIDs are in 미배정.md → exit 0."""
+        rc = _run_verify(full_pipeline_root)
+        assert rc == 0, (
+            f"clean pipeline with unassigned SID properly in 미배정.md must "
+            f"exit 0; got rc={rc}"
         )
