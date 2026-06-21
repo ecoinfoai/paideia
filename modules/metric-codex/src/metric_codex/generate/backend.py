@@ -1,4 +1,4 @@
-"""T043 — LLM backend abstraction for metric-codex generate stage.
+"""LLM backend abstraction for metric-codex generate stage.
 
 Mirrors the verified examen backend pattern, adapted so a *slot* is one student
 (keyed by ``pseudonym``).  The LLM is an OPTIONAL polish over a deterministic,
@@ -12,13 +12,19 @@ Provides:
   duplicate LLM calls and yields byte-identical re-runs (DET-03).
 - ``SubscriptionBackend`` — file-based: writes the request bundle, reads a
   pre-filled response; missing response → ``RuntimeError`` (exit-3 territory).
-- ``ApiBackend`` — Anthropic SDK with ``temperature=0``; any connection/API error
-  is wrapped in ``BackendUnreachableError`` (exit-4 territory).
+- ``ApiBackend`` — Anthropic SDK backend; config errors surface as
+  ``LocatedInputError`` (exit-2); genuine unreachability surfaces as
+  ``BackendUnreachableError`` (exit-4).
 - ``BackendUnreachableError`` — sentinel exception for exit-code-4 mapping.
 
-Cache-key normalization: ``GenerationRequest`` fields serialized to a JSON object
-with ``sort_keys=True``, ``ensure_ascii=False``, ``separators=(",",":")`` (no
-whitespace) → identical Python object → identical bytes → identical key.
+Cache-key normalization: ``GenerationRequest`` fields (including ``max_tokens``)
+serialized to a JSON object with ``sort_keys=True``, ``ensure_ascii=False``,
+``separators=(",",":")`` (no whitespace) → identical Python object → identical
+bytes → identical key.
+
+Note on determinism: ``InputHashCache`` provides cache-hit reproducibility
+(DET-03); ``temperature`` is intentionally absent — modern Anthropic models
+reject it with a 400, and sampling temperature is not the source of determinism.
 """
 
 from __future__ import annotations
@@ -31,10 +37,11 @@ from pathlib import Path
 
 import anthropic
 
+from metric_codex.errors import LocatedInputError
 from metric_codex.output.determinism import atomic_write
 
 # ---------------------------------------------------------------------------
-# Sentinel exception
+# Sentinel exceptions
 # ---------------------------------------------------------------------------
 
 
@@ -60,6 +67,8 @@ class GenerationRequest:
         facts: Serialized pseudonymized bundle evidence (no PII).
         model: Model identifier string (e.g. ``"claude-sonnet-4-6"``).
         mode: Backend mode label (``"api"`` / ``"subscription"``).
+        max_tokens: Maximum tokens in the completion (included in cache key so
+            requests with different limits never share a cache entry).
     """
 
     slot_id: str
@@ -67,6 +76,7 @@ class GenerationRequest:
     facts: str
     model: str
     mode: str
+    max_tokens: int = 2048
 
 
 @dataclass
@@ -132,6 +142,7 @@ def _canonical_key(request: GenerationRequest) -> str:
     """
     payload = {
         "facts": request.facts,
+        "max_tokens": request.max_tokens,
         "mode": request.mode,
         "model": request.model,
         "prompt": request.prompt,
@@ -282,9 +293,19 @@ class SubscriptionBackend(LLMBackend):
             )
 
         raw = json.loads(resp_file.read_text(encoding="utf-8"))
+        try:
+            slot_id_val: str = raw["slot_id"]
+            raw_text_val: str = raw["raw_text"]
+        except KeyError as exc:
+            raise LocatedInputError(
+                f"SubscriptionBackend: response file is missing required field {exc}",
+                file=str(resp_file),
+                expected="JSON object with 'slot_id' and 'raw_text' fields",
+                actual=f"keys present: {sorted(raw.keys())}",
+            ) from exc
         return GenerationResponse(
-            slot_id=raw["slot_id"],
-            raw_text=raw["raw_text"],
+            slot_id=slot_id_val,
+            raw_text=raw_text_val,
             model=raw.get("model", "claude-subscription"),
             cache_hit=False,
         )
@@ -296,19 +317,27 @@ class SubscriptionBackend(LLMBackend):
 
 
 class ApiBackend(LLMBackend):
-    """Anthropic SDK backend — calls the API with ``temperature=0``.
+    """Anthropic SDK backend.
 
-    ``temperature=0`` maximizes determinism on the API side; combined with
-    ``InputHashCache``, identical inputs produce byte-identical Gold outputs.
+    Determinism is provided by ``InputHashCache`` (cache-hit reproducibility,
+    DET-03).  ``temperature`` is intentionally absent: current Anthropic models
+    reject it with a 400 ``BadRequestError``.
 
     Args:
         model: The Anthropic model ID (e.g. ``"claude-sonnet-4-6"``).
-        max_tokens: Maximum tokens in the completion.
+        max_tokens: Maximum tokens in the completion (defaults to 2048;
+            threaded from ``GenerationRequest.max_tokens`` at call time).
 
     Raises:
-        BackendUnreachableError: Wraps any connection/API error so the CLI can
-            map it to exit code 4.
+        LocatedInputError: On config/request errors (``BadRequestError``,
+            ``AuthenticationError``, ``PermissionDeniedError``) — exit-2.
+        BackendUnreachableError: On genuine unreachability
+            (``APIConnectionError``, ``APITimeoutError``, ``ConnectionError``,
+            ``TimeoutError``) — exit-4.
     """
+
+    # Refusal stop_reason values — any of these surfaces as a LocatedInputError.
+    _REFUSAL_STOP_REASONS = frozenset({"refusal"})
 
     def __init__(
         self,
@@ -323,27 +352,70 @@ class ApiBackend(LLMBackend):
         """Call the Anthropic API and return the response.
 
         Args:
-            request: The generation request.
+            request: The generation request; ``request.max_tokens`` is used
+                if the caller overrides the default.
 
         Returns:
             ``GenerationResponse`` with the model's text output.
 
         Raises:
-            BackendUnreachableError: On any network or API failure.
+            LocatedInputError: On config/request errors (exit-2 territory).
+            BackendUnreachableError: On genuine unreachability (exit-4 territory).
         """
+        max_tokens = request.max_tokens if request.max_tokens else self._max_tokens
         try:
             message = self._client.messages.create(
                 model=self._model,
-                max_tokens=self._max_tokens,
-                temperature=0,
+                max_tokens=max_tokens,
                 messages=[{"role": "user", "content": request.prompt}],
             )
-        except Exception as exc:
+        except (
+            anthropic.BadRequestError,
+            anthropic.AuthenticationError,
+            anthropic.PermissionDeniedError,
+        ) as exc:
+            raise LocatedInputError(
+                f"ApiBackend: LLM request rejected — check model/API-key config "
+                f"(model={self._model}): {exc}",
+                expected="valid model ID and API key with permission",
+                actual=type(exc).__name__,
+            ) from exc
+        except (
+            anthropic.APIConnectionError,
+            anthropic.APITimeoutError,
+            ConnectionError,
+            TimeoutError,
+        ) as exc:
             raise BackendUnreachableError(
                 f"ApiBackend: failed to reach LLM (model={self._model}): {exc}"
             ) from exc
 
-        raw_text = message.content[0].text if message.content else ""
+        # Guard: refusal stop_reason surfaces as a located error (not silent empty text).
+        stop_reason = getattr(message, "stop_reason", None)
+        if stop_reason in self._REFUSAL_STOP_REASONS:
+            raise LocatedInputError(
+                f"ApiBackend: LLM refused the request (stop_reason={stop_reason!r}, "
+                f"model={self._model}, slot_id={request.slot_id!r})",
+                expected="stop_reason 'end_turn' or 'max_tokens'",
+                actual=str(stop_reason),
+            )
+
+        # Select the first text block; raise a located error if none is found.
+        raw_text: str | None = None
+        for block in (message.content or []):
+            if getattr(block, "type", None) == "text":
+                raw_text = block.text
+                break
+
+        if not raw_text:
+            raise LocatedInputError(
+                f"ApiBackend: LLM returned no usable text block "
+                f"(stop_reason={stop_reason!r}, model={self._model}, "
+                f"slot_id={request.slot_id!r})",
+                expected="at least one text block in content",
+                actual=f"content length {len(message.content or [])}",
+            )
+
         return GenerationResponse(
             slot_id=request.slot_id,
             raw_text=raw_text,

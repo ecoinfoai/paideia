@@ -1,13 +1,25 @@
-"""T037 RED — InputHashCache determinism for metric-codex generate stage.
+"""T037/T043 RED — InputHashCache determinism and LLM backend conformance tests.
 
 DET-03: a second generate() with an identical request returns cache_hit=True
 WITHOUT calling the wrapped backend and yields a byte-identical raw_text.
+
+T043 (US6): LLM backend conformance —
+- ApiBackend must NOT send temperature (removed for SDK conformance).
+- BadRequestError/AuthenticationError/PermissionDeniedError → LocatedInputError
+  (exit-2 territory), not BackendUnreachableError (exit-4).
+- APIConnectionError/ConnectionError → BackendUnreachableError (exit-4, unchanged).
+- Refusal / empty-content response → located error (not IndexError/crash).
+- Two requests differing only in max_tokens → distinct cache keys (no stale hit).
+- Malformed SubscriptionBackend response (missing slot_id/raw_text) → located
+  exit-2 error (not a bare KeyError).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import anthropic
+import httpx
 import pytest
 from metric_codex.generate.backend import (
     GenerationRequest,
@@ -34,13 +46,14 @@ class _CountingBackend(LLMBackend):
         )
 
 
-def _make_request(slot_id: str = "S001") -> GenerationRequest:
+def _make_request(slot_id: str = "S001", max_tokens: int = 2048) -> GenerationRequest:
     return GenerationRequest(
         slot_id=slot_id,
         prompt="지도교수용 요약을 다듬어라.",
         facts="- score_total: 85 (출처: grades.xlsx, minimal)",
         model="claude-sonnet-4-6",
         mode="api",
+        max_tokens=max_tokens,
     )
 
 
@@ -91,24 +104,71 @@ class TestInputHashCacheDeterminism:
         assert cache.cache_hit_rate() == 0.5
 
 
+def _fake_client_factory(raiser=None, message_obj=None):
+    """Build a monkeypatch-ready fake Anthropic client.
+
+    Args:
+        raiser: If provided, calling create() raises this exception.
+        message_obj: If provided, calling create() returns this object.
+    """
+
+    class _FakeMessages:
+        def create(self, **_kwargs: object):
+            if raiser is not None:
+                raise raiser
+            return message_obj
+
+    class _FakeClient:
+        messages = _FakeMessages()
+
+    return _FakeClient
+
+
+def _make_fake_text_message(text: str, stop_reason: str = "end_turn"):
+    """Return a minimal fake Message-like object with a single TextBlock."""
+    block = type("TextBlock", (), {"type": "text", "text": text})()
+
+    class _FakeMessage:
+        content = [block]
+
+    _FakeMessage.stop_reason = stop_reason
+    return _FakeMessage()
+
+
+def _make_bad_request_error(msg: str = "temperature not supported") -> anthropic.BadRequestError:
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    resp = httpx.Response(400, request=req, text=msg)
+    return anthropic.BadRequestError(message=msg, response=resp, body={"error": {"type": "invalid_request_error"}})
+
+
+def _make_api_connection_error(msg: str = "cannot connect") -> anthropic.APIConnectionError:
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.APIConnectionError(request=req, message=msg)
+
+
 class TestApiBackend:
     """ApiBackend monkeypatched — never hits the live API."""
 
-    def test_uses_temperature_zero(self, monkeypatch) -> None:
+    def test_omits_temperature(self, monkeypatch) -> None:
+        """T043: ApiBackend must NOT send temperature in the API call.
+
+        This intentionally UPDATES test_uses_temperature_zero which asserted
+        the defective behavior (temperature=0). The SDK 0.97.0 rejects
+        temperature on Opus/Fable models with a 400 BadRequestError; removing
+        temperature is the correct fix. Determinism is provided by
+        InputHashCache (cache-hit reproducibility), not sampling temperature.
+        """
         from metric_codex.generate.backend import ApiBackend
 
         captured: list[dict] = []
 
-        class _FakeMessage:
-            content = [type("Block", (), {"text": "다듬은 응답"})()]
-
-        class _FakeMessages:
-            def create(self, **kwargs: object) -> _FakeMessage:
+        class _CapturingMessages:
+            def create(self, **kwargs: object):
                 captured.append(dict(kwargs))
-                return _FakeMessage()
+                return _make_fake_text_message("다듬은 응답")
 
         class _FakeClient:
-            messages = _FakeMessages()
+            messages = _CapturingMessages()
 
         monkeypatch.setattr(
             "metric_codex.generate.backend.anthropic.Anthropic", lambda **_: _FakeClient()
@@ -118,23 +178,190 @@ class TestApiBackend:
         resp = backend.generate(_make_request("S001"))
 
         assert len(captured) == 1
-        assert captured[0].get("temperature") == 0
+        assert "temperature" not in captured[0], (
+            "temperature must NOT be sent — modern Opus/Fable models reject it with a 400"
+        )
         assert resp.raw_text == "다듬은 응답"
 
-    def test_wraps_connection_error(self, monkeypatch) -> None:
+    def test_bad_request_raises_located_input_error(self, monkeypatch) -> None:
+        """T043: anthropic.BadRequestError must surface as LocatedInputError (exit 2).
+
+        Pre-fix: the blanket except-Exception wraps it as BackendUnreachableError
+        (exit 4), misreporting a config error as 'unreachable'.
+        Post-fix: BadRequestError is a config/request error and must exit 2.
+        """
+        from metric_codex.errors import LocatedInputError
         from metric_codex.generate.backend import ApiBackend, BackendUnreachableError
 
-        class _BrokenMessages:
-            def create(self, **_kwargs: object) -> None:
-                raise ConnectionError("cannot reach anthropic")
-
-        class _BrokenClient:
-            messages = _BrokenMessages()
+        exc = _make_bad_request_error("temperature not supported on this model")
 
         monkeypatch.setattr(
-            "metric_codex.generate.backend.anthropic.Anthropic", lambda **_: _BrokenClient()
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(raiser=exc)(),
+        )
+
+        backend = ApiBackend(model="claude-haiku-4-5")
+        # Must raise LocatedInputError (exit-2), NOT BackendUnreachableError (exit-4).
+        with pytest.raises(LocatedInputError):
+            backend.generate(_make_request("S001"))
+
+        # Defensive: must NOT be wrapped as BackendUnreachableError.
+        with pytest.raises(LocatedInputError), pytest.raises(BackendUnreachableError):
+            backend.generate(_make_request("S001"))
+
+    def test_wraps_connection_error(self, monkeypatch) -> None:
+        """ConnectionError → BackendUnreachableError (exit 4). Unchanged behavior."""
+        from metric_codex.generate.backend import ApiBackend, BackendUnreachableError
+
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(raiser=ConnectionError("cannot reach anthropic"))(),
         )
 
         backend = ApiBackend(model="claude-haiku-4-5")
         with pytest.raises(BackendUnreachableError):
+            backend.generate(_make_request("S001"))
+
+    def test_api_connection_error_raises_unreachable(self, monkeypatch) -> None:
+        """T043: anthropic.APIConnectionError → BackendUnreachableError (exit 4)."""
+        from metric_codex.generate.backend import ApiBackend, BackendUnreachableError
+
+        exc = _make_api_connection_error()
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(raiser=exc)(),
+        )
+
+        backend = ApiBackend(model="claude-haiku-4-5")
+        with pytest.raises(BackendUnreachableError):
+            backend.generate(_make_request("S001"))
+
+    def test_refusal_stop_reason_raises_located_error(self, monkeypatch) -> None:
+        """T043: A 'refusal' stop_reason must raise LocatedInputError (not silently return empty)."""
+        from metric_codex.errors import LocatedInputError
+        from metric_codex.generate.backend import ApiBackend
+
+        fake_msg = _make_fake_text_message("I cannot help with this", stop_reason="refusal")
+
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(message_obj=fake_msg)(),
+        )
+
+        backend = ApiBackend(model="claude-haiku-4-5")
+        with pytest.raises(LocatedInputError):
+            backend.generate(_make_request("S001"))
+
+    def test_empty_content_raises_located_error(self, monkeypatch) -> None:
+        """T043: Empty content list must raise LocatedInputError (not IndexError crash)."""
+        from metric_codex.errors import LocatedInputError
+        from metric_codex.generate.backend import ApiBackend
+
+        class _EmptyContentMessage:
+            content = []
+            stop_reason = "end_turn"
+
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(message_obj=_EmptyContentMessage())(),
+        )
+
+        backend = ApiBackend(model="claude-haiku-4-5")
+        with pytest.raises(LocatedInputError):
+            backend.generate(_make_request("S001"))
+
+    def test_no_text_block_raises_located_error(self, monkeypatch) -> None:
+        """T043: Content with no text block (only tool_use etc.) raises LocatedInputError."""
+        from metric_codex.errors import LocatedInputError
+        from metric_codex.generate.backend import ApiBackend
+
+        tool_block = type("ToolBlock", (), {"type": "tool_use", "id": "x", "input": {}})()
+
+        class _NonTextMessage:
+            content = [tool_block]
+            stop_reason = "tool_use"
+
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.anthropic.Anthropic",
+            lambda **_: _fake_client_factory(message_obj=_NonTextMessage())(),
+        )
+
+        backend = ApiBackend(model="claude-haiku-4-5")
+        with pytest.raises(LocatedInputError):
+            backend.generate(_make_request("S001"))
+
+
+class TestCacheKeyMaxTokens:
+    """T043: max_tokens must be included in the cache key (distinct keys for distinct max_tokens)."""
+
+    def test_different_max_tokens_yield_different_cache_keys(self, tmp_path: Path) -> None:
+        """Two requests identical except max_tokens must NOT collide on cache."""
+        backend = _CountingBackend(response_text="첫 번째 응답")
+        cache = InputHashCache(backend=backend, cache_dir=tmp_path)
+
+        req_512 = _make_request("S001", max_tokens=512)
+        req_4096 = _make_request("S001", max_tokens=4096)
+
+        cache.generate(req_512)
+        cache.generate(req_4096)
+
+        # Both must hit the backend — no stale cache collision.
+        assert backend.call_count == 2, (
+            f"Expected 2 backend calls for distinct max_tokens, got {backend.call_count}. "
+            "max_tokens is not included in the cache key!"
+        )
+        assert len(list(tmp_path.glob("*.json"))) == 2
+
+    def test_same_max_tokens_still_hits_cache(self, tmp_path: Path) -> None:
+        """Identical requests (same max_tokens) still get a cache hit."""
+        backend = _CountingBackend(response_text="캐시 응답")
+        cache = InputHashCache(backend=backend, cache_dir=tmp_path)
+
+        req = _make_request("S001", max_tokens=2048)
+        cache.generate(req)
+        resp2 = cache.generate(req)
+
+        assert backend.call_count == 1
+        assert resp2.cache_hit is True
+
+
+class TestSubscriptionBackendMalformedResponse:
+    """T043: SubscriptionBackend must raise LocatedInputError on malformed response JSON."""
+
+    def test_missing_slot_id_raises_located_error(self, tmp_path: Path) -> None:
+        """A response file missing 'slot_id' must raise LocatedInputError, not KeyError."""
+        from metric_codex.errors import LocatedInputError
+        from metric_codex.generate.backend import SubscriptionBackend
+
+        staging = tmp_path / "staging"
+        responses = tmp_path / "responses"
+        responses.mkdir(parents=True)
+
+        # Malformed: missing slot_id
+        malformed = {"raw_text": "some text", "model": "claude-sonnet-4-6"}
+        (responses / "S001.json").write_text(
+            __import__("json").dumps(malformed), encoding="utf-8"
+        )
+
+        backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
+        with pytest.raises(LocatedInputError):
+            backend.generate(_make_request("S001"))
+
+    def test_missing_raw_text_raises_located_error(self, tmp_path: Path) -> None:
+        """A response file missing 'raw_text' must raise LocatedInputError, not KeyError."""
+        from metric_codex.errors import LocatedInputError
+        from metric_codex.generate.backend import SubscriptionBackend
+
+        staging = tmp_path / "staging"
+        responses = tmp_path / "responses"
+        responses.mkdir(parents=True)
+
+        # Malformed: missing raw_text
+        malformed = {"slot_id": "S001", "model": "claude-sonnet-4-6"}
+        (responses / "S001.json").write_text(
+            __import__("json").dumps(malformed), encoding="utf-8"
+        )
+
+        backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
+        with pytest.raises(LocatedInputError):
             backend.generate(_make_request("S001"))
