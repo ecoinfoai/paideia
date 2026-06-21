@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry, SourceRecord
-from paideia_shared.schemas.metric_codex import CodexEntry
+from paideia_shared.schemas.metric_codex import AdvisorRosterEntry, CodexEntry
 
 from metric_codex.distribute.bundles import _parse_student_id
 from metric_codex.errors import LocatedInputError
@@ -671,7 +671,7 @@ def check_skip02_unassigned_in_mibajeong(
 
 def check_skip03_no_cross_leak(
     gold_dir: Path,
-    roster: list | None,
+    roster: list[AdvisorRosterEntry] | None,
 ) -> list[Violation]:
     """Check that no advisor bundle contains a student assigned to another advisor.
 
