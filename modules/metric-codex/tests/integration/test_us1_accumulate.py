@@ -26,6 +26,7 @@ from tests.fixtures.scenario_a import (
     make_dirs,
     write_school_excel,
     write_school_map,
+    write_student_metrics,
 )
 
 _SID_C = "2026000003"
@@ -171,6 +172,162 @@ def test_cross_run_correction(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Boundary — --school-excel must live inside --data-root (Important C)
 # ---------------------------------------------------------------------------
+
+
+def _write_combined_parquet(path: Path, *, sid: str, name: str) -> None:
+    """Write a minimal 진단×시험결합.parquet row for one student."""
+    import json
+
+    axis_fields: dict[str, object] = {}
+    for axis in [
+        "digital_efficacy", "motivation", "time_availability", "material_preference",
+        "study_strategy", "study_environment", "social_learning", "feedback_seeking",
+    ]:
+        axis_fields[f"{axis}_raw"] = 1.0
+        axis_fields[f"{axis}_z"] = 0.1
+        axis_fields[f"{axis}_missing"] = False
+
+    rows = [{
+        "student_id": sid,
+        "name_kr": name,
+        "on_roster": True,
+        "section": "A",
+        "semester": SEMESTER,
+        "course_slug": COURSE,
+        **axis_fields,
+        "cluster_id": 1,
+        "cluster_label": "표준형",
+        "cluster_distance": 0.5,
+        "exam_taken": True,
+        "total_score": 80.0,
+        "score_percent": 80.0,
+        "section_percentile": 75.0,
+        "cohort_percentile": 70.0,
+        "z_score": 1.2,
+        "chapter_correct_rates": json.dumps({"순환": 0.9}, ensure_ascii=False),
+        "source_correct_rates": json.dumps({}, ensure_ascii=False),
+        "difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+        "expected_difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+        "item_type_correct_rates": json.dumps({}, ensure_ascii=False),
+        "interest_chapters_correct_rate": None,
+        "aversion_chapters_correct_rate": None,
+        "prior_readiness_q5": None,
+        "prior_readiness_q6": None,
+        "time_pattern_q21": None,
+        "time_pattern_q22": None,
+        "time_pattern_q23": None,
+        "interest_topics_q9": None,
+        "interest_topics_q10": None,
+        "interest_topics_q11": None,
+        "categorical_intent_q12": None,
+        "categorical_intent_q13": None,
+        "진단응답": True,
+        "시험응시": True,
+        "needs_map_schema_version": "0.1.0",
+        "immersio_phase2_schema_version": "0.1.0",
+    }]
+    import pandas as pd
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def _write_factor_scores(path: Path, *, sid: str) -> None:
+    """Write a minimal factor_scores.parquet for one student."""
+    import pandas as pd
+    from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
+
+    axis_fields: dict[str, object] = {}
+    for axis in STANDARD_AXIS_KEYS:
+        axis_fields[axis] = 1.0          # raw score column (no _raw suffix)
+        axis_fields[f"{axis}_z"] = 0.1
+        axis_fields[f"{axis}_missing"] = False
+    rows = [{
+        "student_id": sid,
+        "on_roster": True,
+        "responded": True,
+        "section": "A",
+        **axis_fields,
+    }]
+    pd.DataFrame(rows).to_parquet(path)
+
+
+def _write_cluster_assignment_with_names(
+    assignment_path: Path,
+    names_path: Path,
+    *,
+    sid: str,
+) -> None:
+    """Write cluster_assignment.parquet + cluster_names.json for one student."""
+    import json
+    import pandas as pd
+    rows = [{"student_id": sid, "cluster_id": 1, "distance_to_centroid": 0.5}]
+    pd.DataFrame(rows).to_parquet(assignment_path)
+    names_path.write_text(json.dumps({"1": "표준형"}), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# T012 — superseded individual sources gone after combined ingest (MC-U26)
+# ---------------------------------------------------------------------------
+
+
+def test_superseded_sources_removed_on_combined_ingest(tmp_path: Path) -> None:
+    """Run1: ingest individual sources. Run2: ingest combined. No double-count.
+
+    After run2 the store must:
+    - contain NO entries with source_id in {immersio:학생지표, needs-map:factor_scores,
+      needs-map:cluster_assignment} (those individual source_ids are superseded).
+    - have NO (student_id, key) pair counted more than once (no double-count).
+    """
+    data_root, bronze, immersio, needsmap = make_dirs(tmp_path)
+    write_school_map(bronze / "성적출석_map.yaml")
+    write_school_excel(bronze / "성적출석.xlsx", rows=[(SID_A, NAME_A, 85, 90.5, 15)])
+
+    # Run 1: individual sources (학생지표 + factor_scores + cluster_assignment)
+    write_student_metrics(immersio / "학생지표.parquet")
+    _write_factor_scores(needsmap / "factor_scores.parquet", sid=SID_A)
+    _write_cluster_assignment_with_names(
+        needsmap / "cluster_assignment.parquet",
+        needsmap / "cluster_names.json",
+        sid=SID_A,
+    )
+
+    import pandas as pd
+    from metric_codex.output.paths import silver_dir as _silver_dir
+
+    rc = app(["ingest", "--semester", SEMESTER, "--course", COURSE,
+              "--data-root", str(data_root), "--now", _NOW])
+    assert rc == 0, "run1 ingest failed"
+
+    sd = _silver_dir(SEMESTER, COURSE, data_root=data_root)
+    df_run1 = pd.read_parquet(sd / "codex_entry.parquet")
+    individual_source_ids = {"immersio:학생지표", "needs-map:factor_scores",
+                             "needs-map:cluster_assignment"}
+    # Run1 SHOULD have entries from individual source_ids
+    run1_individual = df_run1[df_run1["source_id"].isin(individual_source_ids)]
+    assert len(run1_individual) > 0, "precondition: run1 has individual source entries"
+
+    # Run 2: replace with combined source (진단×시험결합)
+    # The individual files stay on disk (degrade if combined supersedes)
+    _write_combined_parquet(immersio / "진단×시험결합.parquet", sid=SID_A, name=NAME_A)
+
+    rc = app(["ingest", "--semester", SEMESTER, "--course", COURSE,
+              "--data-root", str(data_root), "--now", "2026-06-20T00:00:00Z"])
+    assert rc == 0, "run2 ingest failed"
+
+    df_run2 = pd.read_parquet(sd / "codex_entry.parquet")
+
+    # After run2: NO entries with the superseded individual source_ids
+    still_individual = df_run2[df_run2["source_id"].isin(individual_source_ids)]
+    assert len(still_individual) == 0, (
+        f"superseded entries still in store after combined ingest: "
+        f"{still_individual['source_id'].unique().tolist()}"
+    )
+
+    # No (student_id, key) double-count
+    dup = df_run2.groupby(["student_id", "key"]).size()
+    doubles = dup[dup > 1]
+    assert len(doubles) == 0, (
+        f"double-counted (student_id, key) pairs after combined ingest:\n{doubles}"
+    )
 
 
 def test_school_excel_outside_data_root_exits_two(tmp_path: Path) -> None:

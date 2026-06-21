@@ -55,5 +55,27 @@ class AdvisorBundleSummary(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _invariant_per_advisor_sum(self) -> Self:
+        """Enforce: sum(per_advisor_counts.values()) == assigned_count (MC-U22)."""
+        per_sum = sum(self.per_advisor_counts.values())
+        if per_sum != self.assigned_count:
+            raise ValueError(
+                f"sum(per_advisor_counts) = {per_sum} != assigned_count = {self.assigned_count}."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _invariant_unassigned_sorted(self) -> Self:
+        """Enforce: unassigned_sids is ASC-sorted (MC-U29)."""
+        sids = self.unassigned_sids
+        for i in range(len(sids) - 1):
+            if sids[i] >= sids[i + 1]:
+                raise ValueError(
+                    f"unassigned_sids is not ASC-sorted: "
+                    f"{sids[i]!r} >= {sids[i + 1]!r} at index {i}."
+                )
+        return self
+
 
 __all__ = ["AdvisorBundleSummary"]

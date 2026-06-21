@@ -171,6 +171,8 @@ def accumulate(
     results: list[SourceReadResult],
     existing_entries: list[CodexEntry],
     existing_records: list[SourceRecord],
+    *,
+    superseded_source_ids: frozenset[str] = frozenset(),
 ) -> tuple[list[CodexEntry], list[SourceRecord]]:
     """Merge this run's read results into the existing store.
 
@@ -179,19 +181,34 @@ def accumulate(
     count unchanged (idempotent, FR-009).  Source records are merged by
     ``source_id`` (new replaces old).
 
+    When ``superseded_source_ids`` is non-empty, any existing entry or record
+    whose ``source_id`` is in that set is EVICTED before the merge.  This
+    prevents double-counting when a combined source supersedes its constituent
+    individual sources (MC-U26).  Eviction happens before the merge so a
+    superseding result's entries replace—rather than accumulate alongside—the
+    superseded entries.
+
     Args:
         results: This run's per-source read results.
         existing_entries: CodexEntry rows already in the store.
         existing_records: SourceRecord rows already in the store.
+        superseded_source_ids: Source IDs whose entries and records must be
+            evicted from the store before merging the new results.
 
     Returns:
         ``(entries, records)`` — entries sorted by natural key, records sorted
         by source_id.
     """
     entry_by_key: dict[_NaturalKey, CodexEntry] = {
-        _natural_key(e): e for e in existing_entries
+        _natural_key(e): e
+        for e in existing_entries
+        if e.source_id not in superseded_source_ids
     }
-    record_by_id: dict[str, SourceRecord] = {r.source_id: r for r in existing_records}
+    record_by_id: dict[str, SourceRecord] = {
+        r.source_id: r
+        for r in existing_records
+        if r.source_id not in superseded_source_ids
+    }
 
     for result in results:
         for entry in result.entries:

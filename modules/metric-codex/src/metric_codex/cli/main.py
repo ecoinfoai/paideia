@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -515,6 +516,20 @@ def _run_ingest(args: argparse.Namespace) -> int:
     )
     results.extend(paideia_results)
 
+    # MC-U26: when the combined source (진단×시험결합) is present in this run's
+    # results, the three individual sources it supersedes must be evicted from
+    # the store so they cannot double-count alongside the combined entries.
+    combined_source_id = "immersio:진단×시험결합"
+    _SUPERSEDED_BY_COMBINED = frozenset({
+        "immersio:학생지표",
+        "needs-map:factor_scores",
+        "needs-map:cluster_assignment",
+    })
+    combined_in_results = any(
+        r.source_record.source_id == combined_source_id for r in paideia_results
+    )
+    superseded_source_ids = _SUPERSEDED_BY_COMBINED if combined_in_results else frozenset()
+
     # F1/F2 transparency: report which upstream sources were found vs absent so
     # operators can detect silent degrade without inspecting the manifest.
     _school_status = "found" if (
@@ -541,7 +556,12 @@ def _run_ingest(args: argparse.Namespace) -> int:
 
     # 4) Accumulate into the (possibly pre-existing) Silver store.
     existing_entries, existing_records = read_existing_store(own_silver)
-    entries, records = accumulate(results, existing_entries, existing_records)
+    entries, records = accumulate(
+        results,
+        existing_entries,
+        existing_records,
+        superseded_source_ids=superseded_source_ids,
+    )
     write_store(own_silver, entries, records)
 
     # 5) Local-only pseudonym map over the FULL accumulated student set.  The
@@ -881,6 +901,15 @@ def _run_generate(args: argparse.Namespace) -> int:
     # PRIV-05: validate the map for bijection BEFORE any Gold byte is written.
     pseudonym_index = validate_pseudonym_map(pmap)
 
+    # MC-U02: clear the 학생별/ tree so stale mds from a prior run
+    # (name changes, dropped students) cannot linger and corrupt counts.
+    # Done AFTER bijection validation and BEFORE writing new files so a
+    # mid-run failure leaves a consistent (partially rebuilt) tree, not a mix
+    # of old and new content.
+    student_dir = own_gold / "학생별"
+    if student_dir.exists():
+        shutil.rmtree(student_dir)
+
     qs_path: Path = args.question_set or (own_bronze / "question_set.yaml")
     qs = load_question_set(qs_path)
 
@@ -1025,7 +1054,11 @@ def _run_distribute(args: argparse.Namespace) -> int:
     """
     from metric_codex.distribute.bundles import group_by_advisor, write_advisor_bundles
     from metric_codex.distribute.roster import load_roster
-    from metric_codex.distribute.summary import build_summary, write_unassigned_report
+    from metric_codex.distribute.summary import (
+        build_summary,
+        write_missing_gold_report as _write_missing_gold_report,
+        write_unassigned_report,
+    )
     from metric_codex.output.paths import gold_dir
 
     semester: str = args.semester
@@ -1041,23 +1074,60 @@ def _run_distribute(args: argparse.Namespace) -> int:
     roster_path: Path = args.roster or (own_bronze / "지도교수배정.yaml")
     roster = load_roster(roster_path)
 
-    # 2) Group student md files by advisor; identify unassigned (single 학생별
-    #    walk also yields the {student_id: name} map — no second glob needed).
-    per_advisor, unassigned, names = group_by_advisor(gold_dir=own_gold, roster=roster)
-    all_student_ids = sorted(names)
+    # 2) Load the Silver codex to get the authoritative student set (MC-U23).
+    #    The codex is the source of truth for total/assigned/unassigned counts;
+    #    the on-disk md count may differ (a student can lack a Gold md if generate
+    #    was interrupted or the md was manually removed).
+    codex_entries, _ = read_existing_store(own_silver)
+    codex_sids = sorted({e.student_id for e in codex_entries})
 
-    # 3) Write per-advisor bundles (atomic, whole-tree clear, no cross-leak).
-    write_advisor_bundles(gold_dir=own_gold, per_advisor=per_advisor)
+    # Build a sid → advisor map from the roster and classify each codex student.
+    sid_to_advisor: dict[str, str] = {e.student_id: e.advisor_id for e in roster}
+    roster_sids: set[str] = set(sid_to_advisor)
 
-    # 4) Build summary and write unassigned report.
-    summary = build_summary(
-        all_student_ids=all_student_ids,
-        per_advisor=per_advisor,
-        unassigned=unassigned,
+    # 3) Group Gold md files by advisor (disk walk) for the copy step.  This
+    #    also yields the name map for the unassigned report.
+    per_advisor_paths, _unassigned_md, names = group_by_advisor(
+        gold_dir=own_gold, roster=roster
     )
-    write_unassigned_report(gold_dir=own_gold, unassigned=unassigned, names=names)
 
-    # 5) Update manifest — preserve provenance, update bundle_summary.
+    # 4) Build the codex-sourced per_advisor grouping for the summary.
+    #    Assigned codex students with no Gold md are still counted as assigned
+    #    but cannot be copied — they are surfaced via a separate missing-md report.
+    per_advisor_sids: dict[str, list[str]] = {}
+    for sid in codex_sids:
+        advisor_id = sid_to_advisor.get(sid)
+        if advisor_id is not None:
+            per_advisor_sids.setdefault(advisor_id, []).append(sid)
+
+    # Detect assigned codex students who have no Gold md (MC-U21).
+    md_sids: set[str] = set(names)
+    missing_gold: list[str] = sorted(
+        sid for sid in codex_sids
+        if sid in roster_sids and sid not in md_sids
+    )
+
+    # 5) Write per-advisor bundles (atomic, whole-tree clear, no cross-leak).
+    write_advisor_bundles(gold_dir=own_gold, per_advisor=per_advisor_paths)
+
+    # 6) Build summary from the codex set; write unassigned + missing-md reports.
+    summary = build_summary(
+        codex_sids=codex_sids,
+        roster_sids=roster_sids,
+        per_advisor=per_advisor_sids,
+    )
+    # Names map may not cover codex students who have no Gold md; extend with
+    # empty entries so the unassigned report can still emit a line per sid.
+    for sid in codex_sids:
+        names.setdefault(sid, None)
+    unassigned_sids = list(summary.unassigned_sids)  # already ASC-sorted by schema
+    write_unassigned_report(gold_dir=own_gold, unassigned=unassigned_sids, names=names)
+    if missing_gold:
+        _write_missing_gold_report(
+            gold_dir=own_gold, missing_sids=missing_gold, names=names
+        )
+
+    # 7) Update manifest — preserve provenance, update bundle_summary.
     manifest_path = own_silver / "manifest_metric-codex.json"
     if manifest_path.is_file():
         prior = read_manifest(manifest_path)
@@ -1074,7 +1144,7 @@ def _run_distribute(args: argparse.Namespace) -> int:
         llm_backend = "none(template)"
         llm_model = None
         cache_hit_rate = None
-        student_count = len(all_student_ids)
+        student_count = len(codex_sids)
         entry_count = 0
 
     manifest = build_manifest(

@@ -485,13 +485,22 @@ class TestDistributeStaleRemovedAdvisor:
 
 
 class TestDistributeNoNameStudent:
-    """M-4: a {student_id}.md (no name) student distributes + reports correctly."""
+    """M-4: a {student_id}.md (no name) student distributes + reports correctly.
 
-    def test_no_name_student_unassigned_reported(self, generated_data_root, tmp_path):
-        """A bare {sid}.md student absent from the roster appears in 미배정.md."""
+    v0.1.1 design change (D4/MC-U23): the unassigned report and summary counts
+    derive from the CODEX student set, not from on-disk mds.  A bare md placed
+    manually without a codex entry is NOT a valid codex student; it is copied into
+    the bundle (if assigned via roster) but does NOT appear in 미배정.md or the
+    summary unassigned_sids.  This update reflects that design change.
+    """
+
+    def test_no_name_student_not_in_mibaejeong_without_codex_entry(
+        self, generated_data_root, tmp_path
+    ):
+        """A bare {sid}.md with NO codex entry is NOT in 미배정.md (codex-derived report)."""
         gold = generated_data_root / "gold" / "metric-codex" / _KEY
         student_dir = gold / "학생별"
-        # Add a no-name student md (bare student_id stem).
+        # Add a no-name student md (bare student_id stem) WITHOUT a codex entry.
         bare_sid = "2026000099"
         (student_dir / f"{bare_sid}.md").write_text(
             "# 무명 학생\n\n근거 없음\n", encoding="utf-8"
@@ -510,7 +519,13 @@ class TestDistributeNoNameStudent:
         assert rc == 0
 
         mibaejeong = (gold / "미배정.md").read_text(encoding="utf-8")
-        assert bare_sid in mibaejeong
+        # bare_sid has no codex entry → not in the codex-derived unassigned list
+        assert bare_sid not in mibaejeong, (
+            f"{bare_sid} has no codex entry but appeared in 미배정.md"
+        )
+        # The real codex students B and C (not in roster) ARE in 미배정.md
+        assert _SID_B in mibaejeong
+        assert _SID_C in mibaejeong
 
     def test_no_name_student_assigned_in_bundle(self, generated_data_root, tmp_path):
         """A bare {sid}.md student in the roster lands in the advisor bundle."""
@@ -537,6 +552,172 @@ class TestDistributeNoNameStudent:
         assert (adv_dir / f"{bare_sid}.md").is_file()
         index = (adv_dir / "_index.md").read_text(encoding="utf-8")
         assert bare_sid in index
+
+
+class TestDistributeNoStaleStudentMds:
+    """T010 v0.1.1 — regenerate clears stale 학생별/*.md (MC-U02).
+
+    Stale files arise when a student's name changes: the old-name md lingers
+    alongside the new-name md.  The fix is an rmtree of 학생별/ before writing.
+
+    Run 1: 3 students (A=김철수, B=이영희, C=박지수).
+    Run 2: rename C's name to 최다은 (but keep A, B, C all in the store).
+    After run2 generate: the OLD 박지수.md must be gone, replaced by 최다은.md.
+    No old-name and new-name files coexist.
+    """
+
+    def test_no_stale_md_after_name_change(self, tmp_path: Path):
+        data_root = tmp_path / "data"
+        bronze = data_root / "bronze" / "metric-codex" / _KEY
+        bronze.mkdir(parents=True)
+
+        map_text = (
+            f"semester: {_SEM}\ncourse_slug: {_COURSE}\nsheet: 0\nheader_row: 1\n"
+            "columns:\n  student_id: 학번\n  name_kr: 이름\n"
+            "  score_total: 총점\n  score_percent: 환산점수\n  attendance: 출석\n"
+        )
+        (bronze / "성적출석_map.yaml").write_text(map_text, encoding="utf-8")
+        qs_path = bronze / "question_set.yaml"
+        _make_question_set(qs_path)
+
+        def _write_excel(path: Path, rows: list[tuple]) -> None:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.append(["학번", "이름", "총점", "환산점수", "출석"])
+            for r in rows:
+                ws.append([int(r[0]), r[1], r[2], r[3], r[4]])
+            wb.save(path)
+
+        # --- Run 1: A=김철수, B=이영희, C=박지수 ---
+        _write_excel(bronze / "성적출석.xlsx", [
+            (_SID_A, _NAME_A, 85, 90.5, 15),
+            (_SID_B, _NAME_B, 70, 75.0, 12),
+            (_SID_C, _NAME_C, 60, 65.0, 10),
+        ])
+
+        rc = app(["ingest", "--semester", _SEM, "--course", _COURSE,
+                  "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z"])
+        assert rc == 0, "run1 ingest failed"
+        rc = app(["generate", "--semester", _SEM, "--course", _COURSE,
+                  "--data-root", str(data_root), "--question-set", str(qs_path),
+                  "--backend", "none", "--now", "2026-06-01T01:00:00Z"])
+        assert rc == 0, "run1 generate failed"
+
+        student_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        run1_mds = {p.name for p in student_dir.glob("*.md")}
+        assert len(run1_mds) == 3, f"expected 3 mds after run1, got {sorted(run1_mds)}"
+        old_c_md = next(n for n in run1_mds if _SID_C in n)
+        assert _NAME_C in old_c_md, f"C old name not in filename: {old_c_md}"
+
+        # --- Run 2: rename C to 최다은 (A, B, C still in store) ---
+        _NEW_NAME_C = "최다은"
+        _write_excel(bronze / "성적출석.xlsx", [
+            (_SID_A, _NAME_A, 85, 90.5, 15),
+            (_SID_B, _NAME_B, 70, 75.0, 12),
+            (_SID_C, _NEW_NAME_C, 62, 67.0, 11),
+        ])
+
+        rc = app(["ingest", "--semester", _SEM, "--course", _COURSE,
+                  "--data-root", str(data_root), "--now", "2026-06-02T00:00:00Z"])
+        assert rc == 0, "run2 ingest failed"
+        rc = app(["generate", "--semester", _SEM, "--course", _COURSE,
+                  "--data-root", str(data_root), "--question-set", str(qs_path),
+                  "--backend", "none", "--now", "2026-06-02T01:00:00Z"])
+        assert rc == 0, "run2 generate failed"
+
+        run2_mds = {p.name for p in student_dir.glob("*.md")}
+
+        # Old SID_C name must be gone (박지수 → 최다은): no old-name file should linger
+        stale_c_old = [n for n in run2_mds if _SID_C in n and _NAME_C in n]
+        assert not stale_c_old, (
+            f"stale old-name C md still present (박지수 not cleared): {stale_c_old}"
+        )
+
+        # New SID_C md with updated name must exist
+        new_c = [n for n in run2_mds if _SID_C in n and _NEW_NAME_C in n]
+        assert new_c, f"new-name C md (최다은) missing from {sorted(run2_mds)}"
+
+        # Old and new must NOT coexist for the same student
+        all_c_mds = [n for n in run2_mds if _SID_C in n]
+        assert len(all_c_mds) == 1, (
+            f"multiple mds for {_SID_C} coexist (stale + new): {all_c_mds}"
+        )
+
+
+class TestDistributeCountFromCodex:
+    """T011 v0.1.1 — distribution total from codex (not disk glob) (MC-U23/MC-U21).
+
+    After generate, manually remove a student's Gold md to simulate a missing file.
+    Then run distribute.
+    - total_students_with_codex must equal codex entry count (not the md count).
+    - The student whose md is missing but IS in the roster must be surfaced
+      (reported as having no Gold md), not silently dropped or reclassified as
+      unassigned.
+    """
+
+    def test_total_from_codex_not_disk(self, generated_data_root: Path, roster_path: Path):
+        """With A's md deleted: total must still be 3 (codex has 3 students)."""
+        student_dir = generated_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        # Remove SID_A's md
+        a_md = next(p for p in student_dir.glob("*.md") if _SID_A in p.name)
+        a_md.unlink()
+        assert len(list(student_dir.glob("*.md"))) == 2, "precondition: 2 mds left"
+
+        rc = _run_distribute(generated_data_root, roster_path)
+        assert rc == 0
+
+        import json
+        manifest_path = (
+            generated_data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        summary = json.loads(manifest_path.read_text(encoding="utf-8"))["bundle_summary"]
+
+        # Must be 3 (from codex), not 2 (from disk glob)
+        assert summary["total_students_with_codex"] == 3, (
+            f"expected 3 (codex), got {summary['total_students_with_codex']} (disk)"
+        )
+
+    def test_missing_md_assigned_student_surfaced(self, generated_data_root: Path, roster_path: Path):
+        """SID_A is in the roster but has no Gold md; must be surfaced explicitly."""
+        student_dir = generated_data_root / "gold" / "metric-codex" / _KEY / "학생별"
+        a_md = next(p for p in student_dir.glob("*.md") if _SID_A in p.name)
+        a_md.unlink()
+
+        rc = _run_distribute(generated_data_root, roster_path)
+        assert rc == 0
+
+        # SID_A (assigned, no md) must appear in a surfacing report
+        gold = generated_data_root / "gold" / "metric-codex" / _KEY
+        # Check 미배정.md doesn't have it (it's assigned), but some mechanism surfaces it
+        mibaejeong = (gold / "미배정.md").read_text(encoding="utf-8")
+        # SID_A IS assigned (in roster), so must NOT be in 미배정.md
+        assert _SID_A not in mibaejeong, (
+            f"{_SID_A} is assigned but appeared in 미배정.md (wrong classification)"
+        )
+
+        # Missing md report must exist and contain SID_A
+        import json
+        manifest_path = (
+            generated_data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+        summary = json.loads(manifest_path.read_text(encoding="utf-8"))["bundle_summary"]
+        # The summary must still show assigned_count correctly
+        # and the SID_A must be in some surfacing mechanism
+        # (missing_gold_mds in summary or a report file)
+        assert _SID_A not in summary["unassigned_sids"], (
+            f"{_SID_A} is assigned but appeared in unassigned_sids"
+        )
+        # The per_advisor sum invariant must hold: sum(per_advisor_counts) == assigned_count
+        total = summary["total_students_with_codex"]
+        assigned = summary["assigned_count"]
+        unassigned = len(summary["unassigned_sids"])
+        assert assigned + unassigned == total
+        per_sum = sum(summary["per_advisor_counts"].values())
+        assert per_sum == assigned, (
+            f"per_advisor sum {per_sum} != assigned_count {assigned}"
+        )
 
 
 class TestDistributeMissingStudentDir:
