@@ -1086,10 +1086,10 @@ def _run_distribute(args: argparse.Namespace) -> int:
     roster_sids: set[str] = set(sid_to_advisor)
 
     # 3) Group Gold md files by advisor (disk walk) for the copy step.  This
-    #    also yields the name map for the unassigned report.
-    per_advisor_paths, _unassigned_md, names = group_by_advisor(
-        gold_dir=own_gold, roster=roster
-    )
+    #    also yields the name map for the unassigned report.  The disk-derived
+    #    unassigned list (2nd value) is intentionally discarded — unassigned is
+    #    derived from the codex set below, not from on-disk mds (MC-U23).
+    per_advisor_paths, _, names = group_by_advisor(gold_dir=own_gold, roster=roster)
 
     # 4) Build the codex-sourced per_advisor grouping for the summary.
     #    Assigned codex students with no Gold md are still counted as assigned

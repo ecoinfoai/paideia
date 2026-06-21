@@ -696,16 +696,23 @@ class TestDistributeCountFromCodex:
             f"{_SID_A} is assigned but appeared in 미배정.md (wrong classification)"
         )
 
-        # Missing md report must exist and contain SID_A
+        # MC-U21: the assigned-but-no-md student MUST be surfaced in 미생성.md.
+        missing_report = gold / "미생성.md"
+        assert missing_report.exists(), (
+            "미생성.md not written for assigned student with no Gold md"
+        )
+        assert _SID_A in missing_report.read_text(encoding="utf-8"), (
+            f"{_SID_A} (assigned, no md) not surfaced in 미생성.md"
+        )
+
         import json
         manifest_path = (
             generated_data_root / "silver" / "metric-codex" / _KEY
             / "manifest_metric-codex.json"
         )
         summary = json.loads(manifest_path.read_text(encoding="utf-8"))["bundle_summary"]
-        # The summary must still show assigned_count correctly
-        # and the SID_A must be in some surfacing mechanism
-        # (missing_gold_mds in summary or a report file)
+        # The summary must still show assigned_count correctly and SID_A must NOT
+        # be reclassified as unassigned.
         assert _SID_A not in summary["unassigned_sids"], (
             f"{_SID_A} is assigned but appeared in unassigned_sids"
         )
