@@ -22,6 +22,7 @@ from metric_codex.cli.main import app
 from metric_codex.output.manifest import read_manifest
 from metric_codex.output.paths import silver_dir
 from metric_codex.output.sha256 import compute_sha256
+from paideia_shared.schemas.metric_codex import CodexEntry
 
 from tests.fixtures.scenario_a import (
     COURSE,
@@ -410,4 +411,58 @@ class TestSupersedeLineageInteraction:
         assert violations == [], (
             f"check_lineage reported false LINEAGE-01 violations after supersede-purge: "
             f"{[str(v) for v in violations]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T023 (true positive) — check_lineage fires on an unresolved source.
+#
+# Every other LINEAGE-01 test asserts the pass/empty path; without this a
+# future no-op regression of check_lineage would pass silently, defeating a
+# NON-NEGOTIABLE Principle V (audit trail) invariant.  Called directly because
+# the full verify-gate path can't reach LINEAGE-01 with empty provenance — the
+# MANIFEST check fires first on an empty input_hashes.
+# ---------------------------------------------------------------------------
+
+
+class TestCheckLineageTruePositive:
+    """check_lineage must report a located LINEAGE-01 for an unresolved source_id."""
+
+    @staticmethod
+    def _bogus_entry() -> CodexEntry:
+        """Build a minimal valid CodexEntry whose source_id resolves nowhere."""
+        return CodexEntry(
+            student_id=SID_A,
+            semester=SEMESTER,
+            cohort_year=2026,
+            layer="minimal",
+            entry_kind="score_total",
+            key="score_total",
+            value_num=85.0,
+            source_id="bogus:x",
+        )
+
+    def test_unresolved_source_yields_exactly_one_lineage_violation(self) -> None:
+        """A codex entry whose source_id is in neither input_hashes nor ledger fails."""
+        from metric_codex.verify.checks import check_lineage
+
+        violations = check_lineage(
+            codex_entries=[self._bogus_entry()],
+            input_hashes={},
+            source_records=[],
+        )
+        assert len(violations) == 1, (
+            f"expected exactly one LINEAGE-01 violation for an unresolved source; "
+            f"got {[str(v) for v in violations]}"
+        )
+        v = violations[0]
+        assert v.invariant_id == "LINEAGE-01", (
+            f"expected invariant_id LINEAGE-01; got {v.invariant_id!r}"
+        )
+        # The offending source_id must be named in the located output (detail + message).
+        assert "bogus:x" in str(v), (
+            f"offending source_id 'bogus:x' not named in violation: {str(v)!r}"
+        )
+        assert v.detail is not None and "bogus:x" in v.detail, (
+            f"offending source_id 'bogus:x' not in detail: {v.detail!r}"
         )

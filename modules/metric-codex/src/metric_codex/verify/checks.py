@@ -22,7 +22,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry
+from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry, SourceRecord
 from paideia_shared.schemas.metric_codex import CodexEntry
 
 from metric_codex.distribute.bundles import _parse_student_id
@@ -618,7 +618,7 @@ def check_manifest_hashes(manifest_path: Path) -> list[Violation]:
 def check_lineage(
     codex_entries: list[CodexEntry],
     input_hashes: dict[str, str],
-    source_records: list,
+    source_records: list[SourceRecord],
 ) -> list[Violation]:
     """Check that every codex_entry.source_id resolves in provenance (LINEAGE-01).
 
@@ -710,7 +710,7 @@ def run_all_checks(
 
     # Load codex entries and source records (ledger) — both needed for LINEAGE-01.
     codex_entries: list[CodexEntry] = []
-    source_records: list = []
+    source_records: list[SourceRecord] = []
     if own_silver.is_dir():
         try:
             codex_entries, source_records = read_existing_store(own_silver)
@@ -787,9 +787,10 @@ def run_all_checks(
         violations += check_manifest_hashes(manifest_path)
 
     # LINEAGE-01: every codex source_id must resolve in input_hashes ∪ ledger.
-    # Only run when both the codex and the manifest are available; if the manifest
-    # failed to load, manifest_input_hashes is empty and SKIP-02/MANIFEST already
-    # surfaced the failure — skip LINEAGE-01 to avoid spurious noise.
+    # Run when the manifest file exists and the store has any content.  If the
+    # manifest failed to load, manifest_input_hashes is empty and resolution
+    # falls back to the source ledger, which is complete provenance — so no
+    # false positive (the manifest failure is separately surfaced by SKIP-02/MANIFEST).
     if manifest_path.is_file() and (codex_entries or source_records):
         violations += check_lineage(
             codex_entries=codex_entries,
