@@ -826,3 +826,160 @@ class TestVerifyUnparseableRoster:
             f"SKIP-03 Violation must name the roster file (not just 지도교수별); "
             f"roster={roster_path.name!r}, stderr={captured.err!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# T035 RED — PRIV-01: PII in cache/*.json and staging_responses/*.json
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyPriv01CacheAndStagingResponsesPii:
+    """T035 RED: PII in cache/*.json or staging_responses/*.json raw_text
+    must be detected by check_priv01_no_staging_pii → exit 3.
+
+    Before fix: check only scans staging/*.json — cache and staging_responses
+    are unchecked so PII planted there passes vacuously (exit 0).
+    After fix: all three subdirs are scanned; a hit in raw_text raises PRIV-01.
+    """
+
+    def _silver(self, data_root: Path) -> Path:
+        return data_root / "silver" / "metric-codex" / _KEY
+
+    def test_exits_three_on_sid_in_cache_json(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """T035 RED: a 10-digit student_id in cache/*.json raw_text → exit 3."""
+        silver = self._silver(full_pipeline_root)
+        cache_dir = silver / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        evil = cache_dir / "evil_cache.json"
+        payload = {"raw_text": f"학생 {_SID_A} 점수 85점"}
+        evil.write_text(json.dumps(payload), encoding="utf-8")
+
+        rc = _run_verify(full_pipeline_root)
+        assert rc == 3, (
+            f"verify should exit 3 on PRIV-01 in cache/raw_text, got rc={rc}"
+        )
+
+    def test_violation_priv01_names_cache_file(
+        self,
+        full_pipeline_root: Path,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        silver = self._silver(full_pipeline_root)
+        cache_dir = silver / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        evil = cache_dir / "leak.json"
+        payload = {"raw_text": f"student: {_SID_B}"}
+        evil.write_text(json.dumps(payload), encoding="utf-8")
+
+        _run_verify(full_pipeline_root)
+        captured = capsys.readouterr()
+        assert "PRIV-01" in captured.err, (
+            f"Expected PRIV-01 in stderr for cache PII; got: {captured.err!r}"
+        )
+
+    def test_exits_three_on_sid_in_staging_responses_json(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """T035 RED: a 10-digit student_id in staging_responses/*.json raw_text → exit 3."""
+        silver = self._silver(full_pipeline_root)
+        sr_dir = silver / "staging_responses"
+        sr_dir.mkdir(parents=True, exist_ok=True)
+
+        evil = sr_dir / "S001_response.json"
+        payload = {"raw_text": f"학번 {_SID_A} 이름 홍길동"}
+        evil.write_text(json.dumps(payload), encoding="utf-8")
+
+        rc = _run_verify(full_pipeline_root)
+        assert rc == 3, (
+            f"verify should exit 3 on PRIV-01 in staging_responses/raw_text, got rc={rc}"
+        )
+
+    def test_violation_priv01_names_staging_responses_file(
+        self,
+        full_pipeline_root: Path,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        silver = self._silver(full_pipeline_root)
+        sr_dir = silver / "staging_responses"
+        sr_dir.mkdir(parents=True, exist_ok=True)
+
+        evil = sr_dir / "S002_response.json"
+        payload = {"raw_text": f"id={_SID_C}"}
+        evil.write_text(json.dumps(payload), encoding="utf-8")
+
+        _run_verify(full_pipeline_root)
+        captured = capsys.readouterr()
+        assert "PRIV-01" in captured.err, (
+            f"Expected PRIV-01 in stderr for staging_responses PII; got: {captured.err!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T036 RED — EVID: LLM backend Gold → report-only note, exit 0
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyEvid03LlmReportOnly:
+    """T036 RED: when llm_backend != 'none(template)', verify must emit an
+    informational 'not grounding-verified (template-only)' note and exit 0.
+
+    Before fix: the else branch in check_evidence_grounding is a bare ``pass``
+    — no note is emitted.  After fix: a non-fatal note line is printed (not a
+    Violation that triggers exit 3).
+    """
+
+    def _manifest_path(self, data_root: Path) -> Path:
+        return (
+            data_root / "silver" / "metric-codex" / _KEY
+            / "manifest_metric-codex.json"
+        )
+
+    def _set_llm_backend(self, manifest_path: Path, backend: str) -> None:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        raw["llm_backend"] = backend
+        manifest_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+    def test_exits_zero_for_api_backend_gold(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """T036 RED: llm_backend='api' in manifest → verify exits 0 (non-fatal)."""
+        manifest_path = self._manifest_path(full_pipeline_root)
+        self._set_llm_backend(manifest_path, "api")
+
+        rc = _run_verify(full_pipeline_root)
+        assert rc == 0, (
+            f"verify must exit 0 for LLM-rendered Gold (non-fatal note only), got rc={rc}"
+        )
+
+    def test_note_contains_not_grounding_verified(
+        self,
+        full_pipeline_root: Path,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """T036 RED: a 'not grounding-verified (template-only)' line must appear."""
+        manifest_path = self._manifest_path(full_pipeline_root)
+        self._set_llm_backend(manifest_path, "api")
+
+        _run_verify(full_pipeline_root)
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "not grounding-verified" in combined, (
+            f"Expected 'not grounding-verified' note in output; "
+            f"stdout={captured.out!r} stderr={captured.err!r}"
+        )
+
+    def test_exits_zero_for_subscription_backend_gold(
+        self, full_pipeline_root: Path
+    ) -> None:
+        """subscription backend is also a non-template path → exit 0."""
+        manifest_path = self._manifest_path(full_pipeline_root)
+        self._set_llm_backend(manifest_path, "subscription")
+
+        rc = _run_verify(full_pipeline_root)
+        assert rc == 0, (
+            f"verify must exit 0 for subscription-rendered Gold, got rc={rc}"
+        )

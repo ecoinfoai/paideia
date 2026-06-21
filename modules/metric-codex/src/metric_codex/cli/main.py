@@ -743,6 +743,7 @@ def _run_query(args: argparse.Namespace) -> int:
     Raises:
         LocatedInputError: On boundary failures (caught by ``app`` → exit 2).
     """
+    from metric_codex.generate.reidentify import validate_pseudonym_map
     from metric_codex.retrieve.query import answer_question, load_question_set
 
     semester: str = args.semester
@@ -754,6 +755,13 @@ def _run_query(args: argparse.Namespace) -> int:
     pseudonym_path = own_silver / "pseudonym_map.parquet"
 
     entries, pmap = _load_store_and_map(own_silver, pseudonym_path)
+
+    # PRIV-05 defense-in-depth (T041): validate bijection BEFORE resolving the
+    # --student argument.  read_pseudonym_map (via _load_store_and_map) already
+    # checks cross-row uniqueness, but validate_pseudonym_map is the canonical
+    # bijection gate — an explicit call here makes the invariant unconditional on
+    # the query path and documents the intent (no silent mis-identification).
+    validate_pseudonym_map(pmap)
 
     student_id, pseudonym, name_kr = _resolve_student(args.student, entries, pmap)
 

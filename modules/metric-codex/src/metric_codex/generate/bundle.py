@@ -18,6 +18,15 @@ Scanning strategy for assert_no_pii:
   The caller passes the known names to ``write_staging`` (which forwards them to
   ``assert_no_pii``); the CLI ``dry-run`` handler computes them from the
   pseudonym map's ``name_kr`` values.  The 10-digit and email scans always run.
+- 3rd-party name+role: ``_THIRD_PARTY_NAME_ROLE_PATTERN`` detects a 1-2
+  syllable Korean surname followed immediately by a role token (교수, 선생님?,
+  박사, 쌤, 조교).  This pattern is a TARGETED check for incidental 3rd-party
+  names (e.g. a cluster label "박교수 추천반") that the known-name set cannot
+  cover.  It deliberately does NOT scan for bare Hangul syllables to avoid
+  false positives on legitimate evidence (chapter labels like "순환", Korean
+  category text).  LLM-facing payloads are pre-processed with
+  ``redact_third_party_names`` before any LLM call or staging write; Silver /
+  codex retains the original.
 """
 
 from __future__ import annotations
@@ -41,6 +50,38 @@ from metric_codex.retrieve.query import QuestionSet, answer_question
 
 _SID_PATTERN = re.compile(r"\b\d{10}\b")
 _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+# Targeted 3rd-party name+role pattern (W2 precision constraint):
+# Matches 1-2 Hangul syllables (a Korean surname) immediately followed by one
+# of the role tokens: 교수|선생님|선생|박사|쌤|조교.
+# Bare Korean syllables like "순환" (chapter label) do NOT match because they
+# are not followed by a role token.  Two-syllable names like "박지수" without
+# a role suffix also do NOT match, preventing false positives on student names
+# already guarded by the known-name set.
+_THIRD_PARTY_NAME_ROLE_PATTERN = re.compile(
+    r"[가-힣]{1,2}(?:교수|선생님|선생|박사|쌤|조교)"
+)
+
+
+# ---------------------------------------------------------------------------
+# 3rd-party name+role redaction (LLM-facing payload only)
+# ---------------------------------------------------------------------------
+
+
+def redact_third_party_names(text: str) -> str:
+    """Replace 3rd-party Korean surname+role tokens with a redaction marker.
+
+    Only the LLM-facing payload is redacted; Silver / codex retains the
+    original.  Uses ``_THIRD_PARTY_NAME_ROLE_PATTERN`` (targeted — does NOT
+    flag bare Hangul syllables like chapter labels).
+
+    Args:
+        text: A string that may contain 3rd-party name+role tokens.
+
+    Returns:
+        The text with every name+role match replaced by ``[REDACTED]``.
+    """
+    return _THIRD_PARTY_NAME_ROLE_PATTERN.sub("[REDACTED]", text)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +146,10 @@ def assert_no_pii(
     - Known Korean names: exact substring match against ``known_names`` (when
       provided).  Generic Hangul heuristics are intentionally avoided to prevent
       false positives on legitimate Korean evidence text.
+    - 3rd-party Korean name+role tokens: ``_THIRD_PARTY_NAME_ROLE_PATTERN``
+      (e.g. "박교수", "김선생님").  This is a guard: LLM-facing payloads must
+      have been pre-processed by ``redact_third_party_names`` before reaching
+      this scan.  A surviving hit here indicates the redaction step was skipped.
 
     Args:
         payload: Serialized string to scan (typically JSON).
@@ -140,6 +185,14 @@ def assert_no_pii(
                     expected="no Korean name",
                     actual=name,
                 )
+
+    m = _THIRD_PARTY_NAME_ROLE_PATTERN.search(payload)
+    if m:
+        raise LocatedInputError(
+            f"PII scan: 3rd-party name+role token found in payload: {m.group()!r}",
+            expected="no 3rd-party name+role token (redact before staging/LLM)",
+            actual=m.group(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -297,5 +350,6 @@ __all__ = [
     "StudentBundle",
     "assert_no_pii",
     "build_bundles",
+    "redact_third_party_names",
     "write_staging",
 ]

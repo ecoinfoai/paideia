@@ -5,14 +5,23 @@ They NEVER raise on a detected invariant violation — they collect all
 violations so ``run_all_checks`` can report ALL of them at once.
 
 Invariants covered:
-- PRIV-01: no 10-digit id / email / known name in staging bundles.
+- PRIV-01: no 10-digit id / email / known name in staging bundles, cache/,
+  and staging_responses/ (raw_text field of captured LLM I/O).
 - PRIV-03/05: pseudonym map present and bijective.
 - PRIV-04: silver and gold output dirs are gitignored (static repo check).
-- EVID-01/02/03: evidence grounding (template-mode: byte-match; llm: citation
-  resolve + PII-free bundle check).
+- EVID-01/02/03: evidence grounding (template-mode: byte-match; llm: report-
+  only "not grounding-verified (template-only)" note, exit 0 — LLM prose is a
+  sanctioned path; byte-match grounding is template-only by design).
 - SKIP-02: manifest count invariant (assigned + unassigned == total).
 - SKIP-03: no cross-advisor leak in 지도교수별 bundles.
 - MANIFEST: input_hashes and config_ids non-empty (provenance present).
+
+Note (T042): EVID byte-grounding is template-only.  For LLM-rendered Gold
+(backend = api | subscription), the gate emits a report-only note
+"S{NNN}: LLM-rendered → not grounding-verified (template-only)" and exits 0.
+This aligns with ``specs/014-metric-codex-v0-1-1/contracts/privacy.md``:
+LLM polish is a sanctioned path; the gate must not claim grounding for LLM
+prose but must not treat a legitimately LLM-rendered Gold as a violation.
 """
 
 from __future__ import annotations
@@ -86,41 +95,74 @@ def check_priv01_no_staging_pii(
     silver_dir: Path,
     pseudonym_map: list[PseudonymMapEntry],
 ) -> list[Violation]:
-    """Scan every staging bundle JSON for PII (PRIV-01).
+    """Scan every staging bundle, cache, and staging_responses JSON for PII (PRIV-01).
 
-    Checks for 10-digit student_ids, email addresses, and known Korean names
-    from the pseudonym map.  Uses the same patterns as ``assert_no_pii`` but
-    collects violations instead of raising on the first hit.
+    Checks for 10-digit student_ids, email addresses, known Korean names,
+    and 3rd-party name+role tokens.  Uses the same patterns as ``assert_no_pii``
+    but collects violations instead of raising on the first hit.
+
+    Three subdirectory scopes (T039):
+    - ``staging/*.json``: full payload text scan (the bundle written before LLM).
+    - ``cache/*.json``: the ``raw_text`` field only (captured LLM response text).
+    - ``staging_responses/*.json``: the ``raw_text`` field only (subscription
+      responses).  Scanning only ``raw_text`` avoids JSON-escape false positives
+      on the surrounding metadata (e.g. escaped path strings or prompt text).
 
     Args:
         silver_dir: metric-codex Silver directory for this semester/course.
         pseudonym_map: Full pseudonym map (provides known name set).
 
     Returns:
-        List of Violation (empty if no staging dir or no PII found).
+        List of Violation (empty if no dirs exist or no PII found).
     """
-    staging_dir = silver_dir / "staging"
-    if not staging_dir.is_dir():
-        return []
+    import json as _json
 
     known_names: frozenset[str] = frozenset(
         e.name_kr for e in pseudonym_map if e.name_kr
     )
     violations: list[Violation] = []
 
-    for json_path in sorted(staging_dir.glob("*.json")):
-        payload = json_path.read_text(encoding="utf-8")
-        try:
-            assert_no_pii(payload, known_names=known_names)
-        except LocatedInputError as exc:
-            violations.append(
-                Violation(
-                    invariant_id="PRIV-01",
-                    message=exc.message,
-                    file=str(json_path),
-                    detail=f"expected={exc.expected}, got={exc.actual}",
+    # --- staging/: full payload scan (original behaviour) ---
+    staging_dir = silver_dir / "staging"
+    if staging_dir.is_dir():
+        for json_path in sorted(staging_dir.glob("*.json")):
+            payload = json_path.read_text(encoding="utf-8")
+            try:
+                assert_no_pii(payload, known_names=known_names)
+            except LocatedInputError as exc:
+                violations.append(
+                    Violation(
+                        invariant_id="PRIV-01",
+                        message=exc.message,
+                        file=str(json_path),
+                        detail=f"expected={exc.expected}, got={exc.actual}",
+                    )
                 )
-            )
+
+    # --- cache/ and staging_responses/: scan raw_text field only (T039) ---
+    for subdir_name in ("cache", "staging_responses"):
+        subdir = silver_dir / subdir_name
+        if not subdir.is_dir():
+            continue
+        for json_path in sorted(subdir.glob("*.json")):
+            try:
+                doc = _json.loads(json_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001,S112 — boundary: unreadable file, skip
+                continue
+            raw_text = doc.get("raw_text")
+            if not isinstance(raw_text, str):
+                continue
+            try:
+                assert_no_pii(raw_text, known_names=known_names)
+            except LocatedInputError as exc:
+                violations.append(
+                    Violation(
+                        invariant_id="PRIV-01",
+                        message=f"PII in {subdir_name}/{json_path.name} raw_text: {exc.message}",
+                        file=str(json_path),
+                        detail=f"expected={exc.expected}, got={exc.actual}",
+                    )
+                )
 
     return violations
 
@@ -396,11 +438,17 @@ def check_evidence_grounding(
                     )
                 )
         else:
-            # LLM prose or None (corrupt/absent manifest): skip byte-match.
-            # For LLM prose the staging bundle PII check covers EVID-03 via
-            # check_priv01_no_staging_pii.  For None (M-001), run_all_checks
-            # guards against reaching here, so this branch is a safety net.
-            pass
+            # LLM-rendered Gold (api | subscription): byte-match is not applicable
+            # (LLM prose is non-deterministic).  Emit a NON-FATAL informational
+            # note; the gate exits 0 for legitimately LLM-rendered Gold (T040).
+            # Note: this is report-only — it must NOT append a Violation (which
+            # would trigger exit 3).  The PII boundary is separately enforced by
+            # check_priv01_no_staging_pii scanning staging/cache/staging_responses.
+            import sys as _sys
+            print(
+                f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)",
+                file=_sys.stdout,
+            )
 
         # EVID-02: every no_evidence question → "근거 없음" in the md.
         for bq in bundle.questions:

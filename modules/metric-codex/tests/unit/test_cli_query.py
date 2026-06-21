@@ -20,6 +20,7 @@ from pathlib import Path
 
 import openpyxl
 import pandas as pd
+import pytest
 from metric_codex.cli.main import app
 
 # ---------------------------------------------------------------------------
@@ -604,3 +605,96 @@ class TestQueryAvailableLayers:
         assert rc == 0
         data = json.loads(json_out.read_text(encoding="utf-8"))
         assert "available_layers" in data
+
+
+# ---------------------------------------------------------------------------
+# T037 RED — query --reveal with non-bijective pseudonym map → exit 2
+# ---------------------------------------------------------------------------
+
+
+class TestQueryRevealNonBijectiveMap:
+    """T037 RED: query --reveal with a corrupt (non-bijective) pseudonym map
+    must exit 2 and name the duplicate, NOT mis-identify then exit 0.
+
+    Before fix: _run_query resolves via last-wins dicts, so a duplicate
+    pseudonym silently resolves to one of the duplicates and exits 0.
+    After fix: validate_pseudonym_map() is called before _resolve_student,
+    so a non-bijective map raises LocatedInputError → exit 2.
+    """
+
+    def _corrupt_pseudonym_map(self, data_root: Path) -> None:
+        """Rewrite pseudonym_map.parquet so two different students share S001."""
+        import pandas as pd
+        silver = data_root / "silver" / "metric-codex" / _KEY
+        pseudonym_path = silver / "pseudonym_map.parquet"
+        df = pd.read_parquet(pseudonym_path)
+        # Force all rows to the same pseudonym → non-bijective.
+        df["pseudonym"] = "S001"
+        df.to_parquet(pseudonym_path, index=False)
+
+    def test_non_bijective_map_exits_two_on_reveal(self, tmp_path: Path) -> None:
+        """T037 RED: corrupt map → query --reveal exits 2 before mis-identifying."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        self._corrupt_pseudonym_map(data_root)
+
+        rc = app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+            "--reveal",
+        ])
+        assert rc == 2, (
+            f"query --reveal with non-bijective map must exit 2, got rc={rc}"
+        )
+
+    def test_non_bijective_error_names_duplicate(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """T037 RED: the error message names the duplicate pseudonym."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        self._corrupt_pseudonym_map(data_root)
+
+        app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+            "--reveal",
+        ])
+        captured = capsys.readouterr()
+        # Error should mention the duplicate pseudonym or bijection failure.
+        combined = captured.out + captured.err
+        assert "S001" in combined or "bijective" in combined or "duplicate" in combined, (
+            f"Expected duplicate/bijection mention in output; "
+            f"stdout={captured.out!r} stderr={captured.err!r}"
+        )
+
+    def test_non_bijective_map_also_exits_two_without_reveal(
+        self, tmp_path: Path
+    ) -> None:
+        """Defense-in-depth: corrupt map exits 2 even without --reveal."""
+        data_root = _build_ingested_data_root(tmp_path)
+        qs_path = _qs_path(data_root)
+        self._corrupt_pseudonym_map(data_root)
+
+        rc = app([
+            "query",
+            "--semester", _SEM,
+            "--course", _COURSE,
+            "--data-root", str(data_root),
+            "--student", _SID_BOTH,
+            "--question-id", "q_total",
+            "--question-set", str(qs_path),
+        ])
+        assert rc == 2, (
+            f"query without --reveal should also exit 2 on non-bijective map, got rc={rc}"
+        )

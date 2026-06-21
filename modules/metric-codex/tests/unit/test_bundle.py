@@ -331,20 +331,64 @@ class TestAssertNoPii:
         assert_no_pii(payload)
 
     def test_passes_on_korean_freetext_category(self):
-        """Korean free-text category values (e.g., health) are not PII."""
+        """Korean free-text category values (e.g., health) are not PII.
+
+        Updated (T034/W2): also confirms that the new 3rd-party name+role
+        redaction pattern leaves legitimate category labels untouched.
+        '건강,진로' contains no surname+role token, so no redaction occurs.
+        """
         payload = json.dumps(
             {"pseudonym": "S001", "value_text": "건강,진로"},
             ensure_ascii=False,
         )
         assert_no_pii(payload)
+        # W2 guard: legit Korean must survive the PII scan unchanged (no raise).
 
     def test_passes_on_domain_name_in_korean(self):
-        """Korean chapter/domain labels like '순환' are not PII."""
+        """Korean chapter/domain labels like '순환' are not PII.
+
+        Updated (T034/W2): '순환' is a bare anatomy chapter name, not a
+        surname+role token — the new redaction pattern must leave it untouched.
+        """
         payload = json.dumps(
             {"pseudonym": "S001", "key": "chapter_correct_rate:순환"},
             ensure_ascii=False,
         )
         assert_no_pii(payload)
+        # W2 guard: domain labels must pass without false-positive redaction.
+
+    # --- T034 RED: 3rd-party surname+role in value_text must be redacted ---
+
+    def test_raises_on_third_party_name_role_in_payload(self):
+        """A 3rd-party Korean name+role (e.g. '박교수') in payload raises.
+
+        T034 RED: assert_no_pii must detect surname+role tokens such as
+        '박교수 추천반' that could identify a 3rd-party person.  The detection
+        raises LocatedInputError (guard against a surviving leak after the
+        redact-transform on the LLM-facing payload).
+        """
+        payload = json.dumps(
+            {"pseudonym": "S001", "value_text": "박교수 추천반"},
+            ensure_ascii=False,
+        )
+        with pytest.raises(LocatedInputError):
+            assert_no_pii(payload)
+
+    def test_third_party_name_role_redacted_in_bundle_facts(self):
+        """A 박교수-bearing value_text is redacted before staging/LLM payload.
+
+        T034 RED: the LLM-facing facts string (render_template output) must NOT
+        contain '박교수' when the codex entry carries it as value_text.  The
+        Silver/codex entry retains the original; only the LLM-facing payload is
+        redacted.
+        """
+        from metric_codex.generate.bundle import redact_third_party_names
+        raw = "박교수 추천반"
+        redacted = redact_third_party_names(raw)
+        # Must not contain the original name+role token.
+        assert "박교수" not in redacted
+        # The redaction marker must be present to flag the substitution.
+        assert "[REDACTED]" in redacted or len(redacted) < len(raw)
 
 
 # ---------------------------------------------------------------------------
