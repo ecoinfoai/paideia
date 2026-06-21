@@ -410,19 +410,79 @@ class _CapturingBackend(LLMBackend):
         )
 
 
+def _ingest_one_student(tmp_path: Path) -> tuple[Path, str, str]:
+    """Ingest a single-student fixture and return (data_root, semester, course).
+
+    Used by the call-site prompt test (M1): generate needs a populated Silver
+    store + pseudonym map so _run_generate produces at least one bundle.
+    """
+    import textwrap
+
+    import openpyxl
+    from metric_codex.cli.main import app
+
+    data_root = tmp_path / "data"
+    sem, course = "2026-1", "anatomy"
+    key = f"{sem}-{course}"
+    bronze = data_root / "bronze" / "metric-codex" / key
+    bronze.mkdir(parents=True)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["학번", "이름", "총점"])
+    ws.append([2026000001, "김철수", 85])
+    wb.save(bronze / "성적출석.xlsx")
+    (bronze / "성적출석_map.yaml").write_text(
+        textwrap.dedent(f"""\
+            semester: {sem}
+            course_slug: {course}
+            columns:
+              student_id: 학번
+              name_kr: 이름
+              score_total: 총점
+        """),
+        encoding="utf-8",
+    )
+    (bronze / "question_set.yaml").write_text(
+        textwrap.dedent("""\
+            questions:
+              - id: q1
+                text: 총점을 알려주세요.
+                entry_kinds:
+                  - score_total
+                domain: null
+        """),
+        encoding="utf-8",
+    )
+
+    rc = app([
+        "ingest",
+        "--semester", sem,
+        "--course", course,
+        "--data-root", str(data_root),
+        "--now", "2026-06-19T00:00:00Z",
+    ])
+    assert rc == 0, "ingest fixture must succeed"
+    return data_root, sem, course
+
+
 class TestPromptFromTemplateFile:
     """T060 (FR-025 / C2): _run_generate must load the polish prompt from the template file.
 
-    The template file (templates/prompt_narrative.txt) contains the distinctive
-    Korean phrase '학습 근거 요약입니다' which is ABSENT from the old inline prompt
-    '다음은 한 학생의 가명화된 학습 근거 요약이다. '.
+    The template file (templates/prompt_narrative.txt) holds ONLY the prompt body
+    the model receives: the Korean polish instruction (distinctive phrase
+    '학습 근거 요약입니다') + the no-hallucination rule ('근거에 없는 사실은 절대
+    추가하지 마세요') + the {pseudonym}/{facts} fields.  Operator/dev documentation
+    (titles, the 'loaded by cli/main.py' note, the PRIVACY RULE architecture note)
+    was trimmed out (I1) so it is NOT shipped to the LLM.
 
-    Two tests:
-    1. The module-level constant ``_PROMPT_TEMPLATE`` must exist in cli.main and
-       contain the file's distinctive phrase (the constant is populated by
-       loading the template file at import time).
-    2. The template file itself (sanity check) contains the expected phrase so
-       the test cannot pass with a stale/absent file.
+    Tests:
+    1. The module-level constant ``_PROMPT_TEMPLATE`` exists in cli.main and
+       contains the polish instruction (loaded from the file at import time).
+    2. The template file itself (sanity check) contains the expected phrase.
+    3. (M1) The actual ``request.prompt`` produced by ``_run_generate`` contains
+       the formatted polish body AND does NOT contain a doc-header marker — this
+       pins both the call-site wiring and the I1 trim.
     """
 
     def test_cli_module_has_prompt_template_constant(self) -> None:
@@ -440,18 +500,18 @@ class TestPromptFromTemplateFile:
             "cli.main must define _PROMPT_TEMPLATE loaded from prompt_narrative.txt"
         )
         prompt = main_mod._PROMPT_TEMPLATE
-        # Distinctive phrase in the template file (line ~42) but NOT in the old
-        # inline string ('학습 근거 요약이다' without the '입니다' ending).
+        # Distinctive phrase in the template body but NOT in the old inline string
+        # ('학습 근거 요약이다' without the '입니다' ending).
         assert "학습 근거 요약입니다" in prompt, (
             f"_PROMPT_TEMPLATE must contain '학습 근거 요약입니다' from the template file; "
             f"got: {prompt[:200]!r}"
         )
 
     def test_template_file_contains_distinctive_phrase(self) -> None:
-        """Sanity-check: templates/prompt_narrative.txt actually has the expected phrase.
+        """Sanity-check: templates/prompt_narrative.txt has the body, not doc header.
 
-        This test passes regardless of the implementation state and confirms the
-        template file is not accidentally emptied or renamed.
+        Confirms the template carries the polish instruction and is NOT emptied
+        or renamed, and that the I1-trimmed doc header is gone.
         """
         from pathlib import Path
 
@@ -463,4 +523,65 @@ class TestPromptFromTemplateFile:
         assert "학습 근거 요약입니다" in content, (
             f"templates/prompt_narrative.txt must contain '학습 근거 요약입니다'; "
             f"found: {content[:200]!r}"
+        )
+        # I1: doc/meta header must be gone — only the prompt body ships.
+        assert "loaded by cli/main.py" not in content, (
+            "template must not contain the dev plumbing note (I1 trim)"
+        )
+        assert "PRIVACY RULE" not in content, (
+            "template must not contain the operator privacy-note header (I1 trim)"
+        )
+
+    def test_run_generate_prompt_is_trimmed_body(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M1: the request.prompt _run_generate builds is the formatted body, no doc header.
+
+        Drives the real generate path with a capturing backend (ApiBackend patched
+        at its source module, since _run_generate imports it locally), then asserts:
+          - request.prompt carries the formatted polish instruction (the model's
+            actual task), and
+          - request.prompt does NOT carry a doc-header marker ('loaded by
+            cli/main.py') — proving the I1 trim reaches the wire, not just the file.
+        """
+        from metric_codex.cli.main import app
+
+        data_root, sem, course = _ingest_one_student(tmp_path)
+
+        captured = _CapturingBackend()
+        # _run_generate does `from metric_codex.generate.backend import ApiBackend`
+        # at call time, so patching the source-module attribute injects our backend.
+        monkeypatch.setattr(
+            "metric_codex.generate.backend.ApiBackend",
+            lambda **_kw: captured,
+        )
+
+        rc = app([
+            "generate",
+            "--semester", sem,
+            "--course", course,
+            "--data-root", str(data_root),
+            "--backend", "api",
+            "--model", "fake-model",
+            "--now", "2026-06-19T01:00:00Z",
+        ])
+        assert rc == 0, "generate must succeed"
+        assert captured.requests, "the backend must have been invoked"
+
+        prompt = captured.requests[0].prompt
+        # The model receives the formatted polish instruction (its real task).
+        assert "학습 근거 요약입니다" in prompt, (
+            f"call-site prompt must contain the polish instruction; got: {prompt!r}"
+        )
+        assert "근거에" in prompt and "추가하지 마세요" in prompt, (
+            f"call-site prompt must retain the no-hallucination rule; got: {prompt!r}"
+        )
+        # The per-student pseudonym field is substituted (S001 for the lone student).
+        assert "S001" in prompt, f"pseudonym field must be substituted; got: {prompt!r}"
+        # I1: NO operator/dev doc header reaches the LLM.
+        assert "loaded by cli/main.py" not in prompt, (
+            f"doc-header marker must NOT reach the LLM prompt (I1 trim); got: {prompt!r}"
+        )
+        assert "PRIVACY RULE" not in prompt, (
+            f"privacy-note header must NOT reach the LLM prompt (I1 trim); got: {prompt!r}"
         )

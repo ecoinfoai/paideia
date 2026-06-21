@@ -82,6 +82,17 @@ _SUPERSEDED_BY_COMBINED: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 # templates/ lives at modules/metric-codex/templates, i.e. three parents above
 # this file (cli/main.py → cli/ → metric_codex/ → src/ → metric-codex/).
+#
+# The template holds ONLY the prompt body the model should receive: the Korean
+# polish instruction (incl. the no-hallucination rule) plus the {pseudonym} /
+# {facts} substitution fields.  Edit it to tune the polish step.  Do NOT add
+# operator/dev documentation, titles, or architecture notes there — the whole
+# file is .format()'d into every per-student prompt and shipped to the LLM, so
+# any doc text would be noise sent on every call (I1 audit fix).  Plumbing facts
+# (privacy boundary, re-identification flow) are documented here in code, never
+# in the shipped template: the LLM only ever sees pseudonymized facts; the prompt
+# carries no real student id/name, and re-identification happens AFTER generation
+# locally via pseudonym_map.parquet.
 _PROMPT_TEMPLATE: str = (
     Path(__file__).resolve().parents[3] / "templates" / "prompt_narrative.txt"
 ).read_text(encoding="utf-8")

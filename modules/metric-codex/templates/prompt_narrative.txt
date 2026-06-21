@@ -1,18 +1,3 @@
-metric-codex LLM polish prompt — loaded by cli/main.py (FR-025 / C2)
-=======================================================================
-
-This file IS loaded at import time by cli/main.py as the prompt scaffold
-for the generate stage.  Edit this file to tune the LLM polish prompt.
-The placeholders {{pseudonym}} and {{facts}} are substituted per-student.
-
-PRIVACY RULE (non-negotiable)
-------------------------------
-The LLM receives ONLY pseudonymized evidence (e.g. "S001").  Real student IDs
-and Korean names are NEVER included in the prompt.  Re-identification happens
-AFTER generation, locally, using the local-only pseudonym_map.parquet.
-
----
-
 다음은 {pseudonym} 학생의 가명화된 학습 근거 요약입니다.  아래 사실을 모두
 인용하면서, 지도교수가 읽기 쉽도록 한국어 문어체로 다듬어 주세요.  근거에
 없는 사실은 절대 추가하지 마세요.
