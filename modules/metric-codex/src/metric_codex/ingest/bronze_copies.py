@@ -7,6 +7,11 @@ Instead the professor places copies under metric-codex's own Bronze tier:
 - ``data/bronze/metric-codex/{key}/blueprint.yaml``      → ExamenBlueprint
 - ``data/bronze/metric-codex/{key}/curriculum_map.yaml`` → CurriculumMap
 - ``data/bronze/metric-codex/{key}/成績出席_map.yaml``     → SchoolExcelMap
+- ``data/bronze/metric-codex/{key}/cluster_names.json``  → dict[int, str]
+
+The cluster_names.json own-copy is the Principle-II own-Bronze copy: needs-map
+does not guarantee a stable Silver-side sidecar, so metric-codex keeps its own
+authoritative copy under Bronze (FR-026 / MC-U08).
 
 Mirrors ``modules/retro-mester/src/retro_mester/load/examen.py`` but raises
 ``LocatedInputError`` (not retro's ``InputError``) throughout.
@@ -14,6 +19,7 @@ Mirrors ``modules/retro-mester/src/retro_mester/load/examen.py`` but raises
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated, Self
 
@@ -230,10 +236,71 @@ def load_exam_spec(
     return blueprint, curriculum
 
 
+# ---------------------------------------------------------------------------
+# load_cluster_names — own-Bronze copy (FR-026 / MC-U08)
+# ---------------------------------------------------------------------------
+
+
+def load_cluster_names(path: Path) -> dict[int, str]:
+    """Load ``cluster_names.json`` from metric-codex's own Bronze tier.
+
+    metric-codex keeps its own copy of cluster_names.json under Bronze because
+    the needs-map Silver sidecar is not guaranteed to be present in production.
+    This loader is the canonical Bronze-tier reader for that file (Principle II).
+
+    JSON object keys are strings; they are coerced to ints (the cluster ids).
+
+    Args:
+        path: Absolute path to ``cluster_names.json`` in metric-codex Bronze.
+
+    Returns:
+        Mapping of cluster_id (int) → label (str).
+
+    Raises:
+        LocatedInputError: If the file does not exist, is not valid JSON, is not
+            a JSON object, or has a key that cannot be coerced to int.
+    """
+    if not path.is_file():
+        raise LocatedInputError(
+            f"cluster_names.json not found at {path}",
+            file=path.name,
+            expected="cluster_names.json in metric-codex Bronze tier",
+            actual="(file absent)",
+        )
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LocatedInputError(
+            f"failed to parse cluster names JSON: {exc}",
+            file=path.name,
+        ) from exc
+    if not isinstance(raw, dict):
+        raise LocatedInputError(
+            "cluster_names.json must be a JSON object mapping cluster_id → label",
+            file=path.name,
+            expected="object mapping cluster_id → label",
+            actual=type(raw).__name__,
+        )
+    names: dict[int, str] = {}
+    for key, label in raw.items():
+        try:
+            cluster_id = int(key)
+        except (TypeError, ValueError) as exc:
+            raise LocatedInputError(
+                f"non-integer cluster id key {key!r} in cluster_names.json",
+                file=path.name,
+                expected="integer cluster id key",
+                actual=repr(key),
+            ) from exc
+        names[cluster_id] = str(label)
+    return names
+
+
 __all__ = [
     "ColumnMap",
     "SchoolExcelMap",
     "load_blueprint",
+    "load_cluster_names",
     "load_curriculum_map",
     "load_school_excel_map",
     "load_exam_spec",

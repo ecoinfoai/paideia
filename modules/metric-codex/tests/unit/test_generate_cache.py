@@ -1,4 +1,4 @@
-"""T037/T043 RED — InputHashCache determinism and LLM backend conformance tests.
+"""T037/T043/T060 RED — InputHashCache determinism, LLM backend conformance, prompt-from-file.
 
 DET-03: a second generate() with an identical request returns cache_hit=True
 WITHOUT calling the wrapped backend and yields a byte-identical raw_text.
@@ -12,6 +12,12 @@ T043 (US6): LLM backend conformance —
 - Two requests differing only in max_tokens → distinct cache keys (no stale hit).
 - Malformed SubscriptionBackend response (missing slot_id/raw_text) → located
   exit-2 error (not a bare KeyError).
+
+T060 (FR-025 / C2): _run_generate must load the LLM polish prompt from
+templates/prompt_narrative.txt, NOT an inline hardcoded string.  The prompt
+passed to the backend must contain the distinctive template line
+"학습 근거 요약입니다" (present in the file, absent from the old inline string
+"다음은 한 학생의 가명화된 학습 근거 요약이다. ").
 """
 
 from __future__ import annotations
@@ -381,3 +387,80 @@ class TestSubscriptionBackendMalformedResponse:
         backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
         with pytest.raises(LocatedInputError):
             backend.generate(_make_request("S001"))
+
+
+# ---------------------------------------------------------------------------
+# T060 RED — prompt must come from templates/prompt_narrative.txt, not inline
+# ---------------------------------------------------------------------------
+
+
+class _CapturingBackend(LLMBackend):
+    """Records every GenerationRequest passed to it."""
+
+    def __init__(self) -> None:
+        self.requests: list[GenerationRequest] = []
+
+    def generate(self, request: GenerationRequest) -> GenerationResponse:
+        self.requests.append(request)
+        return GenerationResponse(
+            slot_id=request.slot_id,
+            raw_text="polished by capturing backend",
+            model="fake-model",
+            cache_hit=False,
+        )
+
+
+class TestPromptFromTemplateFile:
+    """T060 (FR-025 / C2): _run_generate must load the polish prompt from the template file.
+
+    The template file (templates/prompt_narrative.txt) contains the distinctive
+    Korean phrase '학습 근거 요약입니다' which is ABSENT from the old inline prompt
+    '다음은 한 학생의 가명화된 학습 근거 요약이다. '.
+
+    Two tests:
+    1. The module-level constant ``_PROMPT_TEMPLATE`` must exist in cli.main and
+       contain the file's distinctive phrase (the constant is populated by
+       loading the template file at import time).
+    2. The template file itself (sanity check) contains the expected phrase so
+       the test cannot pass with a stale/absent file.
+    """
+
+    def test_cli_module_has_prompt_template_constant(self) -> None:
+        """_PROMPT_TEMPLATE must be defined in cli.main and contain the template content.
+
+        RED: before the fix, cli.main has no _PROMPT_TEMPLATE — importing the
+        module succeeds but the attribute is absent (AttributeError).
+        GREEN: cli.main loads prompt_narrative.txt at module level and exposes
+        the result as _PROMPT_TEMPLATE; the attribute exists and contains the
+        file's distinctive phrase.
+        """
+        import metric_codex.cli.main as main_mod
+
+        assert hasattr(main_mod, "_PROMPT_TEMPLATE"), (
+            "cli.main must define _PROMPT_TEMPLATE loaded from prompt_narrative.txt"
+        )
+        prompt = main_mod._PROMPT_TEMPLATE
+        # Distinctive phrase in the template file (line ~42) but NOT in the old
+        # inline string ('학습 근거 요약이다' without the '입니다' ending).
+        assert "학습 근거 요약입니다" in prompt, (
+            f"_PROMPT_TEMPLATE must contain '학습 근거 요약입니다' from the template file; "
+            f"got: {prompt[:200]!r}"
+        )
+
+    def test_template_file_contains_distinctive_phrase(self) -> None:
+        """Sanity-check: templates/prompt_narrative.txt actually has the expected phrase.
+
+        This test passes regardless of the implementation state and confirms the
+        template file is not accidentally emptied or renamed.
+        """
+        from pathlib import Path
+
+        template_path = (
+            Path(__file__).resolve().parents[2] / "templates" / "prompt_narrative.txt"
+        )
+        assert template_path.is_file(), f"template file missing: {template_path}"
+        content = template_path.read_text(encoding="utf-8")
+        assert "학습 근거 요약입니다" in content, (
+            f"templates/prompt_narrative.txt must contain '학습 근거 요약입니다'; "
+            f"found: {content[:200]!r}"
+        )

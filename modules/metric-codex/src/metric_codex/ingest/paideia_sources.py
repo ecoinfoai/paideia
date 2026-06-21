@@ -18,6 +18,11 @@ Source → EntryKind mapping (authoritative):
   → ``freetext_category`` (one per matched category).
 - needs-map ``cluster_assignment.parquet`` (``ClusterAssignmentRow``) +
   ``cluster_names.json`` sidecar → ``cluster_label``.
+  Fallback: when the Silver sidecar is absent, ``read_paideia_sources`` checks
+  the own-Bronze copy at ``own_bronze / "cluster_names.json"`` (Principle II /
+  FR-026 / MC-U08).  When both are absent the layer is explicitly UNAVAILABLE —
+  no silent empty-fill, no blank cluster labels.  The own-Bronze path must NOT
+  come from needs-map's manifest.json (no Bronze-direct-share).
 - immersio ``진단×시험결합.parquet`` (``CombinedAnalysisRow``) — Phase 3 master
   that carries the SAME per-student data as 학생지표 + factor_scores +
   cluster_assignment combined.  When present it supersedes those three for the
@@ -195,6 +200,13 @@ def _coerce_cell(value: object) -> object:
 
 def _cohort_year(student_id: str, *, filename: str, row: int) -> int:
     """Derive cohort year from a normalized student id, validating the range.
+
+    U25 v1 rule: rich-layer sources (immersio, needs-map) carry no explicit
+    cohort_year column, so the year is ALWAYS derived from the 학번 prefix here.
+    The school Excel path may optionally use a dedicated column (see
+    ``school_excel.py`` → ``cohort_year_column``).  Mismatches between the two
+    derivation sources are NOT auto-reconciled in v1 — the operator is responsible
+    for consistency between the Excel column and the id prefix.
 
     Args:
         student_id: 10-digit canonical student id.
@@ -900,6 +912,7 @@ def read_paideia_sources(
     course_slug: str,
     data_root: Path,
     ingested_at: str,
+    own_bronze: Path | None = None,
 ) -> list[SourceReadResult]:
     """Read all present immersio/needs-map Silver files into rich entries.
 
@@ -915,6 +928,16 @@ def read_paideia_sources(
     absent) and never raises; only a present-but-malformed file raises a located
     error.
 
+    cluster_names resolution order (FR-026 / MC-U08):
+    1. Silver sidecar (``needsmap_silver_dir / cluster_names.json``) — present in
+       test/dev environments where needs-map writes the sidecar alongside the
+       parquet.
+    2. own-Bronze copy (``own_bronze / cluster_names.json``) — the Principle-II
+       own-copy; used in production when the Silver sidecar is absent.
+    3. Layer UNAVAILABLE — when neither source exists the cluster_label layer is
+       simply not populated.  No silent empty-fill, no blank labels.
+    needs-map's manifest.json is NEVER read directly (no Bronze-direct-share).
+
     Args:
         immersio_silver_dir: Directory holding immersio Silver parquet files, or
             ``None`` if no immersio Silver is available.
@@ -928,6 +951,10 @@ def read_paideia_sources(
         data_root: The ``data/`` root; each file's ``source_path`` is derived as
             ``path.relative_to(data_root)`` for cross-machine determinism.
         ingested_at: ISO-8601 UTC timestamp for every SourceRecord.
+        own_bronze: metric-codex own-Bronze directory for this semester/course.
+            Used as the fallback source for ``cluster_names.json`` when the
+            Silver sidecar is absent (Principle II / FR-026).  ``None`` disables
+            the fallback (same behaviour as before this parameter was added).
 
     Returns:
         One ``SourceReadResult`` per file actually read, ordered deterministically
@@ -972,6 +999,8 @@ def read_paideia_sources(
                 )
 
         # Per-item layer — always read when both files present.
+        # key MUST uniquely encode entry_kind (+item_ref) — the citation
+        # total-order in retrieve/evidence.py depends on it (DET invariant).
         exam_result = immersio_silver_dir / _F_EXAM_RESULT
         exam_item = immersio_silver_dir / _F_EXAM_ITEM
         if exam_result.is_file() and exam_item.is_file():
@@ -998,14 +1027,30 @@ def read_paideia_sources(
                     )
                 )
             assignment = needsmap_silver_dir / _F_CLUSTER_ASSIGNMENT
-            names = needsmap_silver_dir / _F_CLUSTER_NAMES
-            # SPEC-GAP-001: needs-map does not write cluster_names.json in production;
-            # cluster_label degrades when absent.
-            if assignment.is_file() and names.is_file():
+            # FR-026 / MC-U08: cluster_names resolution — Silver sidecar first,
+            # own-Bronze fallback second, UNAVAILABLE if neither exists.
+            # Never read needs-map's manifest.json directly (no Bronze-direct-share).
+            names_silver = needsmap_silver_dir / _F_CLUSTER_NAMES
+            names_own_bronze = (
+                own_bronze / _F_CLUSTER_NAMES
+                if own_bronze is not None
+                else None
+            )
+            # Determine which cluster_names source to use.
+            names_path: Path | None
+            if names_silver.is_file():
+                names_path = names_silver
+            elif names_own_bronze is not None and names_own_bronze.is_file():
+                names_path = names_own_bronze
+            else:
+                # Explicitly UNAVAILABLE — do not silently emit blank labels.
+                names_path = None
+
+            if assignment.is_file() and names_path is not None:
                 results.append(
                     read_cluster_assignment(
                         assignment,
-                        names,
+                        names_path,
                         semester=semester,
                         ingested_at=ingested_at,
                         source_path=_sp(assignment),
@@ -1013,6 +1058,8 @@ def read_paideia_sources(
                 )
 
         # Free-text layer — always read when present.
+        # key MUST uniquely encode entry_kind (+item_ref) — the citation
+        # total-order in retrieve/evidence.py depends on it (DET invariant).
         free_text = needsmap_silver_dir / _F_FREE_TEXT
         if free_text.is_file():
             results.append(

@@ -33,6 +33,7 @@ import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, cast
 
 from paideia_shared.schemas import AdvisorBundleSummary, PseudonymMapEntry
 from paideia_shared.schemas._common import CourseSlug, SemesterCode
@@ -59,6 +60,12 @@ from metric_codex.store.pseudonym import (
     write_pseudonym_map,
 )
 
+# Literal alias for build_manifest's llm_backend parameter — argparse's
+# choices=("none", "subscription", "api") guarantees runtime validity but the
+# static type from Namespace.backend is str; cast() narrows without a runtime
+# branch (carry-over task D / Pyright-clean).
+_LLMBackend = Literal["subscription", "api", "none(template)"]
+
 # When the combined immersio source (진단×시험결합) is present, these three
 # individual source_ids are superseded and evicted from the store to avoid
 # double-counting (MC-U26).
@@ -69,6 +76,15 @@ _SUPERSEDED_BY_COMBINED: frozenset[str] = frozenset(
         "needs-map:cluster_assignment",
     }
 )
+
+# ---------------------------------------------------------------------------
+# LLM polish prompt — loaded from templates/prompt_narrative.txt (FR-025 / C2)
+# ---------------------------------------------------------------------------
+# templates/ lives at modules/metric-codex/templates, i.e. three parents above
+# this file (cli/main.py → cli/ → metric_codex/ → src/ → metric-codex/).
+_PROMPT_TEMPLATE: str = (
+    Path(__file__).resolve().parents[3] / "templates" / "prompt_narrative.txt"
+).read_text(encoding="utf-8")
 
 # ---------------------------------------------------------------------------
 # Argument parser builder
@@ -527,6 +543,7 @@ def _run_ingest(args: argparse.Namespace) -> int:
         course_slug=course,
         data_root=data_root,
         ingested_at=now,
+        own_bronze=own_bronze,
     )
     results.extend(paideia_results)
 
@@ -988,10 +1005,12 @@ def _run_generate(args: argparse.Namespace) -> int:
             assert_no_pii(llm_facts, known_names=known_names)
             request = GenerationRequest(
                 slot_id=bundle.pseudonym,
-                prompt=(
-                    "다음은 한 학생의 가명화된 학습 근거 요약이다. "
-                    "근거에 없는 사실을 추가하지 말고, 지도교수가 읽기 쉽도록 "
-                    "한국어로 다듬어라:\n\n" + llm_facts
+                # Prompt scaffold from templates/prompt_narrative.txt (FR-025 / C2).
+                # The template uses {pseudonym} and {facts} placeholders; facts are
+                # the per-student redacted evidence from render_template(redacted_bundle).
+                prompt=_PROMPT_TEMPLATE.format(
+                    pseudonym=bundle.pseudonym,
+                    facts=llm_facts,
                 ),
                 facts=llm_facts,
                 model=args.model,
@@ -1047,10 +1066,12 @@ def _run_generate(args: argparse.Namespace) -> int:
         )
 
     if backend_mode == "none" or not llm_used:
-        manifest_backend = "none(template)"
+        manifest_backend: _LLMBackend = "none(template)"
         manifest_model = None
     else:
-        manifest_backend = backend_mode
+        # argparse choices=("none","subscription","api") guarantees runtime validity;
+        # cast narrows str → _LLMBackend without a redundant runtime branch.
+        manifest_backend = cast(_LLMBackend, backend_mode)
         manifest_model = args.model
 
     manifest = build_manifest(
@@ -1368,14 +1389,6 @@ def app(argv: list[str] | None = None) -> int:
                 ) from _exc
 
         return handler(args)
-    except NotImplementedError:
-        # Stub handlers — pipeline not yet wired. Treat as a pipeline step
-        # failure (exit 3) rather than letting the traceback escape.
-        print(
-            f"metric-codex: '{args.command}' is not yet implemented",
-            file=sys.stderr,
-        )
-        return 3
     except ValueError as exc:
         print(f"ERROR [metric-codex]: input/config validation error — {exc}", file=sys.stderr)
         return 2

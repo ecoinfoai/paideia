@@ -1,4 +1,4 @@
-"""T028 — Unit tests for Bronze-copy loaders (RED first, then GREEN).
+"""T028/T057 — Unit tests for Bronze-copy loaders (RED first, then GREEN).
 
 Tests for:
 - load_blueprint: valid YAML → ExamenBlueprint
@@ -9,10 +9,17 @@ Tests for:
 - load_school_excel_map: valid minimal YAML → SchoolExcelMap
 - load_school_excel_map: no score/attendance / missing student_id / extra field → error
 - SchoolExcelMap: frozen → pydantic ValidationError on mutation
+
+T057 (FR-026 / MC-U08): load_cluster_names own-Bronze loader —
+- Valid cluster_names.json → dict[int, str]
+- Missing file → LocatedInputError naming the file
+- Non-object JSON (array) → LocatedInputError
+- Non-integer key → LocatedInputError
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -20,6 +27,7 @@ from metric_codex.errors import LocatedInputError
 from metric_codex.ingest.bronze_copies import (
     SchoolExcelMap,
     load_blueprint,
+    load_cluster_names,
     load_curriculum_map,
     load_exam_spec,
     load_school_excel_map,
@@ -405,3 +413,44 @@ def test_located_input_error_from_bronze_is_value_error(tmp_path: Path) -> None:
         load_blueprint(p)
 
     assert issubclass(LocatedInputError, ValueError)
+
+
+# ---------------------------------------------------------------------------
+# T057 (FR-026 / MC-U08) — load_cluster_names own-Bronze loader
+# ---------------------------------------------------------------------------
+
+
+def test_load_cluster_names_valid(tmp_path: Path) -> None:
+    """Valid cluster_names.json returns a dict[int, str]."""
+    p = tmp_path / "cluster_names.json"
+    p.write_text(json.dumps({"0": "성실형", "1": "도전형"}), encoding="utf-8")
+
+    result = load_cluster_names(p)
+
+    assert result == {0: "성실형", 1: "도전형"}
+
+
+def test_load_cluster_names_missing_file_raises(tmp_path: Path) -> None:
+    """Missing cluster_names.json raises LocatedInputError naming the file."""
+    p = tmp_path / "cluster_names.json"
+    with pytest.raises(LocatedInputError) as exc_info:
+        load_cluster_names(p)
+    assert "cluster_names.json" in str(exc_info.value)
+
+
+def test_load_cluster_names_non_object_raises(tmp_path: Path) -> None:
+    """A JSON array (not object) raises LocatedInputError."""
+    p = tmp_path / "cluster_names.json"
+    p.write_text(json.dumps(["성실형", "도전형"]), encoding="utf-8")
+    with pytest.raises(LocatedInputError) as exc_info:
+        load_cluster_names(p)
+    assert "cluster_names.json" in str(exc_info.value)
+
+
+def test_load_cluster_names_non_integer_key_raises(tmp_path: Path) -> None:
+    """A key that cannot be coerced to int raises LocatedInputError."""
+    p = tmp_path / "cluster_names.json"
+    p.write_text(json.dumps({"abc": "성실형"}), encoding="utf-8")
+    with pytest.raises(LocatedInputError) as exc_info:
+        load_cluster_names(p)
+    assert "cluster_names.json" in str(exc_info.value)

@@ -1,4 +1,4 @@
-"""T030 — Unit tests for the rich-layer immersio/needs-map Silver readers.
+"""T030/T057 — Unit tests for the rich-layer immersio/needs-map Silver readers.
 
 Tests written before implementation per the TDD mandate.
 
@@ -25,6 +25,13 @@ Covers:
 - Degrade: missing optional files → no error, fewer entries.
 - Determinism: two reads → equal entries; entries sorted.
 - Malformed parquet (row fails the upstream Pydantic contract) → LocatedInputError.
+
+T057 (FR-026 / MC-U08): cluster_names own-Bronze fallback —
+- Silver cluster_names.json absent BUT own-Bronze copy present → own-Bronze used,
+  cluster_label populated.
+- Both Silver and own-Bronze absent → cluster_label layer not populated (explicit
+  UNAVAILABLE, no silent empty-fill).
+- own-Bronze copy used when Silver sidecar is absent (Principle II precedent).
 """
 
 from __future__ import annotations
@@ -1216,3 +1223,80 @@ def test_exam_results_mixed_course_slug_raises_located(tmp_path: Path) -> None:
     msg = str(exc.value)
     assert "exam_result.parquet" in msg
     assert "course_slug" in msg
+
+
+# ---------------------------------------------------------------------------
+# T057 (FR-026 / MC-U08) — cluster_names own-Bronze fallback in orchestrator
+# ---------------------------------------------------------------------------
+
+
+def _own_bronze_dir(data_root: Path) -> Path:
+    """Return the metric-codex own-Bronze dir for the test key."""
+    return data_root / "bronze" / "metric-codex" / _KEY
+
+
+def test_cluster_label_uses_own_bronze_when_silver_sidecar_absent(
+    tmp_path: Path,
+) -> None:
+    """T057: Silver cluster_names.json absent, own-Bronze copy present → layer populated.
+
+    RED: before the fix, the orchestrator only checks needsmap_silver_dir/
+    cluster_names.json; when absent the layer is silently skipped even when
+    data/bronze/metric-codex/{key}/cluster_names.json exists.
+    GREEN: orchestrator accepts own_bronze kwarg; own-Bronze copy is used and
+    cluster_label entries appear.
+    """
+    data_root, immersio_dir, needsmap_dir = _silver_dirs(tmp_path)
+
+    # cluster_assignment present in Silver, but NO cluster_names.json sidecar.
+    _write_cluster_assignment(needsmap_dir / "cluster_assignment.parquet")
+    # cluster_names.json placed only in own-Bronze (Principle II own-copy).
+    own_bronze = _own_bronze_dir(data_root)
+    own_bronze.mkdir(parents=True, exist_ok=True)
+    _write_cluster_names(own_bronze / "cluster_names.json")
+
+    results = read_paideia_sources(
+        immersio_silver_dir=None,
+        needsmap_silver_dir=needsmap_dir,
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        data_root=data_root,
+        ingested_at=_INGESTED_AT,
+        own_bronze=own_bronze,
+    )
+    all_entries = [e for r in results for e in r.entries]
+    cluster_entries = [e for e in all_entries if e.entry_kind == EntryKind.cluster_label]
+    assert cluster_entries, (
+        "cluster_label entries must appear when own-Bronze cluster_names.json exists"
+    )
+    labels = {e.value_text for e in cluster_entries}
+    assert labels <= {"성실형", "도전형"}, f"unexpected labels: {labels}"
+
+
+def test_cluster_label_absent_when_both_sources_missing(tmp_path: Path) -> None:
+    """T057: Both Silver sidecar AND own-Bronze absent → cluster_label NOT populated.
+
+    Explicit UNAVAILABLE; no silent empty-fill (Principle II / no-silent-empty-fill rule).
+    """
+    data_root, immersio_dir, needsmap_dir = _silver_dirs(tmp_path)
+
+    # cluster_assignment present but no cluster_names.json anywhere.
+    _write_cluster_assignment(needsmap_dir / "cluster_assignment.parquet")
+    own_bronze = _own_bronze_dir(data_root)
+    own_bronze.mkdir(parents=True, exist_ok=True)
+    # Do NOT write cluster_names.json.
+
+    results = read_paideia_sources(
+        immersio_silver_dir=None,
+        needsmap_silver_dir=needsmap_dir,
+        semester=_SEMESTER,
+        course_slug=_COURSE_SLUG,
+        data_root=data_root,
+        ingested_at=_INGESTED_AT,
+        own_bronze=own_bronze,
+    )
+    all_entries = [e for r in results for e in r.entries]
+    cluster_entries = [e for e in all_entries if e.entry_kind == EntryKind.cluster_label]
+    assert not cluster_entries, (
+        "cluster_label must be absent when both Silver sidecar and own-Bronze are missing"
+    )

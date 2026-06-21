@@ -283,6 +283,11 @@ def read_school_excel(
             identities[student_id] = name_kr_val
 
             # Derive or read cohort_year.
+            # U25 v1 rule: cohort_year comes from ONE source per row — either the
+            # explicit cohort_year_column OR the first 4 digits of the normalised
+            # 학번, never both.  Cross-source mismatches (e.g. the Excel column says
+            # 2025 but the id prefix is 2024) are NOT auto-reconciled in v1; the
+            # operator must correct the source file.
             if excel_map.cohort_year_column is not None:
                 raw_cy = row_tuple[col_indices[excel_map.cohort_year_column] - 1].value
                 try:
