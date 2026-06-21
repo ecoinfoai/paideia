@@ -57,6 +57,17 @@ from metric_codex.store.pseudonym import (
     write_pseudonym_map,
 )
 
+# When the combined immersio source (진단×시험결합) is present, these three
+# individual source_ids are superseded and evicted from the store to avoid
+# double-counting (MC-U26).
+_SUPERSEDED_BY_COMBINED: frozenset[str] = frozenset(
+    {
+        "immersio:학생지표",
+        "needs-map:factor_scores",
+        "needs-map:cluster_assignment",
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Argument parser builder
 # ---------------------------------------------------------------------------
@@ -520,11 +531,6 @@ def _run_ingest(args: argparse.Namespace) -> int:
     # results, the three individual sources it supersedes must be evicted from
     # the store so they cannot double-count alongside the combined entries.
     combined_source_id = "immersio:진단×시험결합"
-    _SUPERSEDED_BY_COMBINED = frozenset({
-        "immersio:학생지표",
-        "needs-map:factor_scores",
-        "needs-map:cluster_assignment",
-    })
     combined_in_results = any(
         r.source_record.source_id == combined_source_id for r in paideia_results
     )
@@ -1056,8 +1062,10 @@ def _run_distribute(args: argparse.Namespace) -> int:
     from metric_codex.distribute.roster import load_roster
     from metric_codex.distribute.summary import (
         build_summary,
-        write_missing_gold_report as _write_missing_gold_report,
         write_unassigned_report,
+    )
+    from metric_codex.distribute.summary import (
+        write_missing_gold_report as _write_missing_gold_report,
     )
     from metric_codex.output.paths import gold_dir
 
@@ -1122,10 +1130,9 @@ def _run_distribute(args: argparse.Namespace) -> int:
         names.setdefault(sid, None)
     unassigned_sids = list(summary.unassigned_sids)  # already ASC-sorted by schema
     write_unassigned_report(gold_dir=own_gold, unassigned=unassigned_sids, names=names)
-    if missing_gold:
-        _write_missing_gold_report(
-            gold_dir=own_gold, missing_sids=missing_gold, names=names
-        )
+    # Written unconditionally (mirrors 미배정.md) so a previously-surfaced student
+    # whose md now exists no longer lingers in a stale 미생성.md (MC-U02).
+    _write_missing_gold_report(gold_dir=own_gold, missing_sids=missing_gold, names=names)
 
     # 7) Update manifest — preserve provenance, update bundle_summary.
     manifest_path = own_silver / "manifest_metric-codex.json"

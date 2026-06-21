@@ -258,6 +258,7 @@ def _write_cluster_assignment_with_names(
 ) -> None:
     """Write cluster_assignment.parquet + cluster_names.json for one student."""
     import json
+
     import pandas as pd
     rows = [{"student_id": sid, "cluster_id": 1, "distance_to_centroid": 0.5}]
     pd.DataFrame(rows).to_parquet(assignment_path)

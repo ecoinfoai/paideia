@@ -726,6 +726,54 @@ class TestDistributeCountFromCodex:
             f"per_advisor sum {per_sum} != assigned_count {assigned}"
         )
 
+    def test_missing_md_report_cleared_when_md_appears(
+        self, generated_data_root: Path, roster_path: Path
+    ):
+        """미생성.md must not retain a student across runs once their md exists (MC-U02).
+
+        Run A: SID_A (assigned) has no Gold md → 미생성.md lists SID_A.
+        Operator regenerates the md.
+        Run B: SID_A now has a md → 미생성.md must exist but NO LONGER list SID_A
+        (empty-state body), mirroring the stale-clear discipline of 미배정.md.
+        """
+        gold = generated_data_root / "gold" / "metric-codex" / _KEY
+        student_dir = gold / "학생별"
+
+        # --- Run A: delete SID_A's md so it is assigned-but-missing ---
+        a_md = next(p for p in student_dir.glob("*.md") if _SID_A in p.name)
+        a_md_name = a_md.name
+        a_md.unlink()
+
+        rc = _run_distribute(generated_data_root, roster_path)
+        assert rc == 0
+
+        missing_report = gold / "미생성.md"
+        assert missing_report.exists(), "미생성.md not written on run A"
+        assert _SID_A in missing_report.read_text(encoding="utf-8"), (
+            f"{_SID_A} (assigned, no md) not surfaced in 미생성.md on run A"
+        )
+
+        # --- Operator regenerates SID_A's Gold md ---
+        (student_dir / a_md_name).write_text(
+            "# 다시 생성된 학생\n\n근거\n", encoding="utf-8"
+        )
+
+        # --- Run B: SID_A now has a md → must be cleared from 미생성.md ---
+        rc = _run_distribute(generated_data_root, roster_path)
+        assert rc == 0
+
+        assert missing_report.exists(), (
+            "미생성.md should be written unconditionally on run B"
+        )
+        text_b = missing_report.read_text(encoding="utf-8")
+        assert _SID_A not in text_b, (
+            f"stale {_SID_A} still listed in 미생성.md after its md was created:\n{text_b}"
+        )
+        # Empty-state body present (no missing students remain).
+        assert "미생성 없음" in text_b, (
+            f"미생성.md missing empty-state body on run B:\n{text_b}"
+        )
+
 
 class TestDistributeMissingStudentDir:
     """M-5: missing 학생별/ → LocatedInputError (exit 2), not silent empty bundles."""

@@ -108,8 +108,10 @@ def write_missing_gold_report(
 ) -> None:
     """Write ``gold_dir/미생성.md`` listing assigned students with no Gold md.
 
-    Written unconditionally when ``missing_sids`` is non-empty.  Each entry is
-    an assigned codex student whose Gold md was not found during distribute (MC-U21).
+    Written unconditionally — even an empty list produces the file with an
+    explicit empty-state body, mirroring :func:`write_unassigned_report`.  This
+    way each distribute run self-overwrites the file, so a previously-surfaced
+    student whose md now exists no longer lingers in a stale report (MC-U02/MC-U21).
 
     Args:
         gold_dir: The Gold-layer directory for the semester/course.
@@ -118,16 +120,18 @@ def write_missing_gold_report(
         names: ``{student_id: name_kr | None}`` — names are displayed when
             known, ``"(이름 미확인)"`` otherwise.
     """
-    if not missing_sids:
-        return
-
     gold_dir.mkdir(parents=True, exist_ok=True)
-    lines = ["# Gold md 미생성 배정학생\n\n"]
-    for sid in missing_sids:
-        name = names.get(sid)
-        display = name if name else "(이름 미확인)"
-        lines.append(f"- {sid} {display}\n")
-    content = "".join(lines)
+
+    if missing_sids:
+        lines = ["# Gold md 미생성 배정학생\n\n"]
+        for sid in missing_sids:
+            name = names.get(sid)
+            display = name if name else "(이름 미확인)"
+            lines.append(f"- {sid} {display}\n")
+        content = "".join(lines)
+    else:
+        content = "# Gold md 미생성 배정학생\n\n미생성 없음\n"
+
     report_path = gold_dir / "미생성.md"
 
     def _write(tmp: Path) -> None:
