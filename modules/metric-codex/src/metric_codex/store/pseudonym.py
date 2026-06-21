@@ -1,10 +1,10 @@
 """T031 — Local-only pseudonym map for the metric-codex Silver store.
 
-Assigns a deterministic ``S{NNN}`` pseudonym to every student so the optional
+Assigns a stable ``S{NNN}`` pseudonym to every student so the optional
 LLM polish step never sees a real student_id or name (PRIV-03 — PII never
-crosses the LLM boundary).  The mapping is bijective and fully reproducible for
-a given student set: pseudonyms are handed out ``S001, S002, …`` in ascending
-``student_id`` order.
+crosses the LLM boundary).  The mapping is append-only: once a student_id
+receives a pseudonym it keeps it across runs — new students receive numbers
+above the current maximum so earlier assignments are never renumbered.
 
 The map is persisted as ``pseudonym_map.parquet`` next to the codex store but is
 never forwarded downstream of the pseudonymization boundary.
@@ -25,27 +25,60 @@ from metric_codex.store.codex import none_if_na
 _COLUMNS: list[str] = ["student_id", "name_kr", "pseudonym"]
 
 
-def build_pseudonym_map(identities: dict[str, str | None]) -> list[PseudonymMapEntry]:
-    """Build a deterministic bijective student → pseudonym map.
+def build_pseudonym_map(
+    identities: dict[str, str | None],
+    *,
+    prior: dict[str, str] | None = None,
+) -> list[PseudonymMapEntry]:
+    """Build an append-only bijective student → pseudonym map.
 
-    Students are sorted ascending by ``student_id`` and assigned pseudonyms
-    ``S001``, ``S002``, … in that order.  The assignment depends only on the set
-    of student_ids, so two calls with the same students always agree (PRIV-03).
+    Prior assignments are preserved unchanged: every ``student_id`` present in
+    ``prior`` keeps its existing ``S{NNN}`` pseudonym regardless of where it
+    would sort in the full set.  New student_ids (absent from ``prior``) receive
+    the next consecutive numbers above the current maximum — gaps left by
+    dropped students are never reused.  New ids are assigned in ascending
+    ``student_id`` order among themselves.
+
+    This makes pseudonym assignment stable across runs (PRIV-03, DET-03): adding
+    a student with a low-sorting id does NOT renumber any previously-assigned
+    student.
 
     Args:
         identities: Mapping of ``student_id`` → ``name_kr`` (``None`` when the
             name is unknown).  The name is carried for re-identification only.
+        prior: Optional mapping of ``student_id`` → existing pseudonym loaded
+            from a previously written ``pseudonym_map.parquet``.  Every sid
+            present here keeps its pseudonym; omitted or ``None`` ≡ no prior
+            assignments exist (first run).
 
     Returns:
         One ``PseudonymMapEntry`` per student, sorted ascending by student_id.
     """
+    _prior: dict[str, str] = prior or {}
+
+    # Determine the highest N already in use so new assignments start above it.
+    max_n: int = 0
+    for pseudonym in _prior.values():
+        if pseudonym.startswith("S") and pseudonym[1:].isdigit():
+            max_n = max(max_n, int(pseudonym[1:]))
+
+    # New ids: those in identities but absent from prior, sorted ascending.
+    new_ids = sorted(sid for sid in identities if sid not in _prior)
+
+    counter = max_n + 1
+    new_assignments: dict[str, str] = {}
+    for sid in new_ids:
+        new_assignments[sid] = f"S{counter:03d}"
+        counter += 1
+
     entries: list[PseudonymMapEntry] = []
-    for index, student_id in enumerate(sorted(identities), start=1):
+    for student_id in sorted(identities):
+        pseudonym = _prior.get(student_id) or new_assignments[student_id]
         entries.append(
             PseudonymMapEntry(
                 student_id=student_id,
                 name_kr=identities[student_id],
-                pseudonym=f"S{index:03d}",
+                pseudonym=pseudonym,
             )
         )
     return entries
@@ -120,6 +153,26 @@ def read_pseudonym_map(path: Path) -> list[PseudonymMapEntry]:
             ) from exc
 
     entries.sort(key=lambda e: e.student_id)
+
+    # Cross-row uniqueness: both student_id and pseudonym must be bijective.
+    seen_sids: set[str] = set()
+    seen_pseudonyms: set[str] = set()
+    for offset, entry in enumerate(entries):
+        if entry.student_id in seen_sids:
+            raise LocatedInputError(
+                f"duplicate student_id '{entry.student_id}' in pseudonym map",
+                file=path.name,
+                row=offset + 1,
+            )
+        if entry.pseudonym in seen_pseudonyms:
+            raise LocatedInputError(
+                f"duplicate pseudonym '{entry.pseudonym}' in pseudonym map",
+                file=path.name,
+                row=offset + 1,
+            )
+        seen_sids.add(entry.student_id)
+        seen_pseudonyms.add(entry.pseudonym)
+
     return entries
 
 

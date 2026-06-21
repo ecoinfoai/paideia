@@ -550,10 +550,12 @@ def _run_ingest(args: argparse.Namespace) -> int:
     #    by earlier runs (a run that omits a student must not drop them).
     pseudonym_path = own_silver / "pseudonym_map.parquet"
     identities: dict[str, str | None] = {}
-    # Seed with names recovered from the prior map.
+    prior_pseudonyms: dict[str, str] = {}
+    # Seed with names and pseudonyms recovered from the prior map (append-only).
     if pseudonym_path.is_file():
         for prior in read_pseudonym_map(pseudonym_path):
             identities[prior.student_id] = prior.name_kr
+            prior_pseudonyms[prior.student_id] = prior.pseudonym
     # Overlay this run's identities — a non-None name always wins.
     for result in results:
         for student_id, name_kr in result.identities.items():
@@ -562,7 +564,10 @@ def _run_ingest(args: argparse.Namespace) -> int:
     # Ensure every accumulated student is present (name unknown → None).
     for entry in entries:
         identities.setdefault(entry.student_id, None)
-    write_pseudonym_map(pseudonym_path, build_pseudonym_map(identities))
+    write_pseudonym_map(
+        pseudonym_path,
+        build_pseudonym_map(identities, prior=prior_pseudonyms),
+    )
 
     # 6) Manifest — pre-distribution bundle snapshot (distribute overwrites later).
     student_ids = sorted({e.student_id for e in entries})

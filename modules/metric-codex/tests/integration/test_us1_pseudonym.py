@@ -124,3 +124,43 @@ def test_build_pseudonym_map_deterministic_unit() -> None:
     assert [(e.student_id, e.pseudonym) for e in entries] == [
         (e.student_id, e.pseudonym) for e in again
     ]
+
+
+# T003 — append-only pseudonym stability (MC-U01)
+def test_build_pseudonym_map_preserves_prior_and_appends_above_max() -> None:
+    """Prior assignments survive; new students append above the current max.
+
+    The critical case: a new student whose student_id sorts *lower* than existing
+    students must receive S{max+1}, NOT be renumbered into S001.
+
+    Prior:  2026000002 → S001, 2026000003 → S002
+    New id: 2026000001 (sorts BELOW both prior ids)
+    Expected: 002→S001 and 003→S002 preserved; 001→S003 (appended above max).
+    """
+    # Prior map: IDs .002/.003 are already assigned S001/S002.
+    from paideia_shared.schemas import PseudonymMapEntry
+
+    prior_entries = [
+        PseudonymMapEntry(student_id="2026000002", name_kr="이영희", pseudonym="S001"),
+        PseudonymMapEntry(student_id="2026000003", name_kr="박민준", pseudonym="S002"),
+    ]
+    prior: dict[str, str] = {e.student_id: e.pseudonym for e in prior_entries}
+
+    identities = {
+        "2026000001": "김철수",   # sorts first — the renaming risk
+        "2026000002": "이영희",
+        "2026000003": "박민준",
+    }
+
+    entries = build_pseudonym_map(identities, prior=prior)
+    by_sid = {e.student_id: e.pseudonym for e in entries}
+
+    # Prior assignments must be preserved unchanged.
+    assert by_sid["2026000002"] == "S001", "prior S001 must be kept"
+    assert by_sid["2026000003"] == "S002", "prior S002 must be kept"
+    # New (lower-sorting) student gets S003 — NOT S001.
+    assert by_sid["2026000001"] == "S003", "new low-sorting student must append above max"
+
+    # Bijection must still hold.
+    all_pseudonyms = list(by_sid.values())
+    assert len(all_pseudonyms) == len(set(all_pseudonyms)), "pseudonyms must be unique"

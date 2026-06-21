@@ -3,18 +3,23 @@
 validate_pseudonym_map rejects an empty or non-bijective map; reidentify_and_write
 refuses to write any Gold file when the needed mapping is absent.
 (FR-023 / PRIV-05: absent / corrupt / non-bijective.)
+
+T004 (appended) — read_pseudonym_map raises a located LocatedInputError when the
+parquet file contains a duplicate pseudonym or a duplicate student_id.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from metric_codex.errors import LocatedInputError
 from metric_codex.generate.reidentify import (
     reidentify_and_write,
     validate_pseudonym_map,
 )
+from metric_codex.store.pseudonym import read_pseudonym_map
 from paideia_shared.schemas import PseudonymMapEntry
 
 
@@ -128,3 +133,48 @@ class TestReidentifyAndWrite:
                 narrative="본문",
                 pseudonym_index=index,
             )
+
+
+def _write_map_parquet(path: Path, rows: list[dict]) -> None:
+    """Write a pseudonym_map parquet from raw dicts (bypasses build_pseudonym_map)."""
+    df = pd.DataFrame(rows, columns=["student_id", "name_kr", "pseudonym"])
+    df = df.astype({"student_id": "object", "name_kr": "object", "pseudonym": "object"})
+    df.to_parquet(path, index=False)
+
+
+# T004 — read_pseudonym_map raises LocatedInputError on duplicate pseudonym or student_id
+class TestReadPseudonymMapDuplicateDetection:
+    """T004: read_pseudonym_map raises a located error on cross-row uniqueness failures."""
+
+    def test_duplicate_pseudonym_raises_located_error(self, tmp_path: Path) -> None:
+        """Two rows sharing the same S{NNN} pseudonym must be rejected at the boundary."""
+        path = tmp_path / "pseudonym_map.parquet"
+        _write_map_parquet(path, [
+            {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
+            {"student_id": "2026000002", "name_kr": "이영희", "pseudonym": "S001"},  # dup
+        ])
+
+        with pytest.raises(LocatedInputError) as exc_info:
+            read_pseudonym_map(path)
+
+        # Error must be located (reference the file or pseudonym).
+        err = exc_info.value
+        assert err.file is not None or "S001" in str(err), (
+            "error must identify the duplicate pseudonym"
+        )
+
+    def test_duplicate_student_id_raises_located_error(self, tmp_path: Path) -> None:
+        """Two rows sharing the same student_id must be rejected at the boundary."""
+        path = tmp_path / "pseudonym_map.parquet"
+        _write_map_parquet(path, [
+            {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
+            {"student_id": "2026000001", "name_kr": "이영희", "pseudonym": "S002"},  # dup
+        ])
+
+        with pytest.raises(LocatedInputError) as exc_info:
+            read_pseudonym_map(path)
+
+        err = exc_info.value
+        assert err.file is not None or "2026000001" in str(err), (
+            "error must identify the duplicate student_id"
+        )
