@@ -1,6 +1,6 @@
 """MetricCodexManifest: run-level audit record for a metric-codex pipeline execution.
 
-Entity 7. Written as ``manifest_metric_codex.json`` at the end of every
+Entity 7. Written as ``manifest_metric-codex.json`` at the end of every
 pipeline run. Embeds an AdvisorBundleSummary so a single manifest captures
 both entry-level counts and advisor coverage in one artefact.
 """

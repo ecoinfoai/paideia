@@ -8,6 +8,7 @@ idempotency by downstream pipeline stages.
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
 from typing import Literal, Self
 
@@ -52,6 +53,7 @@ class CodexEntry(BaseModel):
     - V1: exactly one of ``value_num`` / ``value_text`` is non-None.
     - V2: ``item_ref is not None`` ⇒ ``entry_kind == EntryKind.item_correct``.
     - V3: ``layer == "minimal"`` ⇒ ``entry_kind ∈ {score_total, score_percent, attendance}``.
+    - V4: when ``value_num is not None``, it must be finite (NaN / ±inf rejected).
 
     Attributes:
         student_id: 10-digit canonical student ID.
@@ -115,6 +117,21 @@ class CodexEntry(BaseModel):
             raise ValueError(
                 f"minimal layer only allows entry_kind in "
                 f"{sorted(k.value for k in _MINIMAL_KINDS)}; got {self.entry_kind!r}."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _v4_value_num_finite(self) -> Self:
+        """V4: value_num, when set, must be finite (NaN / ±inf rejected).
+
+        NaN silently round-trips to None on parquet re-read (float64 NaN →
+        nullable null), causing silent data loss.  ±inf cannot be stored in
+        parquet float64 without silent truncation on some backends.
+        """
+        if self.value_num is not None and not math.isfinite(self.value_num):
+            raise ValueError(
+                f"value_num must be finite; got {self.value_num!r}. "
+                "NaN and ±inf are rejected to prevent silent parquet round-trip loss."
             )
         return self
 

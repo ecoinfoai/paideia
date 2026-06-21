@@ -37,10 +37,14 @@ def retrieve_evidence(
         A 3-tuple ``(citations, available_layers, no_evidence)``:
 
         - ``citations``: Matched entries converted to EvidenceCitation and
-          sorted by ``(layer, key, source_id)`` for determinism.
+          sorted by ``(layer, key, source_id, str(value), observed_at)`` for a
+          deterministic total order (no ties → stable bytes across runs).
+          ``observed_at=None`` sorts before any ISO date string (v1 limit:
+          U24 — not all entry kinds carry an event date; treat as unknown).
         - ``available_layers``: Sorted list of distinct ``layer`` values present
           in the WHOLE ``entries`` list (not just the filtered subset) — reflects
-          what richness tiers the student's codex contains (FR-015).
+          what richness tiers the student's full codex contains (FR-015 / U28).
+          This is a whole-codex property and is NOT narrowed by the filters.
         - ``no_evidence``: True iff ``citations`` is empty.
     """
     # available_layers reflects the whole student codex, not the filter result.
@@ -79,9 +83,19 @@ def retrieve_evidence(
             )
         )
 
-    # Deterministic total order: include str(value) to break (layer,key,source_id)
-    # ties so input row order (e.g. parquet row-group ordering) cannot leak through.
-    matched.sort(key=lambda c: (c.layer, c.key, c.source_id, str(c.value)))
+    # Deterministic total order: all available EvidenceCitation fields are used
+    # as sort keys so no tie can leak input-row ordering through.
+    # observed_at=None is mapped to "" which sorts before any ISO date string
+    # (total-order convention: None → first, v1 limit documented in docstring).
+    matched.sort(
+        key=lambda c: (
+            c.layer,
+            c.key,
+            c.source_id,
+            str(c.value),
+            c.observed_at or "",
+        )
+    )
 
     return matched, distinct_layers, len(matched) == 0
 

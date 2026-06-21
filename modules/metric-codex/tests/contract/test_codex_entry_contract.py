@@ -254,3 +254,46 @@ class TestCohortYear:
     def test_above_upper_bound_raises(self):
         with pytest.raises(ValidationError):
             CodexEntry(**_valid_entry(cohort_year=2101))
+
+
+# ---------------------------------------------------------------------------
+# T053 RED — V4: value_num finite guard (FR-023)
+# ---------------------------------------------------------------------------
+
+import math  # noqa: E402 — import inside module body for test-file locality
+
+
+class TestValueNumFiniteGuard:
+    """V4: value_num must be finite (NaN / ±inf rejected).
+
+    T053 RED — these must FAIL until V4 is added to CodexEntry.
+    T061 GREEN — after V4, all assertions must pass.
+    """
+
+    def test_nan_rejected(self):
+        """value_num=NaN passes XOR but renders as 'nan'; V4 must reject it."""
+        with pytest.raises(ValidationError, match="finite"):
+            CodexEntry(**_valid_entry(value_num=float("nan")))
+
+    def test_positive_inf_rejected(self):
+        with pytest.raises(ValidationError, match="finite"):
+            CodexEntry(**_valid_entry(value_num=float("inf")))
+
+    def test_negative_inf_rejected(self):
+        with pytest.raises(ValidationError, match="finite"):
+            CodexEntry(**_valid_entry(value_num=float("-inf")))
+
+    def test_finite_value_accepted(self):
+        """A normal finite value must still be accepted."""
+        entry = CodexEntry(**_valid_entry(value_num=42.5))
+        assert entry.value_num == 42.5
+
+    def test_zero_accepted(self):
+        """Zero is finite and must be accepted."""
+        entry = CodexEntry(**_valid_entry(value_num=0.0))
+        assert entry.value_num == 0.0
+
+    def test_negative_finite_accepted(self):
+        """A negative finite value must be accepted."""
+        entry = CodexEntry(**_valid_entry(value_num=-3.14))
+        assert math.isfinite(entry.value_num)

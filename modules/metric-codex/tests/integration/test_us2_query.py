@@ -305,6 +305,62 @@ class TestRetrieveEvidenceDeterminism:
         assert forward == reverse
         assert [c.value for c in forward] == [c.value for c in reverse]
 
+    # T058 RED — citation total-order must include observed_at tie-break (FR-024 / MC-U27)
+    def test_tie_on_observed_at_is_total_order(self):
+        """Two entries differing ONLY by observed_at must sort identically regardless
+        of input order.  The current sort key omits observed_at → unstable (RED)."""
+        # Share (layer, key, source_id, value_num); differ only in observed_at.
+        e_early = _entry(
+            layer="minimal",
+            entry_kind=EntryKind.score_total,
+            key="score_total",
+            value_num=85.0,
+            source_id="school_excel:성적출석.xlsx",
+            observed_at="2026-05-01",
+        )
+        e_late = _entry(
+            layer="minimal",
+            entry_kind=EntryKind.score_total,
+            key="score_total",
+            value_num=85.0,
+            source_id="school_excel:성적출석.xlsx",
+            observed_at="2026-06-01",
+        )
+        forward, _, _ = retrieve_evidence([e_early, e_late])
+        reverse, _, _ = retrieve_evidence([e_late, e_early])
+        assert forward == reverse, (
+            "citation order must be identical regardless of input permutation; "
+            f"forward={[c.observed_at for c in forward]!r}, "
+            f"reverse={[c.observed_at for c in reverse]!r}"
+        )
+
+    def test_tie_on_observed_at_none_is_stable(self):
+        """observed_at=None must sort deterministically (consistently last or first)
+        relative to a non-None observed_at."""
+        e_dated = _entry(
+            layer="minimal",
+            entry_kind=EntryKind.score_total,
+            key="score_total",
+            value_num=85.0,
+            source_id="school_excel:성적출석.xlsx",
+            observed_at="2026-06-01",
+        )
+        e_none = _entry(
+            layer="minimal",
+            entry_kind=EntryKind.score_total,
+            key="score_total",
+            value_num=85.0,
+            source_id="school_excel:성적출석.xlsx",
+            observed_at=None,
+        )
+        forward, _, _ = retrieve_evidence([e_dated, e_none])
+        reverse, _, _ = retrieve_evidence([e_none, e_dated])
+        assert forward == reverse, (
+            "None observed_at must sort deterministically; "
+            f"forward={[c.observed_at for c in forward]!r}, "
+            f"reverse={[c.observed_at for c in reverse]!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Domain filter

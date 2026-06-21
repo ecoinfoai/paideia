@@ -78,6 +78,28 @@ class TestAdvisorRosterEntryValid:
             entry = AdvisorRosterEntry(student_id="2026000001", advisor_id=ok)
             assert entry.advisor_id == ok
 
+    # T056 RED — advisor_id C0 control-char rejection (FR-025)
+    def test_advisor_id_newline_rejected(self):
+        """advisor_id containing \\n (C0 control char) must be rejected (FR-025)."""
+        with pytest.raises(ValidationError):
+            AdvisorRosterEntry(student_id="2026000001", advisor_id="ADV\n001")
+
+    def test_advisor_id_tab_rejected(self):
+        """advisor_id containing \\t (C0 control char) must be rejected (FR-025)."""
+        with pytest.raises(ValidationError):
+            AdvisorRosterEntry(student_id="2026000001", advisor_id="ADV\t001")
+
+    def test_advisor_id_carriage_return_rejected(self):
+        """advisor_id containing \\r (C0 control char) must be rejected."""
+        with pytest.raises(ValidationError):
+            AdvisorRosterEntry(student_id="2026000001", advisor_id="ADV\r001")
+
+    def test_advisor_id_normal_after_ctrl_chars_still_allowed(self):
+        """Confirm legitimate ids remain valid after pattern tightening."""
+        for ok in ("prof-kim", "ADV001", "20260001", "Prof Kim", "ADV 001"):
+            entry = AdvisorRosterEntry(student_id="2026000001", advisor_id=ok)
+            assert entry.advisor_id == ok
+
 
 # ---------------------------------------------------------------------------
 # load_roster happy path

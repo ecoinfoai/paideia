@@ -13,10 +13,12 @@ from .._common import CanonicalStudentId
 
 # advisor_id becomes a path segment under 지도교수별/.  The pattern forbids any
 # path-traversal or separator character: no leading dot (blocks '.', '..',
-# '.hidden'), and no '/', '\\', or NUL anywhere (blocks slashes, absolute
-# paths, NUL injection).  Legitimate ids like 'prof-kim', 'prof.kim',
-# 'ADV001', or an employee number still validate.
-_ADVISOR_ID_PATTERN = r"^[^/\\.\x00][^/\\\x00]*$"
+# '.hidden'), no '/', '\\', or NUL anywhere (blocks slashes, absolute paths,
+# NUL injection), and no C0 control characters \x00-\x1f anywhere (blocks
+# newline, tab, carriage-return injection into path segments).
+# Legitimate ids like 'prof-kim', 'prof.kim', 'ADV001', or an employee number
+# still validate.
+_ADVISOR_ID_PATTERN = r"^[^/\\.\x00-\x1f][^/\\\x00-\x1f]*$"
 
 
 class AdvisorRosterEntry(BaseModel):
