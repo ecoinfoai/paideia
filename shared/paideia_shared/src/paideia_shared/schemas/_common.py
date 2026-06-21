@@ -12,11 +12,21 @@ from pydantic import Field
 CanonicalStudentId: TypeAlias = Annotated[
     str,
     Field(
-        pattern=r"^\d{10}$",
-        description="10-digit zero-padded student ID (post-normalization).",
+        pattern=r"^[0-9]{10}$",
+        description=(
+            "ASCII 10-digit zero-padded student ID (post-normalization)."
+            " Uses [0-9] not \\d: pydantic v2 \\d accepts Unicode digits"
+            " (e.g. Arabic-Indic); [0-9] is strictly ASCII."
+        ),
     ),
 ]
-"""10-digit student ID after normalization (e.g. '2026194999')."""
+"""ASCII 10-digit student ID after normalization (e.g. '2026194999').
+
+``[0-9]`` (not ``\\d``) is intentional: pydantic v2 uses the Unicode-aware
+``re`` engine, so ``\\d`` would accept Arabic-Indic and other Unicode decimal
+digits.  The ingest normalizer always converts to ASCII before this schema
+validates, so the stricter pattern is a safe boundary tightening.
+"""
 
 SemesterCode: TypeAlias = Annotated[
     str,
