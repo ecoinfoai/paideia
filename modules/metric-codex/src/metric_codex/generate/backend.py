@@ -266,6 +266,8 @@ class SubscriptionBackend(LLMBackend):
         Raises:
             RuntimeError: If the response file for ``request.slot_id`` does not
                 exist; the message includes the expected path and the slot_id.
+            LocatedInputError: If the response file is present but malformed
+                (missing the required ``slot_id`` / ``raw_text`` field).
         """
         self._staging_dir.mkdir(parents=True, exist_ok=True)
         bundle_data = {
@@ -325,8 +327,6 @@ class ApiBackend(LLMBackend):
 
     Args:
         model: The Anthropic model ID (e.g. ``"claude-sonnet-4-6"``).
-        max_tokens: Maximum tokens in the completion (defaults to 2048;
-            threaded from ``GenerationRequest.max_tokens`` at call time).
 
     Raises:
         LocatedInputError: On config/request errors (``BadRequestError``,
@@ -339,21 +339,17 @@ class ApiBackend(LLMBackend):
     # Refusal stop_reason values — any of these surfaces as a LocatedInputError.
     _REFUSAL_STOP_REASONS = frozenset({"refusal"})
 
-    def __init__(
-        self,
-        model: str = "claude-sonnet-4-6",
-        max_tokens: int = 2048,
-    ) -> None:
+    def __init__(self, model: str = "claude-sonnet-4-6") -> None:
         self._model = model
-        self._max_tokens = max_tokens
         self._client = anthropic.Anthropic()
 
     def generate(self, request: GenerationRequest) -> GenerationResponse:
         """Call the Anthropic API and return the response.
 
         Args:
-            request: The generation request; ``request.max_tokens`` is used
-                if the caller overrides the default.
+            request: The generation request; ``request.max_tokens`` is the
+                single source of truth for the completion-length cap (also
+                hashed into the cache key, so it always matches the API call).
 
         Returns:
             ``GenerationResponse`` with the model's text output.
@@ -362,11 +358,10 @@ class ApiBackend(LLMBackend):
             LocatedInputError: On config/request errors (exit-2 territory).
             BackendUnreachableError: On genuine unreachability (exit-4 territory).
         """
-        max_tokens = request.max_tokens if request.max_tokens else self._max_tokens
         try:
             message = self._client.messages.create(
                 model=self._model,
-                max_tokens=max_tokens,
+                max_tokens=request.max_tokens,
                 messages=[{"role": "user", "content": request.prompt}],
             )
         except (

@@ -135,10 +135,17 @@ def _make_fake_text_message(text: str, stop_reason: str = "end_turn"):
     return _FakeMessage()
 
 
-def _make_bad_request_error(msg: str = "temperature not supported") -> anthropic.BadRequestError:
+def _make_status_error(
+    error_cls: type[anthropic.APIStatusError], status: int, msg: str
+) -> anthropic.APIStatusError:
+    """Build any ``APIStatusError`` subclass (BadRequest/Auth/PermissionDenied)."""
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    resp = httpx.Response(400, request=req, text=msg)
-    return anthropic.BadRequestError(message=msg, response=resp, body={"error": {"type": "invalid_request_error"}})
+    resp = httpx.Response(status, request=req, text=msg)
+    return error_cls(message=msg, response=resp, body={"error": {"type": "error"}})
+
+
+def _make_bad_request_error(msg: str = "temperature not supported") -> anthropic.BadRequestError:
+    return _make_status_error(anthropic.BadRequestError, 400, msg)
 
 
 def _make_api_connection_error(msg: str = "cannot connect") -> anthropic.APIConnectionError:
@@ -183,31 +190,40 @@ class TestApiBackend:
         )
         assert resp.raw_text == "다듬은 응답"
 
-    def test_bad_request_raises_located_input_error(self, monkeypatch) -> None:
-        """T043: anthropic.BadRequestError must surface as LocatedInputError (exit 2).
+    @pytest.mark.parametrize(
+        ("error_cls", "status"),
+        [
+            (anthropic.BadRequestError, 400),
+            (anthropic.AuthenticationError, 401),
+            (anthropic.PermissionDeniedError, 403),
+        ],
+    )
+    def test_config_error_raises_located_input_error(
+        self, monkeypatch, error_cls, status
+    ) -> None:
+        """T043: config-class SDK errors surface as LocatedInputError (exit 2).
 
-        Pre-fix: the blanket except-Exception wraps it as BackendUnreachableError
-        (exit 4), misreporting a config error as 'unreachable'.
-        Post-fix: BadRequestError is a config/request error and must exit 2.
+        Pre-fix: the blanket except-Exception wrapped these as
+        BackendUnreachableError (exit 4), misreporting a config error as
+        'unreachable'.  Post-fix: BadRequestError / AuthenticationError /
+        PermissionDeniedError are config/request errors and must map to exit 2.
+        Parametrized so the three share-a-branch types stay pinned to exit 2.
         """
         from metric_codex.errors import LocatedInputError
-        from metric_codex.generate.backend import ApiBackend, BackendUnreachableError
+        from metric_codex.generate.backend import ApiBackend
 
-        exc = _make_bad_request_error("temperature not supported on this model")
-
+        exc = _make_status_error(error_cls, status, "config error")
         monkeypatch.setattr(
             "metric_codex.generate.backend.anthropic.Anthropic",
             lambda **_: _fake_client_factory(raiser=exc)(),
         )
 
         backend = ApiBackend(model="claude-haiku-4-5")
-        # Must raise LocatedInputError (exit-2), NOT BackendUnreachableError (exit-4).
-        with pytest.raises(LocatedInputError):
+        with pytest.raises(LocatedInputError) as caught:
             backend.generate(_make_request("S001"))
 
-        # Defensive: must NOT be wrapped as BackendUnreachableError.
-        with pytest.raises(LocatedInputError), pytest.raises(BackendUnreachableError):
-            backend.generate(_make_request("S001"))
+        # LocatedInputError subclasses ValueError → app() maps it to exit 2.
+        assert isinstance(caught.value, ValueError)
 
     def test_wraps_connection_error(self, monkeypatch) -> None:
         """ConnectionError → BackendUnreachableError (exit 4). Unchanged behavior."""
