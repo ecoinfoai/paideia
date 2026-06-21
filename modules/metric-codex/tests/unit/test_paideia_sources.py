@@ -1246,7 +1246,7 @@ def test_cluster_label_uses_own_bronze_when_silver_sidecar_absent(
     GREEN: orchestrator accepts own_bronze kwarg; own-Bronze copy is used and
     cluster_label entries appear.
     """
-    data_root, immersio_dir, needsmap_dir = _silver_dirs(tmp_path)
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
 
     # cluster_assignment present in Silver, but NO cluster_names.json sidecar.
     _write_cluster_assignment(needsmap_dir / "cluster_assignment.parquet")
@@ -1278,7 +1278,7 @@ def test_cluster_label_absent_when_both_sources_missing(tmp_path: Path) -> None:
 
     Explicit UNAVAILABLE; no silent empty-fill (Principle II / no-silent-empty-fill rule).
     """
-    data_root, immersio_dir, needsmap_dir = _silver_dirs(tmp_path)
+    data_root, _, needsmap_dir = _silver_dirs(tmp_path)
 
     # cluster_assignment present but no cluster_names.json anywhere.
     _write_cluster_assignment(needsmap_dir / "cluster_assignment.parquet")

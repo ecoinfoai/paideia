@@ -5,7 +5,7 @@ Tests (RED first, per TDD mandate):
 - Unknown subcommand exits 2.
 - _COMMAND_HANDLERS contains exactly the 7 expected subcommands.
 - app() with a known subcommand passes argparse parsing (doesn't fail on
-  argument validation), and the stub handler raises NotImplementedError.
+  argument validation).
 - Common flags (--semester, --course, --data-root) are accepted by every
   subcommand (argparse level — parse does not fail).
 
@@ -13,11 +13,14 @@ Updated in T041/T042/T045: query, dry-run, and generate are now wired.
 Updated in T052: distribute is now wired (no longer a stub).
 Updated in T054: verify is now wired (no longer a stub).
 Updated in T055: build is now wired (no longer a stub).
+Updated in T069: removed the no-op stub-handler test — every subcommand is
+wired, so no handler raises NotImplementedError and the dead app() handler
+was dropped in T065 (SC-010: suite has 0 skips).
 - query requires --student; skeleton test passes dummy --student.
-- dry-run is wired and may fail on missing Silver files (not NotImplementedError).
-- distribute is wired and may fail on missing roster file (not NotImplementedError).
-- verify is wired and exits 0/2/3 depending on artifact state (not NotImplementedError).
-- build is wired and chains all four stages (not NotImplementedError).
+- dry-run is wired and may fail on missing Silver files.
+- distribute is wired and may fail on missing roster file.
+- verify is wired and exits 0/2/3 depending on artifact state.
+- build is wired and chains all four stages.
 """
 
 from __future__ import annotations
@@ -25,9 +28,6 @@ from __future__ import annotations
 import pytest
 
 _ALL_SUBCOMMANDS = ["ingest", "query", "dry-run", "generate", "distribute", "verify", "build"]
-# Subcommands still backed by a NotImplementedError stub.
-# All subcommands are now wired (T041/T042/T045/T052/T054/T055).
-_STUB_SUBCOMMANDS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -103,27 +103,6 @@ def test_common_flags_parse_without_error(subcommand: str) -> None:
 
     assert args.semester == "2026-1"
     assert args.course == "anatomy"
-
-
-# ---------------------------------------------------------------------------
-# Stub handlers raise NotImplementedError
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("subcommand", _STUB_SUBCOMMANDS)
-def test_stub_handlers_raise_not_implemented(subcommand: str) -> None:
-    """Each still-stub handler raises NotImplementedError (wired in later units).
-
-    All subcommands are now wired (T055), so _STUB_SUBCOMMANDS is empty and
-    this parametrized test is a no-op placeholder.
-    """
-    from metric_codex.cli.main import _COMMAND_HANDLERS, _build_parser
-
-    parser = _build_parser()
-    args = parser.parse_args([subcommand, "--semester", "2026-1", "--course", "anatomy"])
-    handler = _COMMAND_HANDLERS[subcommand]
-    with pytest.raises(NotImplementedError):
-        handler(args)
 
 
 # ---------------------------------------------------------------------------

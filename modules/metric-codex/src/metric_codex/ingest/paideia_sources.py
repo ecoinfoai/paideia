@@ -56,6 +56,7 @@ from paideia_shared.schemas.metric_codex import CodexEntry, EntryKind, SourceRec
 from pydantic import BaseModel, ValidationError
 
 from metric_codex.errors import LocatedInputError
+from metric_codex.ingest.bronze_copies import load_cluster_names
 from metric_codex.ingest.normalize import normalize_student_id
 from metric_codex.ingest.result import SourceReadResult
 from metric_codex.output.sha256 import compute_sha256
@@ -705,7 +706,10 @@ def read_cluster_assignment(
     rows = _validate_rows(
         _read_parquet(assignment_path), ClusterAssignmentRow, filename=assignment_path.name
     )
-    names = _load_cluster_names(names_path)
+    # Single canonical cluster_names loader (bronze_copies.load_cluster_names);
+    # the orchestrator guards is_file() before calling here, so the located
+    # missing-file error inside the loader only fires for direct/test callers.
+    names = load_cluster_names(names_path)
 
     entries: list[CodexEntry] = []
     identities: dict[str, str | None] = {}
@@ -743,50 +747,6 @@ def read_cluster_assignment(
         ),
         identities=identities,
     )
-
-
-def _load_cluster_names(path: Path) -> dict[int, str]:
-    """Load the ``cluster_names.json`` sidecar into an int→label map.
-
-    JSON object keys are strings; they are coerced to ints (the cluster ids).
-
-    Args:
-        path: Real filesystem path to ``cluster_names.json``.
-
-    Returns:
-        Mapping of cluster_id (int) → label (str).
-
-    Raises:
-        LocatedInputError: If the file is not valid JSON, not an object, or has
-            a non-integer key.
-    """
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise LocatedInputError(
-            f"failed to parse cluster names JSON: {exc}",
-            file=path.name,
-        ) from exc
-    if not isinstance(raw, dict):
-        raise LocatedInputError(
-            "cluster names sidecar must be a JSON object",
-            file=path.name,
-            expected="object mapping cluster_id → label",
-            actual=type(raw).__name__,
-        )
-    names: dict[int, str] = {}
-    for key, label in raw.items():
-        try:
-            cluster_id = int(key)
-        except (TypeError, ValueError) as exc:
-            raise LocatedInputError(
-                f"non-integer cluster id key {key!r} in cluster names sidecar",
-                file=path.name,
-                expected="integer cluster id key",
-                actual=repr(key),
-            ) from exc
-        names[cluster_id] = str(label)
-    return names
 
 
 def read_combined_analysis(
