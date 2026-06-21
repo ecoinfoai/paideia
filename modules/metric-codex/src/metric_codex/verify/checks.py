@@ -611,6 +611,61 @@ def check_manifest_hashes(manifest_path: Path) -> list[Violation]:
 
 
 # ---------------------------------------------------------------------------
+# LINEAGE-01: every codex source_id resolves in input_hashes ∪ source_ledger
+# ---------------------------------------------------------------------------
+
+
+def check_lineage(
+    codex_entries: list[CodexEntry],
+    input_hashes: dict[str, str],
+    source_records: list,
+) -> list[Violation]:
+    """Check that every codex_entry.source_id resolves in provenance (LINEAGE-01).
+
+    A source is considered resolved when it appears in EITHER ``input_hashes``
+    (the manifest's recorded digest) OR ``source_records`` (the full accumulated
+    ledger).  A source present only in the ledger is fine — the ledger is the
+    complete preserved provenance; input_hashes and ledger together form the
+    audit universe.
+
+    Legitimately purged sources (evicted by a supersede operation) will not
+    appear in EITHER, but by definition their entries have also been evicted from
+    the codex, so they can never be a source_id referenced by a CodexEntry.
+    LINEAGE-01 therefore cannot produce a false positive for purged sources.
+
+    Args:
+        codex_entries: All CodexEntry rows for the semester/course.
+        input_hashes: Manifest ``input_hashes`` dict (source_id → sha256).
+        source_records: Accumulated ``SourceRecord`` rows from the Silver ledger.
+
+    Returns:
+        List of Violation — one per unresolved source_id (empty if all resolve).
+    """
+    ledger_ids: frozenset[str] = frozenset(r.source_id for r in source_records)
+    known: frozenset[str] = frozenset(input_hashes) | ledger_ids
+
+    seen: set[str] = set()
+    violations: list[Violation] = []
+    for entry in codex_entries:
+        sid = entry.source_id
+        if sid in seen:
+            continue
+        seen.add(sid)
+        if sid not in known:
+            violations.append(
+                Violation(
+                    invariant_id="LINEAGE-01",
+                    message=(
+                        f"codex_entry source_id {sid!r} resolves in neither "
+                        "manifest.input_hashes nor source_ledger — provenance broken"
+                    ),
+                    detail=f"unresolved source_id={sid!r}",
+                )
+            )
+    return violations
+
+
+# ---------------------------------------------------------------------------
 # run_all_checks
 # ---------------------------------------------------------------------------
 
@@ -653,11 +708,12 @@ def run_all_checks(
     # --- Load shared artifacts (errors → collected as violations, never crash) ---
     violations: list[Violation] = []
 
-    # Load codex entries.
+    # Load codex entries and source records (ledger) — both needed for LINEAGE-01.
     codex_entries: list[CodexEntry] = []
+    source_records: list = []
     if own_silver.is_dir():
         try:
-            codex_entries, _ = read_existing_store(own_silver)
+            codex_entries, source_records = read_existing_store(own_silver)
         except LocatedInputError as exc:
             violations.append(
                 Violation(
@@ -681,15 +737,17 @@ def run_all_checks(
                 )
             )
 
-    # Load manifest (if present) — needed by SKIP-02 and MANIFEST checks.
+    # Load manifest (if present) — needed by SKIP-02, MANIFEST, and LINEAGE-01 checks.
     # M-001: use None sentinel when manifest fails to load.  check_evidence_grounding
     # skips the byte-match when llm_backend is None to avoid false EVID-01 noise
     # that would mask the real manifest failure (SKIP-02/MANIFEST already report it).
     llm_backend: str | None = None
+    manifest_input_hashes: dict[str, str] = {}
     if manifest_path.is_file():
         try:
             manifest = read_manifest(manifest_path)
             llm_backend = manifest.llm_backend
+            manifest_input_hashes = dict(manifest.input_hashes)
         except LocatedInputError:
             pass  # SKIP-02 / MANIFEST checks will re-report this.
 
@@ -728,6 +786,17 @@ def run_all_checks(
         violations += check_skip02_count_invariant(manifest_path)
         violations += check_manifest_hashes(manifest_path)
 
+    # LINEAGE-01: every codex source_id must resolve in input_hashes ∪ ledger.
+    # Only run when both the codex and the manifest are available; if the manifest
+    # failed to load, manifest_input_hashes is empty and SKIP-02/MANIFEST already
+    # surfaced the failure — skip LINEAGE-01 to avoid spurious noise.
+    if manifest_path.is_file() and (codex_entries or source_records):
+        violations += check_lineage(
+            codex_entries=codex_entries,
+            input_hashes=manifest_input_hashes,
+            source_records=source_records,
+        )
+
     # M-001: skip the byte-match when llm_backend is None (corrupt/absent manifest).
     # The manifest failure is already reported by SKIP-02/MANIFEST checks above.
     if question_set is not None and pseudonym_map and llm_backend is not None:
@@ -750,6 +819,7 @@ __all__ = [
     "check_priv03_pseudonym_bijective",
     "check_priv04_gitignored",
     "check_evidence_grounding",
+    "check_lineage",
     "check_skip02_count_invariant",
     "check_skip03_no_cross_leak",
     "check_manifest_hashes",

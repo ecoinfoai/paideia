@@ -277,7 +277,13 @@ class TestDistributeCountInvariant:
 
 
 class TestDistributeProvenancePreserved:
-    """Constitution V: distribute must not clobber ingest/generate provenance."""
+    """Constitution V: distribute must not clobber ingest/generate provenance.
+
+    US3 / MC-U09: distribute now records the roster's identity hash in
+    config_ids (new entry), so the assertion is updated from strict equality
+    to 'prior entries are a subset of the post-distribute config_ids'.  The
+    prior input_hashes must remain unchanged.
+    """
 
     def test_input_hashes_preserved(self, generated_data_root, roster_path):
         manifest_path = (
@@ -292,8 +298,17 @@ class TestDistributeProvenancePreserved:
         _run_distribute(generated_data_root, roster_path)
 
         after = json.loads(manifest_path.read_text(encoding="utf-8"))
+        # input_hashes must be byte-identical (Constitution V: provenance never dropped).
         assert after["input_hashes"] == prior_input_hashes
-        assert after["config_ids"] == prior_config_ids
+        # config_ids is a superset: all prior entries are preserved (overlay-merge),
+        # PLUS the roster identity hash is added (MC-U09 / US3).
+        for k, v in prior_config_ids.items():
+            assert after["config_ids"].get(k) == v, (
+                f"prior config_id key {k!r} was dropped or changed by distribute"
+            )
+        assert roster_path.name in after["config_ids"], (
+            "roster identity hash missing from config_ids after distribute (MC-U09)"
+        )
 
     def test_bundle_summary_updated(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)

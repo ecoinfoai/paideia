@@ -596,6 +596,16 @@ def _run_ingest(args: argparse.Namespace) -> int:
     )
 
     # 6) Manifest — pre-distribution bundle snapshot (distribute overwrites later).
+    #    input_hashes is built from the ACCUMULATED ledger (records), not just
+    #    this-run results, so a prior run's sources survive a source-absent re-run
+    #    (MC-U03 / Principle V audit trail).  config_ids is overlay-merged with the
+    #    prior manifest so settings recorded in earlier runs are not silently dropped.
+    manifest_path = own_silver / "manifest_metric-codex.json"
+    prior_config_ids: dict[str, str] = {}
+    if manifest_path.is_file():
+        prior_manifest = read_manifest(manifest_path)
+        prior_config_ids = dict(prior_manifest.config_ids)
+
     student_ids = sorted({e.student_id for e in entries})
     student_count = len(student_ids)
     bundle_summary = AdvisorBundleSummary(
@@ -608,8 +618,8 @@ def _run_ingest(args: argparse.Namespace) -> int:
     manifest = build_manifest(
         semester=semester,
         course_slug=course,
-        input_hashes={r.source_record.source_id: r.source_record.sha256 for r in results},
-        config_ids=config_ids,
+        input_hashes={r.source_id: r.sha256 for r in records},
+        config_ids={**prior_config_ids, **config_ids},
         generated_at=now,
         llm_backend="none(template)",
         llm_model=None,
@@ -618,7 +628,7 @@ def _run_ingest(args: argparse.Namespace) -> int:
         entry_count=len(entries),
         bundle_summary=bundle_summary,
     )
-    write_manifest(own_silver / "manifest_metric-codex.json", manifest)
+    write_manifest(manifest_path, manifest)
 
     return 0
 
@@ -1135,11 +1145,15 @@ def _run_distribute(args: argparse.Namespace) -> int:
     _write_missing_gold_report(gold_dir=own_gold, missing_sids=missing_gold, names=names)
 
     # 7) Update manifest — preserve provenance, update bundle_summary.
+    #    Record the roster's identity hash in config_ids (MC-U09) so the
+    #    advisor assignment that drove this distribution run is auditable.
+    roster_hash = compute_sha256(roster_path)
+
     manifest_path = own_silver / "manifest_metric-codex.json"
     if manifest_path.is_file():
         prior = read_manifest(manifest_path)
         input_hashes = prior.input_hashes
-        config_ids = prior.config_ids
+        prior_config_ids_dist = dict(prior.config_ids)
         llm_backend = prior.llm_backend
         llm_model = prior.llm_model
         cache_hit_rate = prior.cache_hit_rate
@@ -1147,12 +1161,15 @@ def _run_distribute(args: argparse.Namespace) -> int:
         entry_count = prior.entry_count
     else:
         input_hashes = {}
-        config_ids = {}
+        prior_config_ids_dist = {}
         llm_backend = "none(template)"
         llm_model = None
         cache_hit_rate = None
         student_count = len(codex_sids)
         entry_count = 0
+
+    # Overlay-merge: prior values as base, roster hash wins on key conflict.
+    config_ids = {**prior_config_ids_dist, roster_path.name: roster_hash}
 
     manifest = build_manifest(
         semester=semester,
