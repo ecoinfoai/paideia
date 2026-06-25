@@ -51,3 +51,7 @@ tmp/immersio_email_preview/
 
 # MkDocs 빌드 산출물 (GitHub Pages는 CI에서 빌드)
 /site/
+
+# Spec-kit 작업문서·아이디어 노트 — 로컬 보관, 외부 비공개 (히스토리 purge 완료)
+idea/
+specs/
