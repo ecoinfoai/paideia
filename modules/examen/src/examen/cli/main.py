@@ -33,6 +33,9 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from paideia_shared.schemas._common import CourseSlug, SemesterCode
+from pydantic import TypeAdapter
+
 from examen.generate.backend import BackendUnreachableError
 
 if TYPE_CHECKING:
@@ -577,6 +580,48 @@ _COMMAND_HANDLERS = {
 }
 
 
+_SEMESTER_TA: TypeAdapter[SemesterCode] = TypeAdapter(SemesterCode)
+_COURSE_TA: TypeAdapter[CourseSlug] = TypeAdapter(CourseSlug)
+
+
+def _validate_semester_course(args: argparse.Namespace) -> int | None:
+    """Validate ``--semester`` / ``--course`` against their shared patterns.
+
+    Guards with ``getattr`` so subcommands that legitimately omit either flag
+    are unaffected. On the first failure prints a located message naming the
+    argument, the expected pattern and the offending value (FR-010), and
+    signals exit code 2. Returns ``None`` when both values are valid (or absent).
+
+    Args:
+        args: Parsed argparse namespace.
+
+    Returns:
+        ``2`` if validation failed (caller should return this exit code), else
+        ``None``.
+    """
+    checks: tuple[tuple[str, str | None, TypeAdapter, str, str], ...] = (
+        ("--semester", getattr(args, "semester", None), _SEMESTER_TA,
+         "SemesterCode", r"^\d{4}-[12SW]$"),
+        ("--course", getattr(args, "course", None), _COURSE_TA,
+         "CourseSlug", r"^[a-z][a-z0-9-]{1,39}$"),
+    )
+    examples = {"--semester": "2026-1", "--course": "anatomy"}
+    for flag, value, adapter, type_name, pattern in checks:
+        if value is None:
+            continue
+        try:
+            adapter.validate_python(value)
+        except ValueError:
+            print(
+                f"ERROR [examen]: input/config validation error — {flag} "
+                f"{value!r} does not match {type_name} pattern '{pattern}' "
+                f"(e.g. {examples[flag]!r})",
+                file=sys.stderr,
+            )
+            return 2
+    return None
+
+
 def app(argv: list[str] | None = None) -> int:
     """Entry point for the ``examen`` console script.
 
@@ -598,6 +643,15 @@ def app(argv: list[str] | None = None) -> int:
     if handler is None:  # pragma: no cover
         parser.error(f"unknown command: {args.command}")
         return 2
+
+    # Boundary validation (INJ-01) — reject malformed --semester / --course
+    # BEFORE any handler runs, hence before output/paths.py interpolates them
+    # into a filesystem path (f"{semester}-{course_slug}"). Without this a
+    # traversal payload like "../../etc" reaches mkdir/write_text. app() has no
+    # top-level `except ValueError`, so we map the failure to exit 2 locally.
+    code = _validate_semester_course(args)
+    if code is not None:
+        return code
 
     # Pipeline exception trap (T016 — exit codes 3/4). Placed in app() so all
     # future pipeline wiring inherits the mapping without each handler repeating

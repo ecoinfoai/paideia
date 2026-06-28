@@ -358,3 +358,80 @@ class TestBuildPipelineValueError:
             ]
         )
         assert code == 2
+
+
+# ---------------------------------------------------------------------------
+# --semester / --course boundary validation (INJ-01) → exit 2 before path use
+# ---------------------------------------------------------------------------
+
+
+class TestSemesterCourseValidation:
+    """Malformed --semester / --course must be rejected at the CLI boundary.
+
+    examen interpolates these values into filesystem paths (output/paths.py
+    builds ``f"{semester}-{course_slug}"``). A path-traversal payload such as
+    ``../../etc`` would otherwise reach ``mkdir``/``write_text``. Validation
+    must happen BEFORE any path is constructed (security finding INJ-01).
+    """
+
+    def test_e2_traversal_semester_returns_exit2(self) -> None:
+        """E2 — '../../etc' as --semester is rejected with exit 2."""
+        code = _invoke(["ingest", "--semester", "../../etc", "--course", "anatomy"])
+        assert code == 2
+
+    def test_e3_traversal_course_creates_no_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """E3 — '../passwd' as --course exits 2 and creates no filesystem dirs."""
+        # Default data root is the relative ``data/`` dir, resolved against cwd.
+        monkeypatch.chdir(tmp_path)
+        code = _invoke(["ingest", "--semester", "2026-1", "--course", "../passwd"])
+        assert code == 2
+        # No path was constructed → nothing created under (or escaping) the root.
+        assert not (tmp_path / "data").exists()
+        assert not (tmp_path.parent / "passwd").exists()
+
+    def test_e4_semester_with_slash_returns_exit2(self) -> None:
+        """E4 — a slash in --semester is rejected with exit 2."""
+        code = _invoke(["ingest", "--semester", "2026-1/x", "--course", "anatomy"])
+        assert code == 2
+
+    def test_e5_bad_term_char_returns_exit2(self) -> None:
+        """E5 — an out-of-range term ('99') in --semester is rejected (exit 2)."""
+        code = _invoke(["ingest", "--semester", "2026-99", "--course", "anatomy"])
+        assert code == 2
+
+    def test_e6_uppercase_course_returns_exit2(self) -> None:
+        """E6 — an uppercase --course violates CourseSlug and exits 2."""
+        code = _invoke(["ingest", "--semester", "2026-1", "--course", "ANATOMY"])
+        assert code == 2
+
+    def test_message_includes_value_and_pattern(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """FR-010 — the located error names the offending value and the pattern."""
+        code = _invoke(["ingest", "--semester", "../../etc", "--course", "anatomy"])
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "../../etc" in err
+        assert r"^\d{4}-[12SW]$" in err
+
+    def test_e1_valid_args_pass_validation(self, tmp_path: Path) -> None:
+        """E1 — valid --semester/--course are NOT rejected as validation errors.
+
+        Reaches normal handling (may exit 0/3 for other reasons, never 2 for
+        the semester/course boundary).
+        """
+        valid_bp = _write_valid_blueprint(tmp_path)
+        code = _invoke(
+            [
+                "ingest",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--blueprint",
+                str(valid_bp),
+            ]
+        )
+        assert code != 2
