@@ -37,9 +37,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import time
 from pathlib import Path
 
+import pytest
 import responses
 from immersio.email.pipeline import run_email_dispatch
 
@@ -196,6 +198,34 @@ def test_dry_run_dryrun_csv_truncate_write_byte_identical(email_fixture) -> None
             "FR-C03a violated: truncate-write should be byte-identical for "
             "identical input"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 2b — dry-run dispatch log csv is owner-only (DAR-01 / FR-004)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 0o600 protection")
+@responses.activate
+def test_dry_run_dryrun_csv_is_owner_only(email_fixture) -> None:
+    """FR-004/SC-002: the dry-run dispatch log carries full DispatchLogRow
+    PII (student_id, name_kr, email) and must be owner-only regardless of
+    send/dry-run mode or umask. Pre-seed a group/world-readable file so the
+    fix must actively tighten it, not merely rely on a fresh create.
+    """
+    gold_dir = email_fixture["gold_email_dir"]
+    gold_dir.mkdir(parents=True, exist_ok=True)
+    dryrun_log = gold_dir / "메일_발송로그_dryrun.csv"
+    # Pre-seed 0644 so the assert fails unless _write_log_csv fchmods.
+    dryrun_log.write_bytes(b"stale\n")
+    os.chmod(dryrun_log, 0o644)
+
+    rc = run_email_dispatch(_args())
+    assert rc == 0
+    assert dryrun_log.is_file()
+    mode = dryrun_log.stat().st_mode & 0o777
+    assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+    assert mode == 0o600, oct(mode)
 
 
 # ---------------------------------------------------------------------------

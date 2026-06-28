@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -1161,8 +1162,13 @@ def _write_log_csv(rows: list[DispatchLogRow], path: Path, *, truncate: bool = F
             Default ``False`` matches v0.1.0 append-mode behaviour for the
             send-mode log csv.
     """
+    # DAR-01/FR-004: the dispatch log (send AND dry-run) carries full
+    # DispatchLogRow PII; force owner-only on the fd. fchmod ignores umask
+    # and also tightens a pre-existing 0644 file. CSV bytes are unchanged.
     if truncate:
-        with path.open("w", encoding="utf-8", newline="") as f:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=list(DispatchLogRow.COLUMN_ORDER))
             writer.writeheader()
             for row in rows:
@@ -1170,7 +1176,9 @@ def _write_log_csv(rows: list[DispatchLogRow], path: Path, *, truncate: bool = F
                 writer.writerow({c: dump[c] for c in DispatchLogRow.COLUMN_ORDER})
         return
     is_new = not path.is_file()
-    with path.open("a", encoding="utf-8", newline="") as f:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(DispatchLogRow.COLUMN_ORDER))
         if is_new:
             writer.writeheader()
