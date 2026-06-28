@@ -35,12 +35,18 @@ _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 # ``generate/bundle.py`` but DROPS the trailing ``(?![가-힣])`` lookahead the
 # label-oriented metric-codex pattern carries: needs-map scrubs free-text
 # student prose where the honorific ``님`` and josa (``께``/``이``/``은``…) attach
-# directly to the role token (``박교수님께``), so a right Hangul-boundary
-# assertion would never fire and the mention would leak. The leading lookbehind
-# ``(?<![가-힣])`` is kept (prevents left mid-word slices like ``대박사건``). The
-# tradeoff is safe over-redaction of rare noun+role compounds (``방사선생물학``)
-# — the conservative bias for an LLM-facing redactor (the model only ever sees
-# ``[REDACTED]``; no leak, no crash).
+# directly to the role token (``박교수님께``/``박교수다``/``박교수랑``), so a right
+# Hangul-boundary assertion (or an honorific-aware lookahead) would miss those
+# josa forms and leak the mention. Recall-first is the correct bias for a
+# security redactor.
+# The leading ``(?<![가-힣])`` lookbehind only requires the match to START at a
+# non-Hangul boundary; it does NOT prevent role tokens embedded in a larger
+# Hangul compound from matching once a valid surname prefix sits at a boundary.
+# So role-token-containing compounds are OVER-redacted: ``방사선생물학`` →
+# ``[REDACTED]물학``, ``대박사건`` → ``[REDACTED]건`` (``대`` is the 1-Hangul
+# prefix at a boundary, ``박사`` the role). This over-redaction is an ACCEPTED
+# conservative tradeoff — over-redact rather than leak; the model only ever sees
+# ``[REDACTED]`` (no leak, no crash).
 _THIRD_PARTY_NAME_ROLE_PATTERN = re.compile(
     r"(?<![가-힣])[가-힣]{1,2}(?:교수|선생님|선생|박사|쌤|조교)"
 )
@@ -85,11 +91,15 @@ def redact(text: str, names: Iterable[str]) -> tuple[str, bool]:
     if not isinstance(text, str):
         raise TypeError(f"redact: expected str text, got {type(text).__name__}.")
 
-    # Phone BEFORE student-id so an 11-digit mobile is consumed whole and does
-    # not leave a stray trailing digit for a partial \d{10} match.
-    redacted = _PHONE_PATTERN.sub(_REDACTED_TOKEN, text)
-    redacted = _RRN_PATTERN.sub(_REDACTED_TOKEN, redacted)
+    # Fully-anchored patterns (RRN, birthdate) BEFORE the greedy phone: the
+    # phone regex would otherwise eat a substring of an RRN (e.g. 01231-1234
+    # inside 901231-1234567), leaving residual digits the RRN scrub never sees
+    # and flipping validation_flag falsely True (PII-01 partial leak). Phone
+    # still runs BEFORE the \d{10} student-id scrub so an 11-digit mobile is
+    # consumed whole, with no stray trailing digit.
+    redacted = _RRN_PATTERN.sub(_REDACTED_TOKEN, text)
     redacted = _BIRTHDATE_PATTERN.sub(_REDACTED_TOKEN, redacted)
+    redacted = _PHONE_PATTERN.sub(_REDACTED_TOKEN, redacted)
     redacted = _EMAIL_PATTERN.sub(_REDACTED_TOKEN, redacted)
     redacted = _THIRD_PARTY_NAME_ROLE_PATTERN.sub(_REDACTED_TOKEN, redacted)
     redacted = _STUDENT_ID_RE.sub(_REDACTED_TOKEN, redacted)

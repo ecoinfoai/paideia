@@ -119,6 +119,9 @@ def test_redact_strips_korean_rrn() -> None:
     text = "주민번호 901231-1234567 노출됨."
     redacted, ok = redact(text, names=[])
     assert "901231-1234567" not in redacted
+    # No residual digit may survive — the greedy phone scrub must NOT eat a
+    # substring of the RRN (PII-01 partial leak: 9[REDACTED]567).
+    assert not any(ch.isdigit() for ch in redacted)
     assert ok is True
 
 
