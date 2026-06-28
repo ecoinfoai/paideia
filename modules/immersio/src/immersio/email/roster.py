@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import EmailMappingEntry
 
 from ..normalize.student_id import normalize_student_id
@@ -166,12 +167,16 @@ def write_mapping_silver(entries: list[EmailMappingEntry], silver_path: Path) ->
         "original_timestamp": [e.original_timestamp for e in entries],
     }
     table = pa.table(columns, schema=schema)
-    pq.write_table(
-        table,
+    # Owner-only via atomic temp→rename (DAR-02) — keeps determinism levers.
+    atomic_write(
         silver_path,
-        use_dictionary=False,
-        write_statistics=False,
-        compression="snappy",
+        lambda p: pq.write_table(
+            table,
+            p,
+            use_dictionary=False,
+            write_statistics=False,
+            compression="snappy",
+        ),
     )
 
 

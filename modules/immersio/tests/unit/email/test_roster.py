@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
 import pytest
@@ -125,3 +126,22 @@ def test_silver_parquet_byte_identical_two_runs(tmp_path: Path) -> None:
     write_mapping_silver(entries, silver_a)
     write_mapping_silver(entries, silver_b)
     assert silver_a.read_bytes() == silver_b.read_bytes()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 0o600 protection")
+def test_mapping_silver_is_owner_only(tmp_path: Path) -> None:
+    """The student_id↔email mapping parquet must be mode 0o600 (DAR-02)."""
+    csv_path = tmp_path / "bronze.csv"
+    _write_csv(
+        csv_path,
+        [
+            ["2026/03/03 11:03:36 AM GMT+9", "alice@example.com", "1234567001"],
+            ["2026/03/03 11:04:39 AM GMT+9", "bob@example.com", "1234567002"],
+        ],
+    )
+    entries = load_email_mapping(csv_path)
+    silver = tmp_path / "mapping.parquet"
+    write_mapping_silver(entries, silver)
+    mode = silver.stat().st_mode & 0o777
+    assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+    assert mode == 0o600, oct(mode)

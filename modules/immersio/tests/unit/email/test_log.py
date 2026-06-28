@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -50,6 +51,34 @@ def _row(
         exam_name="중간고사",
         cohort=CohortLabel.ALL,
     )
+
+
+# ---------------------------------------------------------------------------
+# Owner-only permissions (DAR-01)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 0o600 protection")
+def test_new_dispatch_log_is_owner_only(tmp_path: Path) -> None:
+    """A freshly created dispatch log must be mode 0o600 (DAR-01)."""
+    log = tmp_path / "메일_발송로그.csv"
+    append_dispatch_log_row(log, _row("1234567001", DispatchStatus.SUCCESS))
+    mode = log.stat().st_mode & 0o777
+    assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+    assert mode == 0o600, oct(mode)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 0o600 protection")
+def test_preexisting_0644_log_becomes_owner_only(tmp_path: Path) -> None:
+    """A pre-existing 0644 log is tightened to 0o600 when reopened (DAR-01)."""
+    log = tmp_path / "메일_발송로그.csv"
+    log.touch()
+    os.chmod(log, 0o644)
+    assert log.stat().st_mode & 0o777 == 0o644
+    append_dispatch_log_row(log, _row("1234567001", DispatchStatus.SUCCESS))
+    mode = log.stat().st_mode & 0o777
+    assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+    assert mode == 0o600, oct(mode)
 
 
 # ---------------------------------------------------------------------------

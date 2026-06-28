@@ -109,8 +109,10 @@ def _exclusive_lock(path: Path) -> Iterator[int]:
     another process (FR-D02 / R6 — concurrent run).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    # O_RDWR|O_CREAT — file exists or is created with default mode
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    # O_RDWR|O_CREAT — owner-only on create; fchmod re-asserts 0o600 even
+    # for a pre-existing looser log (ignores umask, idempotent). DAR-01.
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    os.fchmod(fd, 0o600)
     locked = False
     try:
         try:
