@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="idea/paideia_pipeline_eng.svg" alt="paideia pipeline: diagnose → teach → assess → reflect" width="100%">
+  <img src="docs/assets/paideia_pipeline_eng.svg" alt="paideia pipeline: diagnose → teach → assess → reflect" width="100%">
 </p>
 
 # paideia
