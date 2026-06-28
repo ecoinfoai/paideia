@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import FreetextAuditRow
 
 
@@ -44,7 +45,8 @@ def write_freetext_audit(rows: Iterable[FreetextAuditRow], silver_dir: Path) -> 
         # downstream parquet readers have a stable schema.
         canonical_columns = list(FreetextAuditRow.model_fields.keys())
         df = pd.DataFrame(columns=canonical_columns)
-    df.to_parquet(target, index=False, compression="snappy")
+    # Owner-only atomic temp→rename for the per-token PII audit (DAR-02/LEAK-04).
+    atomic_write(target, lambda p: df.to_parquet(p, index=False, compression="snappy"))
     return target
 
 

@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 # FreeTextRow imported lazily where needed
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import (
     ClusterAssignmentRow,
     ClusterReport,
@@ -414,7 +415,8 @@ def _scale_reliability_rows_to_df(rows: list[ScaleReliabilityRow]) -> pd.DataFra
 
 def _write_silver_atomic(silver_dir: Path, name: str, df: pd.DataFrame) -> None:
     silver_dir.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(silver_dir / name, index=False)
+    # Owner-only atomic temp→rename for student-PII silver parquet (DAR-02).
+    atomic_write(silver_dir / name, lambda p: df.to_parquet(p, index=False))
 
 
 def _write_manifest_atomic(silver_dir: Path, manifest: NeedsMapManifest) -> None:

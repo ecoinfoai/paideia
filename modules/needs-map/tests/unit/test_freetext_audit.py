@@ -10,6 +10,7 @@ Spec: 003-needs-map-v0-1-1/tasks.md T051; FR-031.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -78,6 +79,17 @@ def test_write_freetext_audit_empty_input_writes_empty_parquet(
     assert df.empty
     canonical = list(FreetextAuditRow.model_fields.keys())
     assert list(df.columns) == canonical
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 0o600 protection")
+def test_write_freetext_audit_is_owner_only(tmp_path: Path) -> None:
+    """freetext_audit.parquet must be mode 0o600 (DAR-02/LEAK-04)."""
+    from needs_map.free_text.audit import write_freetext_audit
+
+    parquet_path = write_freetext_audit([_row()], tmp_path)
+    mode = parquet_path.stat().st_mode & 0o777
+    assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+    assert mode == 0o600, oct(mode)
 
 
 def test_freetext_audit_row_char_offsets_invariant(tmp_path: Path) -> None:
