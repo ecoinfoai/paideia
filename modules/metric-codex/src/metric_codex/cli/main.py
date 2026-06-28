@@ -569,9 +569,9 @@ def _run_ingest(args: argparse.Namespace) -> int:
 
     # F1/F2 transparency: report which upstream sources were found vs absent so
     # operators can detect silent degrade without inspecting the manifest.
-    _school_status = "found" if (
-        school_explicit or school_map.is_file() or school_excel.is_file()
-    ) else "absent"
+    _school_status = (
+        "found" if (school_explicit or school_map.is_file() or school_excel.is_file()) else "absent"
+    )
     _immersio_status = "found" if immersio_dir_arg is not None else "absent"
     _needsmap_status = "found" if needsmap_dir_arg is not None else "absent"
     print(
@@ -736,8 +736,7 @@ def _resolve_student(
         pseudonym = student_arg
     else:
         raise LocatedInputError(
-            f"--student must be a 10-digit student_id or S\\d{{3,}} pseudonym; "
-            f"got {student_arg!r}",
+            f"--student must be a 10-digit student_id or S\\d{{3,}} pseudonym; got {student_arg!r}",
             expected="10-digit student_id or S001 pseudonym",
             actual=student_arg,
         )
@@ -1177,8 +1176,7 @@ def _run_distribute(args: argparse.Namespace) -> int:
     # Detect assigned codex students who have no Gold md (MC-U21).
     md_sids: set[str] = set(names)
     missing_gold: list[str] = sorted(
-        sid for sid in codex_sids
-        if sid in roster_sids and sid not in md_sids
+        sid for sid in codex_sids if sid in roster_sids and sid not in md_sids
     )
 
     # 5) Write per-advisor bundles (atomic, whole-tree clear, no cross-leak).

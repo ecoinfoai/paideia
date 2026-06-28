@@ -210,6 +210,7 @@ class InputHashCache:
             ensure_ascii=False,
             indent=2,
         )
+
         # Atomic write so a crash mid-write can never leave a corrupt cache .json
         # that a later run would read and skip the backend (헌장 V: no partial output).
         def _write_cache(tmp: Path) -> None:
@@ -397,7 +398,7 @@ class ApiBackend(LLMBackend):
 
         # Select the first text block; raise a located error if none is found.
         raw_text: str | None = None
-        for block in (message.content or []):
+        for block in message.content or []:
             if getattr(block, "type", None) == "text":
                 raw_text = block.text
                 break

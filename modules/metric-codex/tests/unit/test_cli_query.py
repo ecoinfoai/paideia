@@ -31,7 +31,7 @@ _SEM = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEM}-{_COURSE}"
 _SID_BOTH = "2026000001"  # has minimal + rich
-_SID_MIN = "2026000002"   # minimal only
+_SID_MIN = "2026000002"  # minimal only
 _NAME_BOTH = "김철수"
 _NAME_MIN = "이영희"
 
@@ -133,13 +133,19 @@ def _build_ingested_data_root(tmp_path: Path) -> Path:
     _make_school_map(bronze / "성적출석_map.yaml")
     _make_immersio_silver(immersio)
 
-    rc = app([
-        "ingest",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--now", "2026-06-01T00:00:00Z",
-    ])
+    rc = app(
+        [
+            "ingest",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            "2026-06-01T00:00:00Z",
+        ]
+    )
     assert rc == 0, "ingest must succeed to set up query tests"
     return data_root
 
@@ -163,29 +169,45 @@ class TestQueryBothLayersStudent:
     def test_exit_zero_with_question_id(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc == 0
 
     def test_output_contains_citation(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         # Should contain the citation key or source
         assert "score_total" in captured.out or "school_excel" in captured.out
@@ -195,28 +217,43 @@ class TestQueryBothLayersStudent:
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
         # S001 is the smaller student_id (SID_BOTH=2026000001 < SID_MIN=2026000002)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", "S001",
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                "S001",
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc == 0
 
     def test_freeform_text_query(self, tmp_path, capsys):
         """--text freeform search returns exit 0 and output."""
         data_root = _build_ingested_data_root(tmp_path)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--text", "score_total",
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--text",
+                "score_total",
+            ]
+        )
         assert rc == 0
 
 
@@ -231,30 +268,46 @@ class TestQueryMinimalOnlyStudent:
     def test_prints_no_evidence_sentinel(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_MIN,
-            "--question-id", "q_domain",
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_MIN,
+                "--question-id",
+                "q_domain",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         assert "근거 없음" in captured.out
 
     def test_exit_zero_even_for_no_evidence(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_MIN,
-            "--question-id", "q_domain",
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_MIN,
+                "--question-id",
+                "q_domain",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc == 0
 
 
@@ -268,26 +321,40 @@ class TestQueryUnknownStudent:
 
     def test_unknown_student_id_exits_two(self, tmp_path):
         data_root = _build_ingested_data_root(tmp_path)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", "9999999999",  # not in store
-            "--text", "score",
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                "9999999999",  # not in store
+                "--text",
+                "score",
+            ]
+        )
         assert rc == 2
 
     def test_unknown_pseudonym_exits_two(self, tmp_path):
         data_root = _build_ingested_data_root(tmp_path)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", "S999",  # not in map
-            "--text", "score",
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                "S999",  # not in map
+                "--text",
+                "score",
+            ]
+        )
         assert rc == 2
 
 
@@ -302,47 +369,71 @@ class TestQueryReveal:
     def test_reveal_shows_name(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--reveal",
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--reveal",
+            ]
+        )
         captured = capsys.readouterr()
         assert _NAME_BOTH in captured.out
 
     def test_no_reveal_hides_name(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         assert _NAME_BOTH not in captured.out
 
     def test_reveal_also_shows_student_id(self, tmp_path, capsys):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--reveal",
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--reveal",
+            ]
+        )
         captured = capsys.readouterr()
         assert _SID_BOTH in captured.out
 
@@ -357,30 +448,45 @@ class TestQueryArgparseBoundaries:
 
     def test_missing_student_flag_exits_two(self, tmp_path):
         """--student is required; omitting it should exit 2."""
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(tmp_path),
-            "--text", "score",
-            # --student missing
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(tmp_path),
+                "--text",
+                "score",
+                # --student missing
+            ]
+        )
         assert rc == 2
 
     def test_question_id_and_text_mutually_exclusive(self, tmp_path):
         """--question-id and --text are mutually exclusive."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--text", "score",
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--text",
+                "score",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         # Should exit 2 (argparse mutual exclusion)
         assert rc == 2
 
@@ -391,14 +497,20 @@ class TestQueryArgparseBoundaries:
         reachable in the handler (M-5/M-6).
         """
         data_root = _build_ingested_data_root(tmp_path)
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            # neither --question-id nor --text
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                # neither --question-id nor --text
+            ]
+        )
         assert rc == 2
 
 
@@ -414,16 +526,25 @@ class TestQueryJsonOutput:
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
         json_out = tmp_path / "answer.json"
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--json", str(json_out),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--json",
+                str(json_out),
+            ]
+        )
         assert rc == 0
         assert json_out.is_file()
         data = json.loads(json_out.read_text(encoding="utf-8"))
@@ -441,38 +562,56 @@ class TestDryRunHandler:
     def test_dry_run_exits_zero(self, tmp_path):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        rc = app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc == 0
 
     def test_dry_run_not_not_implemented(self, tmp_path):
         """dry-run must no longer be a stub (not exit 3)."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        rc = app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc != 3
 
     def test_dry_run_creates_staging_files(self, tmp_path):
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         own_silver = data_root / "silver" / "metric-codex" / _KEY
         staging_dir = own_silver / "staging"
         assert staging_dir.is_dir()
@@ -483,13 +622,19 @@ class TestDryRunHandler:
         """One staging file per student in the store."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         own_silver = data_root / "silver" / "metric-codex" / _KEY
         json_files = list((own_silver / "staging").glob("*.json"))
         # 2 students in the scenario
@@ -499,13 +644,19 @@ class TestDryRunHandler:
         """PRIV-01/SC-004: staging files must contain no 10-digit ids or names."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         own_silver = data_root / "silver" / "metric-codex" / _KEY
         sid_pattern = re.compile(r"\b\d{10}\b")
         for f in (own_silver / "staging").glob("*.json"):
@@ -519,13 +670,19 @@ class TestDryRunHandler:
         """dry-run prints the staging file count and paths."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "dry-run",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "dry-run",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         # Some indication of count or path should appear
         assert "staging" in captured.out or "S001" in captured.out or "2" in captured.out
@@ -543,15 +700,23 @@ class TestQueryAvailableLayers:
         """Both-layers student (school Excel + immersio) shows 'minimal, rich' in output."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         # Must contain the available-layers header line
         assert "가용 층:" in captured.out, (
@@ -565,15 +730,23 @@ class TestQueryAvailableLayers:
         """Minimal-only student (school Excel only) shows only 'minimal' in the layers line."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_MIN,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_MIN,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
         assert "가용 층:" in captured.out, (
             f"Expected '가용 층:' line in stdout; got:\n{captured.out!r}"
@@ -592,16 +765,25 @@ class TestQueryAvailableLayers:
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
         json_out = tmp_path / "qa.json"
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--json", str(json_out),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--json",
+                str(json_out),
+            ]
+        )
         assert rc == 0
         data = json.loads(json_out.read_text(encoding="utf-8"))
         assert "available_layers" in data
@@ -625,6 +807,7 @@ class TestQueryRevealNonBijectiveMap:
     def _corrupt_pseudonym_map(self, data_root: Path) -> None:
         """Rewrite pseudonym_map.parquet so two different students share S001."""
         import pandas as pd
+
         silver = data_root / "silver" / "metric-codex" / _KEY
         pseudonym_path = silver / "pseudonym_map.parquet"
         df = pd.read_parquet(pseudonym_path)
@@ -638,19 +821,25 @@ class TestQueryRevealNonBijectiveMap:
         qs_path = _qs_path(data_root)
         self._corrupt_pseudonym_map(data_root)
 
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--reveal",
-        ])
-        assert rc == 2, (
-            f"query --reveal with non-bijective map must exit 2, got rc={rc}"
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--reveal",
+            ]
         )
+        assert rc == 2, f"query --reveal with non-bijective map must exit 2, got rc={rc}"
 
     def test_non_bijective_error_names_duplicate(
         self, tmp_path: Path, capsys: pytest.CaptureFixture
@@ -660,16 +849,24 @@ class TestQueryRevealNonBijectiveMap:
         qs_path = _qs_path(data_root)
         self._corrupt_pseudonym_map(data_root)
 
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-            "--reveal",
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+                "--reveal",
+            ]
+        )
         captured = capsys.readouterr()
         # Error should mention the duplicate pseudonym or bijection failure.
         combined = captured.out + captured.err
@@ -678,23 +875,29 @@ class TestQueryRevealNonBijectiveMap:
             f"stdout={captured.out!r} stderr={captured.err!r}"
         )
 
-    def test_non_bijective_map_also_exits_two_without_reveal(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_bijective_map_also_exits_two_without_reveal(self, tmp_path: Path) -> None:
         """Defense-in-depth: corrupt map exits 2 even without --reveal."""
         data_root = _build_ingested_data_root(tmp_path)
         qs_path = _qs_path(data_root)
         self._corrupt_pseudonym_map(data_root)
 
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--student", _SID_BOTH,
-            "--question-id", "q_total",
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--student",
+                _SID_BOTH,
+                "--question-id",
+                "q_total",
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         assert rc == 2, (
             f"query without --reveal should also exit 2 on non-bijective map, got rc={rc}"
         )

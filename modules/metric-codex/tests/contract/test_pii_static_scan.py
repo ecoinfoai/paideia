@@ -171,9 +171,7 @@ def test_email_scan_catches_real_email() -> None:
     """Detector must flag a real-shaped email address."""
     hits = _scan_text("contact: user@example.ac.kr")
     cats = [c for c, _ in hits]
-    assert "email" in cats, (
-        "Email regex false-negative: 'user@example.ac.kr' was not flagged."
-    )
+    assert "email" in cats, "Email regex false-negative: 'user@example.ac.kr' was not flagged."
 
 
 def test_student_id_scan_catches_real_id() -> None:
@@ -309,8 +307,7 @@ def test_templates_dir_is_tracked() -> None:
         )
         # check-ignore exits 0 if ignored, 1 if NOT ignored.
         assert result.returncode == 1, (
-            f"templates/ appears to be gitignored but should be tracked: "
-            f"{_TEMPLATES_DIR}"
+            f"templates/ appears to be gitignored but should be tracked: {_TEMPLATES_DIR}"
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pytest.skip("git not available — skipping gitignore assertion")

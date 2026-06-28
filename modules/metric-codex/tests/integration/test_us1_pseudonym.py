@@ -147,7 +147,7 @@ def test_build_pseudonym_map_preserves_prior_and_appends_above_max() -> None:
     prior: dict[str, str] = {e.student_id: e.pseudonym for e in prior_entries}
 
     identities = {
-        "2026000001": "김철수",   # sorts first — the renaming risk
+        "2026000001": "김철수",  # sorts first — the renaming risk
         "2026000002": "이영희",
         "2026000003": "박민준",
     }

@@ -96,10 +96,14 @@ def _ingest(data_root: Path, *, now: str) -> int:
     return app(
         [
             "ingest",
-            "--semester", SEMESTER,
-            "--course", COURSE,
-            "--data-root", str(data_root),
-            "--now", now,
+            "--semester",
+            SEMESTER,
+            "--course",
+            COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            now,
         ]
     )
 
@@ -108,11 +112,16 @@ def _distribute(data_root: Path, *, roster_path: Path, now: str) -> int:
     return app(
         [
             "distribute",
-            "--semester", SEMESTER,
-            "--course", COURSE,
-            "--data-root", str(data_root),
-            "--roster", str(roster_path),
-            "--now", now,
+            "--semester",
+            SEMESTER,
+            "--course",
+            COURSE,
+            "--data-root",
+            str(data_root),
+            "--roster",
+            str(roster_path),
+            "--now",
+            now,
         ]
     )
 
@@ -200,9 +209,7 @@ class TestManifestLineageSurvival:
 
         known_ids = set(manifest.input_hashes) | set(ledger_df["source_id"])
         unresolved = set(codex_df["source_id"]) - known_ids
-        assert not unresolved, (
-            f"codex_entry source_ids not in input_hashes ∪ ledger: {unresolved}"
-        )
+        assert not unresolved, f"codex_entry source_ids not in input_hashes ∪ ledger: {unresolved}"
 
     def test_roster_hash_in_config_ids_after_distribute(
         self, two_run_root: tuple[Path, str]
@@ -217,15 +224,23 @@ class TestManifestLineageSurvival:
         _make_question_set(qs_path)
 
         # Need generate first so distribute has student mds to copy.
-        rc = app([
-            "generate",
-            "--semester", SEMESTER,
-            "--course", COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-            "--backend", "none",
-            "--now", _NOW_B,
-        ])
+        rc = app(
+            [
+                "generate",
+                "--semester",
+                SEMESTER,
+                "--course",
+                COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+                "--backend",
+                "none",
+                "--now",
+                _NOW_B,
+            ]
+        )
         assert rc == 0, f"generate failed rc={rc}"
 
         rc = _distribute(data_root, roster_path=roster_path, now=_NOW_DIST)
@@ -254,52 +269,60 @@ def _write_combined_parquet(path: Path, *, sid: str, name: str) -> None:
     """Write a minimal 진단×시험결합.parquet row for one student."""
     axis_fields: dict[str, object] = {}
     for axis in [
-        "digital_efficacy", "motivation", "time_availability", "material_preference",
-        "study_strategy", "study_environment", "social_learning", "feedback_seeking",
+        "digital_efficacy",
+        "motivation",
+        "time_availability",
+        "material_preference",
+        "study_strategy",
+        "study_environment",
+        "social_learning",
+        "feedback_seeking",
     ]:
         axis_fields[f"{axis}_raw"] = 1.0
         axis_fields[f"{axis}_z"] = 0.1
         axis_fields[f"{axis}_missing"] = False
 
-    rows = [{
-        "student_id": sid,
-        "name_kr": name,
-        "on_roster": True,
-        "section": "A",
-        "semester": SEMESTER,
-        "course_slug": COURSE,
-        **axis_fields,
-        "cluster_id": 1,
-        "cluster_label": "표준형",
-        "cluster_distance": 0.5,
-        "exam_taken": True,
-        "total_score": 80.0,
-        "score_percent": 80.0,
-        "section_percentile": 75.0,
-        "cohort_percentile": 70.0,
-        "z_score": 1.2,
-        "chapter_correct_rates": json.dumps({"순환": 0.9}, ensure_ascii=False),
-        "source_correct_rates": json.dumps({}, ensure_ascii=False),
-        "difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
-        "expected_difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
-        "item_type_correct_rates": json.dumps({}, ensure_ascii=False),
-        "interest_chapters_correct_rate": None,
-        "aversion_chapters_correct_rate": None,
-        "prior_readiness_q5": None,
-        "prior_readiness_q6": None,
-        "time_pattern_q21": None,
-        "time_pattern_q22": None,
-        "time_pattern_q23": None,
-        "interest_topics_q9": None,
-        "interest_topics_q10": None,
-        "interest_topics_q11": None,
-        "categorical_intent_q12": None,
-        "categorical_intent_q13": None,
-        "진단응답": True,
-        "시험응시": True,
-        "needs_map_schema_version": "0.1.0",
-        "immersio_phase2_schema_version": "0.1.0",
-    }]
+    rows = [
+        {
+            "student_id": sid,
+            "name_kr": name,
+            "on_roster": True,
+            "section": "A",
+            "semester": SEMESTER,
+            "course_slug": COURSE,
+            **axis_fields,
+            "cluster_id": 1,
+            "cluster_label": "표준형",
+            "cluster_distance": 0.5,
+            "exam_taken": True,
+            "total_score": 80.0,
+            "score_percent": 80.0,
+            "section_percentile": 75.0,
+            "cohort_percentile": 70.0,
+            "z_score": 1.2,
+            "chapter_correct_rates": json.dumps({"순환": 0.9}, ensure_ascii=False),
+            "source_correct_rates": json.dumps({}, ensure_ascii=False),
+            "difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+            "expected_difficulty_correct_rates": json.dumps({}, ensure_ascii=False),
+            "item_type_correct_rates": json.dumps({}, ensure_ascii=False),
+            "interest_chapters_correct_rate": None,
+            "aversion_chapters_correct_rate": None,
+            "prior_readiness_q5": None,
+            "prior_readiness_q6": None,
+            "time_pattern_q21": None,
+            "time_pattern_q22": None,
+            "time_pattern_q23": None,
+            "interest_topics_q9": None,
+            "interest_topics_q10": None,
+            "interest_topics_q11": None,
+            "categorical_intent_q12": None,
+            "categorical_intent_q13": None,
+            "진단응답": True,
+            "시험응시": True,
+            "needs_map_schema_version": "0.1.0",
+            "immersio_phase2_schema_version": "0.1.0",
+        }
+    ]
     pd.DataFrame(rows).to_parquet(path)
 
 
@@ -312,11 +335,13 @@ class TestSupersedeLineageInteraction:
     omits the purged source — so LINEAGE-01 has nothing to complain about.
     """
 
-    _INDIVIDUAL_SOURCE_IDS = frozenset({
-        "immersio:학생지표",
-        "needs-map:factor_scores",
-        "needs-map:cluster_assignment",
-    })
+    _INDIVIDUAL_SOURCE_IDS = frozenset(
+        {
+            "immersio:학생지표",
+            "needs-map:factor_scores",
+            "needs-map:cluster_assignment",
+        }
+    )
     _COMBINED_SOURCE_ID = "immersio:진단×시험결합"
 
     @pytest.fixture()
@@ -339,7 +364,15 @@ class TestSupersedeLineageInteraction:
             axis_fields[f"{axis}_z"] = 0.1
             axis_fields[f"{axis}_missing"] = False
 
-        factor_rows = [{"student_id": SID_A, "on_roster": True, "responded": True, "section": "A", **axis_fields}]
+        factor_rows = [
+            {
+                "student_id": SID_A,
+                "on_roster": True,
+                "responded": True,
+                "section": "A",
+                **axis_fields,
+            }
+        ]
         pd.DataFrame(factor_rows).to_parquet(needsmap / "factor_scores.parquet")
 
         cluster_rows = [{"student_id": SID_A, "cluster_id": 1, "distance_to_centroid": 0.5}]
@@ -401,6 +434,7 @@ class TestSupersedeLineageInteraction:
         manifest = read_manifest(_manifest_path(post_supersede_root))
 
         from metric_codex.store.codex import read_existing_store
+
         entries, records = read_existing_store(sd)
 
         violations = check_lineage(

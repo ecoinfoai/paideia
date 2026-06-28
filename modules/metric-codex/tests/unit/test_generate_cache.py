@@ -204,9 +204,7 @@ class TestApiBackend:
             (anthropic.PermissionDeniedError, 403),
         ],
     )
-    def test_config_error_raises_located_input_error(
-        self, monkeypatch, error_cls, status
-    ) -> None:
+    def test_config_error_raises_located_input_error(self, monkeypatch, error_cls, status) -> None:
         """T043: config-class SDK errors surface as LocatedInputError (exit 2).
 
         Pre-fix: the blanket except-Exception wrapped these as
@@ -361,9 +359,7 @@ class TestSubscriptionBackendMalformedResponse:
 
         # Malformed: missing slot_id
         malformed = {"raw_text": "some text", "model": "claude-sonnet-4-6"}
-        (responses / "S001.json").write_text(
-            __import__("json").dumps(malformed), encoding="utf-8"
-        )
+        (responses / "S001.json").write_text(__import__("json").dumps(malformed), encoding="utf-8")
 
         backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
         with pytest.raises(LocatedInputError):
@@ -380,9 +376,7 @@ class TestSubscriptionBackendMalformedResponse:
 
         # Malformed: missing raw_text
         malformed = {"slot_id": "S001", "model": "claude-sonnet-4-6"}
-        (responses / "S001.json").write_text(
-            __import__("json").dumps(malformed), encoding="utf-8"
-        )
+        (responses / "S001.json").write_text(__import__("json").dumps(malformed), encoding="utf-8")
 
         backend = SubscriptionBackend(staging_dir=staging, responses_dir=responses)
         with pytest.raises(LocatedInputError):
@@ -455,13 +449,19 @@ def _ingest_one_student(tmp_path: Path) -> tuple[Path, str, str]:
         encoding="utf-8",
     )
 
-    rc = app([
-        "ingest",
-        "--semester", sem,
-        "--course", course,
-        "--data-root", str(data_root),
-        "--now", "2026-06-19T00:00:00Z",
-    ])
+    rc = app(
+        [
+            "ingest",
+            "--semester",
+            sem,
+            "--course",
+            course,
+            "--data-root",
+            str(data_root),
+            "--now",
+            "2026-06-19T00:00:00Z",
+        ]
+    )
     assert rc == 0, "ingest fixture must succeed"
     return data_root, sem, course
 
@@ -515,9 +515,7 @@ class TestPromptFromTemplateFile:
         """
         from pathlib import Path
 
-        template_path = (
-            Path(__file__).resolve().parents[2] / "templates" / "prompt_narrative.txt"
-        )
+        template_path = Path(__file__).resolve().parents[2] / "templates" / "prompt_narrative.txt"
         assert template_path.is_file(), f"template file missing: {template_path}"
         content = template_path.read_text(encoding="utf-8")
         assert "학습 근거 요약입니다" in content, (
@@ -556,15 +554,23 @@ class TestPromptFromTemplateFile:
             lambda **_kw: captured,
         )
 
-        rc = app([
-            "generate",
-            "--semester", sem,
-            "--course", course,
-            "--data-root", str(data_root),
-            "--backend", "api",
-            "--model", "fake-model",
-            "--now", "2026-06-19T01:00:00Z",
-        ])
+        rc = app(
+            [
+                "generate",
+                "--semester",
+                sem,
+                "--course",
+                course,
+                "--data-root",
+                str(data_root),
+                "--backend",
+                "api",
+                "--model",
+                "fake-model",
+                "--now",
+                "2026-06-19T01:00:00Z",
+            ]
+        )
         assert rc == 0, "generate must succeed"
         assert captured.requests, "the backend must have been invoked"
 

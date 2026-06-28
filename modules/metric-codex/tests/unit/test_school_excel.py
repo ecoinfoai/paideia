@@ -536,8 +536,7 @@ def test_source_path_used_verbatim(tmp_path: Path) -> None:
         source_path="data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx",
     )
     assert (
-        result.source_record.source_path
-        == "data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx"
+        result.source_record.source_path == "data/bronze/metric-codex/2026-1-anatomy/성적출석.xlsx"
     )
 
 

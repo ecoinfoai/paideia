@@ -200,14 +200,10 @@ def accumulate(
         by source_id.
     """
     entry_by_key: dict[_NaturalKey, CodexEntry] = {
-        _natural_key(e): e
-        for e in existing_entries
-        if e.source_id not in superseded_source_ids
+        _natural_key(e): e for e in existing_entries if e.source_id not in superseded_source_ids
     }
     record_by_id: dict[str, SourceRecord] = {
-        r.source_id: r
-        for r in existing_records
-        if r.source_id not in superseded_source_ids
+        r.source_id: r for r in existing_records if r.source_id not in superseded_source_ids
     }
 
     for result in results:

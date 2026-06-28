@@ -991,11 +991,7 @@ def read_paideia_sources(
             # own-Bronze fallback second, UNAVAILABLE if neither exists.
             # Never read needs-map's manifest.json directly (no Bronze-direct-share).
             names_silver = needsmap_silver_dir / _F_CLUSTER_NAMES
-            names_own_bronze = (
-                own_bronze / _F_CLUSTER_NAMES
-                if own_bronze is not None
-                else None
-            )
+            names_own_bronze = own_bronze / _F_CLUSTER_NAMES if own_bronze is not None else None
             # Determine which cluster_names source to use.
             names_path: Path | None
             if names_silver.is_file():

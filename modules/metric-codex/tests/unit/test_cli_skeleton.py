@@ -140,18 +140,21 @@ def test_build_subcommand_is_wired() -> None:
     from metric_codex.cli.main import app
 
     with tempfile.TemporaryDirectory() as td:
-        result = app([
-            "build",
-            "--semester", "2026-1",
-            "--course", "anatomy",
-            "--data-root", td,
-        ])
+        result = app(
+            [
+                "build",
+                "--semester",
+                "2026-1",
+                "--course",
+                "anatomy",
+                "--data-root",
+                td,
+            ]
+        )
     # Both 0 (graceful no-Bronze degrade) and 2 (ingest boundary fail) confirm
     # the handler ran.  3 (pipeline step failure from verify) is also acceptable
     # when generate/distribute succeed on an empty store but verify flags issues.
-    assert result in (0, 2, 3), (
-        f"build should return 0/2/3 from a wired handler; got {result}"
-    )
+    assert result in (0, 2, 3), f"build should return 0/2/3 from a wired handler; got {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -177,15 +180,18 @@ class TestEagerSlugSemesterValidation:
         from metric_codex.cli.main import app
 
         with tempfile.TemporaryDirectory() as td:
-            result = app([
-                "ingest",
-                "--semester", "2026-1",
-                "--course", "../../tmp/evil",
-                "--data-root", td,
-            ])
-        assert result == 2, (
-            f"invalid --course '../../tmp/evil' must exit 2; got {result}"
-        )
+            result = app(
+                [
+                    "ingest",
+                    "--semester",
+                    "2026-1",
+                    "--course",
+                    "../../tmp/evil",
+                    "--data-root",
+                    td,
+                ]
+            )
+        assert result == 2, f"invalid --course '../../tmp/evil' must exit 2; got {result}"
 
     def test_invalid_course_slug_no_data_dir_written(self) -> None:
         """Bad --course must not create any file under data_root before exit.
@@ -201,17 +207,20 @@ class TestEagerSlugSemesterValidation:
 
             data_root = pathlib.Path(td) / "data"
             data_root.mkdir()
-            app([
-                "ingest",
-                "--semester", "2026-1",
-                "--course", "../../tmp/evil",
-                "--data-root", str(data_root),
-            ])
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    "2026-1",
+                    "--course",
+                    "../../tmp/evil",
+                    "--data-root",
+                    str(data_root),
+                ]
+            )
             # No file/dir may have been created inside data_root.
             created = list(data_root.rglob("*"))
-            assert not created, (
-                f"data_root must be untouched on invalid --course; found {created}"
-            )
+            assert not created, f"data_root must be untouched on invalid --course; found {created}"
 
     def test_invalid_semester_exits_two(self) -> None:
         """A non-SemesterCode --semester string exits 2."""
@@ -220,15 +229,18 @@ class TestEagerSlugSemesterValidation:
         from metric_codex.cli.main import app
 
         with tempfile.TemporaryDirectory() as td:
-            result = app([
-                "ingest",
-                "--semester", "badyear",
-                "--course", "anatomy",
-                "--data-root", td,
-            ])
-        assert result == 2, (
-            f"invalid --semester 'badyear' must exit 2; got {result}"
-        )
+            result = app(
+                [
+                    "ingest",
+                    "--semester",
+                    "badyear",
+                    "--course",
+                    "anatomy",
+                    "--data-root",
+                    td,
+                ]
+            )
+        assert result == 2, f"invalid --semester 'badyear' must exit 2; got {result}"
 
     def test_invalid_semester_no_data_dir_written(self) -> None:
         """Bad --semester must not create any file under data_root."""
@@ -241,12 +253,17 @@ class TestEagerSlugSemesterValidation:
 
             data_root = pathlib.Path(td) / "data"
             data_root.mkdir()
-            app([
-                "ingest",
-                "--semester", "2026/1",
-                "--course", "anatomy",
-                "--data-root", str(data_root),
-            ])
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    "2026/1",
+                    "--course",
+                    "anatomy",
+                    "--data-root",
+                    str(data_root),
+                ]
+            )
             created = list(data_root.rglob("*"))
             assert not created, (
                 f"data_root must be untouched on invalid --semester; found {created}"
@@ -262,12 +279,17 @@ class TestEagerSlugSemesterValidation:
             # With no Bronze inputs at all the ingest handler degrades (exit 0)
             # or fails on missing paideia Silver (also 0 or 2) — either is fine.
             # The point is that exit code 2 is NOT caused by the slug/semester gate.
-            result = app([
-                "ingest",
-                "--semester", "2026-1",
-                "--course", "anatomy",
-                "--data-root", td,
-            ])
+            result = app(
+                [
+                    "ingest",
+                    "--semester",
+                    "2026-1",
+                    "--course",
+                    "anatomy",
+                    "--data-root",
+                    td,
+                ]
+            )
         # 0 (no Bronze degrade) or 3 (pipeline failure from verify) are valid;
         # we just assert the gate did not reject a good value.
         assert result in (0, 3)  # gate must not reject a valid slug
@@ -283,12 +305,15 @@ class TestEagerSlugSemesterValidation:
         from metric_codex.cli.main import app
 
         with tempfile.TemporaryDirectory() as td:
-            result = app([
-                "ingest",
-                "--semester", "2026-1",
-                "--course", "x",
-                "--data-root", td,
-            ])
-        assert result == 2, (
-            f"1-char slug 'x' must exit 2 after T029 gate; got {result}"
-        )
+            result = app(
+                [
+                    "ingest",
+                    "--semester",
+                    "2026-1",
+                    "--course",
+                    "x",
+                    "--data-root",
+                    td,
+                ]
+            )
+        assert result == 2, f"1-char slug 'x' must exit 2 after T029 gate; got {result}"

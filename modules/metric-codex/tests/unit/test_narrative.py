@@ -129,7 +129,7 @@ class TestRenderTemplateNoEvidence:
         result = render_template(_bundle([bq]))
         # "근거 없음" must be there; no float value lines should follow
         # (a simple heuristic: no "0." or any digit before "(" citations)
-        section = result[result.find("도메인별 정답률."):]
+        section = result[result.find("도메인별 정답률.") :]
         # Must contain the sentinel
         assert "근거 없음" in section
 
@@ -161,8 +161,13 @@ class TestRenderTemplateCitations:
         assert "85" in result
 
     def test_citation_value_text_present_in_output(self):
-        c = _citation(key="freetext_category:q9", value="health,career", layer="rich",
-                      source_id="needs-map:free_text_categorization.parquet", observed_at=None)
+        c = _citation(
+            key="freetext_category:q9",
+            value="health,career",
+            layer="rich",
+            source_id="needs-map:free_text_categorization.parquet",
+            observed_at=None,
+        )
         bq = _bq("q1", "자유서술?", _answer_with_evidence(c))
         result = render_template(_bundle([bq]))
         assert "health,career" in result
@@ -196,24 +201,39 @@ class TestRenderTemplateNonFiniteFloat:
     """
 
     def test_nan_value_does_not_crash(self):
-        c = _citation(key="z_score", value=float("nan"), layer="rich",
-                      source_id="immersio:학생지표.parquet", observed_at=None)
+        c = _citation(
+            key="z_score",
+            value=float("nan"),
+            layer="rich",
+            source_id="immersio:학생지표.parquet",
+            observed_at=None,
+        )
         bq = _bq("q1", "z?", _answer_with_evidence(c))
         # Must not raise.
         result = render_template(_bundle([bq]))
         assert isinstance(result, str)
 
     def test_nan_value_rendered_as_string_sentinel(self):
-        c = _citation(key="z_score", value=float("nan"), layer="rich",
-                      source_id="immersio:학생지표.parquet", observed_at=None)
+        c = _citation(
+            key="z_score",
+            value=float("nan"),
+            layer="rich",
+            source_id="immersio:학생지표.parquet",
+            observed_at=None,
+        )
         bq = _bq("q1", "z?", _answer_with_evidence(c))
         result = render_template(_bundle([bq]))
         # str(float('nan')) == 'nan' — the sentinel appears verbatim.
         assert "nan" in result
 
     def test_inf_value_does_not_crash(self):
-        c = _citation(key="z_score", value=float("inf"), layer="rich",
-                      source_id="immersio:학생지표.parquet", observed_at=None)
+        c = _citation(
+            key="z_score",
+            value=float("inf"),
+            layer="rich",
+            source_id="immersio:학생지표.parquet",
+            observed_at=None,
+        )
         bq = _bq("q1", "z?", _answer_with_evidence(c))
         result = render_template(_bundle([bq]))
         assert "inf" in result

@@ -71,9 +71,7 @@ class TestBuildAllZero:
         rc = cli_main._run_build(_dummy_args())
         assert rc == 0
 
-    def test_all_four_stages_called_in_order(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_all_four_stages_called_in_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
         order: list[str] = []
         _patch_stages(
             monkeypatch,
@@ -103,9 +101,7 @@ class TestBuildReturnNonZeroStop:
         rc = cli_main._run_build(_dummy_args())
         assert rc == 3, f"verify→3 must propagate as _run_build's return; got {rc}"
 
-    def test_verify_return_3_runs_all_four(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_verify_return_3_runs_all_four(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """verify is last, so all four stages still run before the 3 is returned."""
         order: list[str] = []
         _patch_stages(
@@ -154,9 +150,7 @@ class TestBuildRaisePropagates:
         with pytest.raises(LocatedInputError):
             cli_main._run_build(_dummy_args())
 
-    def test_ingest_raise_stops_later_stages(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_ingest_raise_stops_later_stages(self, monkeypatch: pytest.MonkeyPatch) -> None:
         order: list[str] = []
         _patch_stages(
             monkeypatch,

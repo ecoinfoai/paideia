@@ -38,11 +38,11 @@ _SEM = "2026-1"
 _COURSE = "anatomy"
 _KEY = f"{_SEM}-{_COURSE}"
 
-_SID_FULL = "2026000001"    # present in school Excel + immersio + needs-map
+_SID_FULL = "2026000001"  # present in school Excel + immersio + needs-map
 _NAME_FULL = "김철수"
 _SID_MINIMAL = "2026000002"  # present in school Excel ONLY
 _NAME_MINIMAL = "이영희"
-_SID_UNAS = "2026000003"     # in school Excel, NOT in roster
+_SID_UNAS = "2026000003"  # in school Excel, NOT in roster
 _NAME_UNAS = "박지수"
 
 _ADV_A = "ADV_A"
@@ -54,8 +54,8 @@ _NOW_GEN = "2026-06-19T01:00:00Z"
 _NOW_DIST = "2026-06-19T02:00:00Z"
 
 # Question IDs used in assertions.
-_QID_MINIMAL = "q_total"          # entry_kind: score_total  (minimal layer — all students)
-_QID_RICH = "q_domain"            # entry_kind: domain_correct_rate (rich only — FULL student)
+_QID_MINIMAL = "q_total"  # entry_kind: score_total  (minimal layer — all students)
+_QID_RICH = "q_domain"  # entry_kind: domain_correct_rate (rich only — FULL student)
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +67,9 @@ def _make_school_excel(path: Path) -> None:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(["학번", "이름", "총점", "환산점수", "출석"])
-    ws.append([int(_SID_FULL),    _NAME_FULL,    85, 90.5, 15])
+    ws.append([int(_SID_FULL), _NAME_FULL, 85, 90.5, 15])
     ws.append([int(_SID_MINIMAL), _NAME_MINIMAL, 70, 75.0, 12])
-    ws.append([int(_SID_UNAS),    _NAME_UNAS,    60, 65.0, 10])
+    ws.append([int(_SID_UNAS), _NAME_UNAS, 60, 65.0, 10])
     wb.save(path)
 
 
@@ -228,62 +228,96 @@ def full_data_root(tmp_path: Path) -> Path:
 
 
 def _ingest(data_root: Path) -> int:
-    return app([
-        "ingest",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--now", _NOW_INGEST,
-    ])
+    return app(
+        [
+            "ingest",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            _NOW_INGEST,
+        ]
+    )
 
 
 def _dry_run(data_root: Path) -> int:
     qs = data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
-    return app([
-        "dry-run",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--question-set", str(qs),
-    ])
+    return app(
+        [
+            "dry-run",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--question-set",
+            str(qs),
+        ]
+    )
 
 
 def _generate(data_root: Path) -> int:
     qs = data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
-    return app([
-        "generate",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--question-set", str(qs),
-        "--backend", "none",
-        "--now", _NOW_GEN,
-    ])
+    return app(
+        [
+            "generate",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--question-set",
+            str(qs),
+            "--backend",
+            "none",
+            "--now",
+            _NOW_GEN,
+        ]
+    )
 
 
 def _distribute(data_root: Path) -> int:
     roster = data_root / "bronze" / "metric-codex" / _KEY / "지도교수배정.yaml"
-    return app([
-        "distribute",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--roster", str(roster),
-        "--now", _NOW_DIST,
-    ])
+    return app(
+        [
+            "distribute",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--roster",
+            str(roster),
+            "--now",
+            _NOW_DIST,
+        ]
+    )
 
 
 def _verify(data_root: Path) -> int:
     qs = data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
     roster = data_root / "bronze" / "metric-codex" / _KEY / "지도교수배정.yaml"
-    return app([
-        "verify",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--question-set", str(qs),
-        "--roster", str(roster),
-    ])
+    return app(
+        [
+            "verify",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--question-set",
+            str(qs),
+            "--roster",
+            str(roster),
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +350,7 @@ class TestSC001MultiLayerCoexist:
         _ingest(full_data_root)
         df = pd.read_parquet(_silver(full_data_root) / "codex_entry.parquet")
         full_rows = df[df["student_id"] == _SID_FULL]
-        rich_text = full_rows[
-            (full_rows["layer"] == "rich") & (full_rows["value_text"].notna())
-        ]
+        rich_text = full_rows[(full_rows["layer"] == "rich") & (full_rows["value_text"].notna())]
         assert not rich_text.empty, (
             "SC-001: FULL student must have rich value_text entries (freetext_category)"
         )
@@ -354,34 +386,49 @@ class TestSC002CitedAnswer:
     def test_query_full_student_rich_exits_zero(self, full_data_root: Path) -> None:
         _ingest(full_data_root)
         qs = full_data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(full_data_root),
-            "--student", _SID_FULL,
-            "--question-id", _QID_RICH,
-            "--question-set", str(qs),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(full_data_root),
+                "--student",
+                _SID_FULL,
+                "--question-id",
+                _QID_RICH,
+                "--question-set",
+                str(qs),
+            ]
+        )
         assert rc == 0, "SC-002: query for FULL student (rich question) must exit 0"
 
-    def test_query_full_json_citations_resolve(
-        self, full_data_root: Path, tmp_path: Path
-    ) -> None:
+    def test_query_full_json_citations_resolve(self, full_data_root: Path, tmp_path: Path) -> None:
         """Every EvidenceCitation key/source_id in the JSON output traces to a real row."""
         _ingest(full_data_root)
         qs = full_data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
         json_out = tmp_path / "answer.json"
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(full_data_root),
-            "--student", _SID_FULL,
-            "--question-id", _QID_RICH,
-            "--question-set", str(qs),
-            "--json", str(json_out),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(full_data_root),
+                "--student",
+                _SID_FULL,
+                "--question-id",
+                _QID_RICH,
+                "--question-set",
+                str(qs),
+                "--json",
+                str(json_out),
+            ]
+        )
         assert rc == 0
         assert json_out.is_file(), "JSON output must be written"
 
@@ -395,10 +442,7 @@ class TestSC002CitedAnswer:
         # Every citation must resolve to a real codex_entry row.
         df = pd.read_parquet(_silver(full_data_root) / "codex_entry.parquet")
         full_rows = df[df["student_id"] == _SID_FULL]
-        entry_index = {
-            (row["key"], row["source_id"])
-            for _, row in full_rows.iterrows()
-        }
+        entry_index = {(row["key"], row["source_id"]) for _, row in full_rows.iterrows()}
         for c in citations:
             key = (c["key"], c["source_id"])
             assert key in entry_index, (
@@ -419,15 +463,23 @@ class TestSC005NoEvidenceDegrade:
     ) -> None:
         _ingest(full_data_root)
         qs = full_data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
-        rc = app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(full_data_root),
-            "--student", _SID_MINIMAL,
-            "--question-id", _QID_RICH,
-            "--question-set", str(qs),
-        ])
+        rc = app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(full_data_root),
+                "--student",
+                _SID_MINIMAL,
+                "--question-id",
+                _QID_RICH,
+                "--question-set",
+                str(qs),
+            ]
+        )
         assert rc == 0, "SC-005: query should exit 0 even with no_evidence"
         captured = capsys.readouterr()
         assert "근거 없음" in captured.out, (
@@ -441,16 +493,25 @@ class TestSC005NoEvidenceDegrade:
         _ingest(full_data_root)
         qs = full_data_root / "bronze" / "metric-codex" / _KEY / "question_set.yaml"
         json_out = tmp_path / "minimal_answer.json"
-        app([
-            "query",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(full_data_root),
-            "--student", _SID_MINIMAL,
-            "--question-id", _QID_RICH,
-            "--question-set", str(qs),
-            "--json", str(json_out),
-        ])
+        app(
+            [
+                "query",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(full_data_root),
+                "--student",
+                _SID_MINIMAL,
+                "--question-id",
+                _QID_RICH,
+                "--question-set",
+                str(qs),
+                "--json",
+                str(json_out),
+            ]
+        )
         answer = json.loads(json_out.read_text(encoding="utf-8"))
         assert answer.get("no_evidence") is True, (
             "SC-005: no_evidence must be True for minimal-only student + rich question"
@@ -486,9 +547,7 @@ class TestSC004StagingNoPii:
         _dry_run(full_data_root)
         staging = _silver(full_data_root) / "staging"
         jsons = list(staging.glob("*.json"))
-        assert len(jsons) == 3, (
-            f"expected 3 staging files (one per student); got {len(jsons)}"
-        )
+        assert len(jsons) == 3, f"expected 3 staging files (one per student); got {len(jsons)}"
 
     def test_no_10digit_id_in_staging(self, full_data_root: Path) -> None:
         """PRIV-01/SC-004: no 10-digit student_id appears in any staging file."""
@@ -499,9 +558,7 @@ class TestSC004StagingNoPii:
         for f in staging.glob("*.json"):
             text = f.read_text(encoding="utf-8")
             m = sid_re.search(text)
-            assert m is None, (
-                f"SC-004 PRIV-01: 10-digit id {m.group()!r} found in {f.name}"
-            )
+            assert m is None, f"SC-004 PRIV-01: 10-digit id {m.group()!r} found in {f.name}"
 
     def test_no_korean_name_in_staging(self, full_data_root: Path) -> None:
         """PRIV-01/SC-004: no Korean student name appears in any staging file."""
@@ -511,9 +568,7 @@ class TestSC004StagingNoPii:
         for f in staging.glob("*.json"):
             text = f.read_text(encoding="utf-8")
             for name in (_NAME_FULL, _NAME_MINIMAL, _NAME_UNAS):
-                assert name not in text, (
-                    f"SC-004 PRIV-01: name {name!r} found in {f.name}"
-                )
+                assert name not in text, f"SC-004 PRIV-01: name {name!r} found in {f.name}"
 
     def test_no_email_shape_in_staging(self, full_data_root: Path) -> None:
         """PRIV-01/SC-004: no email-shaped string in any staging file."""
@@ -524,9 +579,7 @@ class TestSC004StagingNoPii:
         for f in staging.glob("*.json"):
             text = f.read_text(encoding="utf-8")
             m = email_re.search(text)
-            assert m is None, (
-                f"SC-004 PRIV-01: email {m.group()!r} found in {f.name}"
-            )
+            assert m is None, f"SC-004 PRIV-01: email {m.group()!r} found in {f.name}"
 
 
 # ---------------------------------------------------------------------------
@@ -552,9 +605,7 @@ class TestSC009GenerateOffline:
         _ingest(full_data_root)
         _generate(full_data_root)
         mds = list((_gold(full_data_root) / "학생별").glob("*.md"))
-        assert len(mds) == 3, (
-            f"SC-009: expected 3 student md files; got {len(mds)}"
-        )
+        assert len(mds) == 3, f"SC-009: expected 3 student md files; got {len(mds)}"
 
     def test_each_md_has_citation_or_no_evidence(self, full_data_root: Path) -> None:
         """SC-009/DET-02: each Gold md contains cited evidence OR '근거 없음'."""
@@ -628,9 +679,7 @@ class TestSC007Idempotent:
         _ingest(full_data_root)
         df2 = pd.read_parquet(_silver(full_data_root) / "codex_entry.parquet")
         count2 = len(df2)
-        assert count1 == count2, (
-            f"SC-007: entry_count changed on re-ingest: {count1} → {count2}"
-        )
+        assert count1 == count2, f"SC-007: entry_count changed on re-ingest: {count1} → {count2}"
 
 
 # ---------------------------------------------------------------------------
@@ -668,19 +717,13 @@ class TestSC003NoAdvisorCrossLeak:
     def test_adv_a_contains_only_full_student(self, full_data_root: Path) -> None:
         """SC-003: ADV_A's dir contains ONLY the FULL student (SID_FULL)."""
         self._run_full_pipeline(full_data_root)
-        sids = self._student_ids_in_advisor_dir(
-            _gold(full_data_root) / "지도교수별" / _ADV_A
-        )
-        assert sids == {_SID_FULL}, (
-            f"SC-003: ADV_A dir must contain only {_SID_FULL}; got {sids}"
-        )
+        sids = self._student_ids_in_advisor_dir(_gold(full_data_root) / "지도교수별" / _ADV_A)
+        assert sids == {_SID_FULL}, f"SC-003: ADV_A dir must contain only {_SID_FULL}; got {sids}"
 
     def test_adv_b_contains_only_minimal_student(self, full_data_root: Path) -> None:
         """SC-003: ADV_B's dir contains ONLY the MINIMAL student (SID_MINIMAL)."""
         self._run_full_pipeline(full_data_root)
-        sids = self._student_ids_in_advisor_dir(
-            _gold(full_data_root) / "지도교수별" / _ADV_B
-        )
+        sids = self._student_ids_in_advisor_dir(_gold(full_data_root) / "지도교수별" / _ADV_B)
         assert sids == {_SID_MINIMAL}, (
             f"SC-003: ADV_B dir must contain only {_SID_MINIMAL}; got {sids}"
         )
@@ -720,16 +763,12 @@ class TestSC008UnassignedReporting:
     def test_unassigned_student_in_mibaejeong(self, full_data_root: Path) -> None:
         self._run_full_pipeline(full_data_root)
         text = (_gold(full_data_root) / "미배정.md").read_text(encoding="utf-8")
-        assert _SID_UNAS in text, (
-            f"SC-008: {_SID_UNAS} must appear in 미배정.md"
-        )
+        assert _SID_UNAS in text, f"SC-008: {_SID_UNAS} must appear in 미배정.md"
 
     def test_unassigned_in_manifest(self, full_data_root: Path) -> None:
         self._run_full_pipeline(full_data_root)
         manifest = json.loads(
-            (_silver(full_data_root) / "manifest_metric-codex.json").read_text(
-                encoding="utf-8"
-            )
+            (_silver(full_data_root) / "manifest_metric-codex.json").read_text(encoding="utf-8")
         )
         unassigned = manifest["bundle_summary"]["unassigned_sids"]
         assert _SID_UNAS in unassigned, (
@@ -740,17 +779,13 @@ class TestSC008UnassignedReporting:
         """SC-008: assigned + unassigned == total (count invariant)."""
         self._run_full_pipeline(full_data_root)
         manifest = json.loads(
-            (_silver(full_data_root) / "manifest_metric-codex.json").read_text(
-                encoding="utf-8"
-            )
+            (_silver(full_data_root) / "manifest_metric-codex.json").read_text(encoding="utf-8")
         )
         summary = manifest["bundle_summary"]
         total = summary["total_students_with_codex"]
         assigned = summary["assigned_count"]
         unassigned = len(summary["unassigned_sids"])
-        assert assigned + unassigned == total, (
-            f"SC-008: {assigned} + {unassigned} != {total}"
-        )
+        assert assigned + unassigned == total, f"SC-008: {assigned} + {unassigned} != {total}"
 
 
 # ---------------------------------------------------------------------------

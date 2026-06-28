@@ -230,9 +230,7 @@ def read_school_excel(
         if excel_map.cohort_year_column is not None:
             required_headers.append(excel_map.cohort_year_column)
 
-        col_indices = _find_column_indices(
-            ws, excel_map.header_row, required_headers, filename
-        )
+        col_indices = _find_column_indices(ws, excel_map.header_row, required_headers, filename)
 
         source_id = f"school_excel:{filename}"
         entries: list[CodexEntry] = []

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _valid_entry(**overrides):
     """Return a minimal valid CodexEntry payload with optional field overrides."""
     base = dict(
@@ -48,6 +49,7 @@ def _valid_source(**overrides):
 # SourceRecord tests
 # ---------------------------------------------------------------------------
 
+
 class TestSourceRecord:
     def test_valid_source_record_constructs(self):
         rec = SourceRecord(**_valid_source())
@@ -79,6 +81,7 @@ class TestSourceRecord:
 # EntryKind enum membership
 # ---------------------------------------------------------------------------
 
+
 class TestEntryKindEnum:
     VALID_KINDS = [
         "score_total",
@@ -107,6 +110,7 @@ class TestEntryKindEnum:
 # ---------------------------------------------------------------------------
 # value_num XOR value_text
 # ---------------------------------------------------------------------------
+
 
 class TestValueXOR:
     def test_value_num_only_ok(self):
@@ -139,6 +143,7 @@ class TestValueXOR:
 # layer ↔ entry_kind rule
 # ---------------------------------------------------------------------------
 
+
 class TestLayerEntryKindRule:
     def test_minimal_score_total_ok(self):
         entry = CodexEntry(**_valid_entry(layer="minimal", entry_kind="score_total"))
@@ -167,6 +172,7 @@ class TestLayerEntryKindRule:
 # ---------------------------------------------------------------------------
 # item_ref ↔ item_correct rule
 # ---------------------------------------------------------------------------
+
 
 class TestItemRefRule:
     def test_item_ref_with_item_correct_ok(self):
@@ -208,6 +214,7 @@ class TestItemRefRule:
 # Natural key field values
 # ---------------------------------------------------------------------------
 
+
 class TestNaturalKey:
     """The (student_id, source_id, entry_kind, key, item_ref) tuple round-trips."""
 
@@ -240,6 +247,7 @@ class TestNaturalKey:
 # cohort_year bounds
 # ---------------------------------------------------------------------------
 
+
 class TestCohortYear:
     def test_lower_bound_ok(self):
         CodexEntry(**_valid_entry(cohort_year=2000))
@@ -259,6 +267,7 @@ class TestCohortYear:
 # ---------------------------------------------------------------------------
 # T053 RED — V4: value_num finite guard (FR-023)
 # ---------------------------------------------------------------------------
+
 
 class TestValueNumFiniteGuard:
     """V4: value_num must be finite (NaN / ±inf rejected).

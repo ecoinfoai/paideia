@@ -43,7 +43,9 @@ class TestMetricCodexManifestValid:
         assert manifest.entry_count == 120
 
     def test_llm_backend_subscription(self):
-        MetricCodexManifest(**_valid_manifest(llm_backend="subscription", llm_model="claude-sonnet-4-5"))
+        MetricCodexManifest(
+            **_valid_manifest(llm_backend="subscription", llm_model="claude-sonnet-4-5")
+        )
 
     def test_llm_backend_api(self):
         MetricCodexManifest(**_valid_manifest(llm_backend="api", llm_model="claude-opus-4-5"))
@@ -90,11 +92,15 @@ class TestMetricCodexManifestInvalid:
 
     def test_cache_hit_rate_above_one_rejected(self):
         with pytest.raises(ValidationError):
-            MetricCodexManifest(**_valid_manifest(llm_backend="api", llm_model="m", cache_hit_rate=1.1))
+            MetricCodexManifest(
+                **_valid_manifest(llm_backend="api", llm_model="m", cache_hit_rate=1.1)
+            )
 
     def test_cache_hit_rate_below_zero_rejected(self):
         with pytest.raises(ValidationError):
-            MetricCodexManifest(**_valid_manifest(llm_backend="api", llm_model="m", cache_hit_rate=-0.1))
+            MetricCodexManifest(
+                **_valid_manifest(llm_backend="api", llm_model="m", cache_hit_rate=-0.1)
+            )
 
     def test_embedded_bundle_invariant_violation_rejected(self):
         """Passing a bad bundle dict inline triggers validation."""

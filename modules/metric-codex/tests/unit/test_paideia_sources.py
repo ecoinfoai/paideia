@@ -676,8 +676,12 @@ def test_determinism_two_reads(tmp_path: Path) -> None:
     _write_student_metrics(path)
     sp = str(path.relative_to(data_root))
 
-    r1 = read_student_metrics(path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp)
-    r2 = read_student_metrics(path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp)
+    r1 = read_student_metrics(
+        path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp
+    )
+    r2 = read_student_metrics(
+        path, semester=_SEMESTER, course_slug=_COURSE_SLUG, ingested_at=_INGESTED_AT, source_path=sp
+    )
     assert r1.entries == r2.entries
     # Sorted by (student_id, entry_kind, key).
     keys = [(e.student_id, e.entry_kind.value, e.key) for e in r1.entries]
@@ -1039,12 +1043,9 @@ def test_combined_reader_skips_off_roster_row(tmp_path: Path) -> None:
     # Only on-roster student _SID_A should produce entries.
     student_ids_emitted = {e.student_id for e in result.entries}
     assert _SID_OFF not in student_ids_emitted, (
-        f"off-roster student {_SID_OFF!r} must be skipped; "
-        f"found entries for: {student_ids_emitted}"
+        f"off-roster student {_SID_OFF!r} must be skipped; found entries for: {student_ids_emitted}"
     )
-    assert _SID_A in student_ids_emitted, (
-        f"on-roster student {_SID_A!r} must produce entries"
-    )
+    assert _SID_A in student_ids_emitted, f"on-roster student {_SID_A!r} must produce entries"
 
 
 def test_combined_off_roster_identity_not_in_identities(tmp_path: Path) -> None:

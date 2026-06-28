@@ -122,11 +122,16 @@ def _run_build(data_root: Path, extra: list[str] | None = None) -> int:
     """Invoke ``metric-codex build`` with the standard fixture arguments."""
     argv = [
         "build",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--backend", "none",
-        "--now", _NOW,
+        "--semester",
+        _SEM,
+        "--course",
+        _COURSE,
+        "--data-root",
+        str(data_root),
+        "--backend",
+        "none",
+        "--now",
+        _NOW,
     ]
     if extra:
         argv.extend(extra)
@@ -292,9 +297,7 @@ class TestBuildManifestSummary:
         total = s["total_students_with_codex"]
         assigned = s["assigned_count"]
         unassigned = len(s["unassigned_sids"])
-        assert assigned + unassigned == total, (
-            f"{assigned} + {unassigned} != {total}"
-        )
+        assert assigned + unassigned == total, f"{assigned} + {unassigned} != {total}"
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +317,7 @@ class TestBuildFirstNonZeroStop:
 
         _make_school_excel(bronze / "성적출석.xlsx")
         # Deliberately write an invalid school map (empty YAML → schema error).
-        (bronze / "성적출석_map.yaml").write_text(
-            "# intentionally blank\n", encoding="utf-8"
-        )
+        (bronze / "성적출석_map.yaml").write_text("# intentionally blank\n", encoding="utf-8")
         _make_question_set(bronze / "question_set.yaml")
         _make_roster(bronze / "지도교수배정.yaml")
 
@@ -329,13 +330,9 @@ class TestBuildFirstNonZeroStop:
     def test_student_dir_not_created(self, bad_bronze_root: Path) -> None:
         _run_build(bad_bronze_root)
         student_dir = _gold(bad_bronze_root) / "학생별"
-        assert not student_dir.exists(), (
-            "학생별/ must NOT exist when pipeline stops at ingest"
-        )
+        assert not student_dir.exists(), "학생별/ must NOT exist when pipeline stops at ingest"
 
     def test_advisor_dir_not_created(self, bad_bronze_root: Path) -> None:
         _run_build(bad_bronze_root)
         advisor_dir = _gold(bad_bronze_root) / "지도교수별"
-        assert not advisor_dir.exists(), (
-            "지도교수별/ must NOT exist when pipeline stops at ingest"
-        )
+        assert not advisor_dir.exists(), "지도교수별/ must NOT exist when pipeline stops at ingest"

@@ -64,13 +64,19 @@ def _make_school_map(path: Path, sem: str = _SEM, course: str = _COURSE) -> None
 
 
 def _run_ingest(data_root: Path, now: str = "2026-06-01T00:00:00Z") -> int:
-    return app([
-        "ingest",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--now", now,
-    ])
+    return app(
+        [
+            "ingest",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            now,
+        ]
+    )
 
 
 def _basic_bronze(tmp_path: Path) -> tuple[Path, Path]:
@@ -208,23 +214,43 @@ class TestVerifyGateCorruptManifest:
         qs_path = bronze / "question_set.yaml"
         _make_question_set(qs_path)
 
-        assert app([
-            "ingest",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
 
-        assert app([
-            "generate",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-            "--backend", "none",
-            "--now", "2026-06-01T01:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "none",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         return data_root, qs_path
 
@@ -239,9 +265,7 @@ class TestVerifyGateCorruptManifest:
         llm_backend is None (unknown due to corrupt manifest).
         """
         data_root, qs_path = self._build_pipeline(tmp_path)
-        manifest_path = (
-            data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
-        )
+        manifest_path = data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
 
         # Simulate LLM-polished prose by overwriting the Gold md with non-template
         # content BEFORE corrupting the manifest.  This is the realistic scenario:
@@ -257,20 +281,24 @@ class TestVerifyGateCorruptManifest:
         # Corrupt the manifest so read_manifest raises.
         manifest_path.write_text("{not valid json !!!", encoding="utf-8")
 
-        rc = app([
-            "verify",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--question-set", str(qs_path),
-        ])
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+            ]
+        )
         captured = capsys.readouterr()
 
         # The corrupt manifest MUST be reported.
         assert rc == 3, f"expected exit 3 after corrupt manifest; got {rc}"
-        assert (
-            "MANIFEST" in captured.err or "SKIP-02" in captured.err
-        ), (
+        assert "MANIFEST" in captured.err or "SKIP-02" in captured.err, (
             f"Expected MANIFEST or SKIP-02 violation in stderr; got:\n{captured.err!r}"
         )
         # No spurious EVID-01 must appear: the byte-match must be skipped.
@@ -298,13 +326,22 @@ class TestGenerateLLMResponsePiiScan:
         qs_path = bronze / "question_set.yaml"
         _make_question_set(qs_path)
 
-        assert app([
-            "ingest",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         return data_root, qs_path
 
@@ -329,19 +366,25 @@ class TestGenerateLLMResponsePiiScan:
             "metric_codex.generate.backend.InputHashCache.generate",
             return_value=fake_response,
         ):
-            rc = app([
-                "generate",
-                "--semester", _SEM,
-                "--course", _COURSE,
-                "--data-root", str(data_root),
-                "--question-set", str(qs_path),
-                "--backend", "api",
-                "--now", "2026-06-01T01:00:00Z",
-            ])
+            rc = app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "api",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
 
-        assert rc == 2, (
-            f"Expected exit 2 when LLM raw_text contains a 10-digit id; got {rc}"
-        )
+        assert rc == 2, f"Expected exit 2 when LLM raw_text contains a 10-digit id; got {rc}"
 
         # No Gold md must be written.
         gold_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"

@@ -115,27 +115,41 @@ def generated_data_root(tmp_path: Path) -> Path:
     _make_school_excel(bronze / "성적출석.xlsx")
     _make_school_map(bronze / "성적출석_map.yaml")
 
-    rc = app([
-        "ingest",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--now", "2026-06-01T00:00:00Z",
-    ])
+    rc = app(
+        [
+            "ingest",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            "2026-06-01T00:00:00Z",
+        ]
+    )
     assert rc == 0, f"ingest failed with rc={rc}"
 
     qs_path = bronze / "question_set.yaml"
     _make_question_set(qs_path)
 
-    rc = app([
-        "generate",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--question-set", str(qs_path),
-        "--backend", "none",
-        "--now", "2026-06-01T01:00:00Z",
-    ])
+    rc = app(
+        [
+            "generate",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--question-set",
+            str(qs_path),
+            "--backend",
+            "none",
+            "--now",
+            "2026-06-01T01:00:00Z",
+        ]
+    )
     assert rc == 0, f"generate failed with rc={rc}"
 
     # Verify student md files were created.
@@ -156,14 +170,21 @@ def roster_path(generated_data_root: Path) -> Path:
 
 
 def _run_distribute(data_root: Path, roster: Path) -> int:
-    return app([
-        "distribute",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--roster", str(roster),
-        "--now", "2026-06-02T00:00:00Z",
-    ])
+    return app(
+        [
+            "distribute",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--roster",
+            str(roster),
+            "--now",
+            "2026-06-02T00:00:00Z",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -203,18 +224,14 @@ class TestDistributeNoCrossLeak:
         adv_a_dir = self._advisor_dir(generated_data_root, _ADV_A)
         md_files = [f for f in adv_a_dir.glob("*.md") if not f.name.startswith("_")]
         sids = {self._sid_from_filename(f.name) for f in md_files}
-        assert sids == {_SID_A}, (
-            f"ADV_A dir contains unexpected students: {sids}"
-        )
+        assert sids == {_SID_A}, f"ADV_A dir contains unexpected students: {sids}"
 
     def test_adv_b_contains_only_sid_b(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         adv_b_dir = self._advisor_dir(generated_data_root, _ADV_B)
         md_files = [f for f in adv_b_dir.glob("*.md") if not f.name.startswith("_")]
         sids = {self._sid_from_filename(f.name) for f in md_files}
-        assert sids == {_SID_B}, (
-            f"ADV_B dir contains unexpected students: {sids}"
-        )
+        assert sids == {_SID_B}, f"ADV_B dir contains unexpected students: {sids}"
 
     def test_cross_leak_count_zero(self, generated_data_root, roster_path):
         """SC-003: zero files belong to a wrong advisor."""
@@ -249,8 +266,7 @@ class TestDistributeUnassigned:
     def test_unassigned_in_manifest_summary(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         summary = manifest["bundle_summary"]
@@ -263,17 +279,14 @@ class TestDistributeCountInvariant:
     def test_count_invariant(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         summary = manifest["bundle_summary"]
         total = summary["total_students_with_codex"]
         assigned = summary["assigned_count"]
         unassigned = len(summary["unassigned_sids"])
-        assert assigned + unassigned == total, (
-            f"{assigned} + {unassigned} != {total}"
-        )
+        assert assigned + unassigned == total, f"{assigned} + {unassigned} != {total}"
 
 
 class TestDistributeProvenancePreserved:
@@ -287,8 +300,7 @@ class TestDistributeProvenancePreserved:
 
     def test_input_hashes_preserved(self, generated_data_root, roster_path):
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         prior = json.loads(manifest_path.read_text(encoding="utf-8"))
         prior_input_hashes = prior["input_hashes"]
@@ -313,8 +325,7 @@ class TestDistributeProvenancePreserved:
     def test_bundle_summary_updated(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         summary = manifest["bundle_summary"]
@@ -339,13 +350,11 @@ class TestDistributeDeterminism:
         _run()
         bundle_dir = self._bundle_dir(generated_data_root)
         contents_1 = {
-            str(f.relative_to(bundle_dir)): f.read_bytes()
-            for f in sorted(bundle_dir.rglob("*.md"))
+            str(f.relative_to(bundle_dir)): f.read_bytes() for f in sorted(bundle_dir.rglob("*.md"))
         }
         _run()
         contents_2 = {
-            str(f.relative_to(bundle_dir)): f.read_bytes()
-            for f in sorted(bundle_dir.rglob("*.md"))
+            str(f.relative_to(bundle_dir)): f.read_bytes() for f in sorted(bundle_dir.rglob("*.md"))
         }
         assert contents_1 == contents_2, "distribute is not deterministic"
 
@@ -354,14 +363,21 @@ class TestDistributeInvalidRoster:
     """Malformed roster → exit 2."""
 
     def test_missing_roster_exits_2(self, generated_data_root):
-        rc = app([
-            "distribute",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(generated_data_root),
-            "--roster", str(generated_data_root / "nonexistent.yaml"),
-            "--now", "2026-06-02T00:00:00Z",
-        ])
+        rc = app(
+            [
+                "distribute",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(generated_data_root),
+                "--roster",
+                str(generated_data_root / "nonexistent.yaml"),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
         assert rc == 2
 
     def test_duplicate_sid_in_roster_exits_2(self, generated_data_root, tmp_path):
@@ -376,14 +392,21 @@ class TestDistributeInvalidRoster:
             """),
             encoding="utf-8",
         )
-        rc = app([
-            "distribute",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(generated_data_root),
-            "--roster", str(bad_roster),
-            "--now", "2026-06-02T00:00:00Z",
-        ])
+        rc = app(
+            [
+                "distribute",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(generated_data_root),
+                "--roster",
+                str(bad_roster),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
         assert rc == 2
 
 
@@ -393,16 +416,26 @@ class TestDistributeIndexFile:
     def test_adv_a_index_exists(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         index = (
-            generated_data_root / "gold" / "metric-codex" / _KEY
-            / "지도교수별" / _ADV_A / "_index.md"
+            generated_data_root
+            / "gold"
+            / "metric-codex"
+            / _KEY
+            / "지도교수별"
+            / _ADV_A
+            / "_index.md"
         )
         assert index.is_file()
 
     def test_adv_a_index_contains_sid_a(self, generated_data_root, roster_path):
         _run_distribute(generated_data_root, roster_path)
         index = (
-            generated_data_root / "gold" / "metric-codex" / _KEY
-            / "지도교수별" / _ADV_A / "_index.md"
+            generated_data_root
+            / "gold"
+            / "metric-codex"
+            / _KEY
+            / "지도교수별"
+            / _ADV_A
+            / "_index.md"
         )
         text = index.read_text(encoding="utf-8")
         assert _SID_A in text
@@ -422,14 +455,21 @@ class TestDistributePathTraversal:
             """),
             encoding="utf-8",
         )
-        rc = app([
-            "distribute",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(generated_data_root),
-            "--roster", str(evil_roster),
-            "--now", "2026-06-02T00:00:00Z",
-        ])
+        rc = app(
+            [
+                "distribute",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(generated_data_root),
+                "--roster",
+                str(evil_roster),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
         assert rc == 2
 
     def test_path_traversal_does_not_delete_sibling(self, generated_data_root, tmp_path):
@@ -448,14 +488,21 @@ class TestDistributePathTraversal:
             """),
             encoding="utf-8",
         )
-        app([
-            "distribute",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(generated_data_root),
-            "--roster", str(evil_roster),
-            "--now", "2026-06-02T00:00:00Z",
-        ])
+        app(
+            [
+                "distribute",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(generated_data_root),
+                "--roster",
+                str(evil_roster),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
 
         # 학생별/ untouched (no destructive escape).
         after = sorted(p.name for p in student_dir.glob("*.md"))
@@ -468,9 +515,7 @@ class TestDistributeStaleRemovedAdvisor:
     """I-2: an advisor in a prior roster but not the new one must not linger."""
 
     def test_removed_advisor_dir_gone(self, generated_data_root, tmp_path):
-        bundle_root = (
-            generated_data_root / "gold" / "metric-codex" / _KEY / "지도교수별"
-        )
+        bundle_root = generated_data_root / "gold" / "metric-codex" / _KEY / "지도교수별"
 
         # First run: roster {A, B}.
         roster_ab = tmp_path / "roster_ab.yaml"
@@ -493,9 +538,7 @@ class TestDistributeStaleRemovedAdvisor:
         assert rc == 0
 
         # B's stale bundle must be gone (FR-017: no cross-leak across runs).
-        assert not (bundle_root / _ADV_B).exists(), (
-            "removed advisor B's stale bundle lingered"
-        )
+        assert not (bundle_root / _ADV_B).exists(), "removed advisor B's stale bundle lingered"
         assert (bundle_root / _ADV_A).is_dir()
 
 
@@ -517,9 +560,7 @@ class TestDistributeNoNameStudent:
         student_dir = gold / "학생별"
         # Add a no-name student md (bare student_id stem) WITHOUT a codex entry.
         bare_sid = "2026000099"
-        (student_dir / f"{bare_sid}.md").write_text(
-            "# 무명 학생\n\n근거 없음\n", encoding="utf-8"
-        )
+        (student_dir / f"{bare_sid}.md").write_text("# 무명 학생\n\n근거 없음\n", encoding="utf-8")
 
         roster_a = tmp_path / "roster_a.yaml"
         roster_a.write_text(
@@ -547,9 +588,7 @@ class TestDistributeNoNameStudent:
         gold = generated_data_root / "gold" / "metric-codex" / _KEY
         student_dir = gold / "학생별"
         bare_sid = "2026000099"
-        (student_dir / f"{bare_sid}.md").write_text(
-            "# 무명 학생\n\n근거 없음\n", encoding="utf-8"
-        )
+        (student_dir / f"{bare_sid}.md").write_text("# 무명 학생\n\n근거 없음\n", encoding="utf-8")
 
         roster = tmp_path / "roster.yaml"
         roster.write_text(
@@ -604,18 +643,46 @@ class TestDistributeNoStaleStudentMds:
             wb.save(path)
 
         # --- Run 1: A=김철수, B=이영희, C=박지수 ---
-        _write_excel(bronze / "성적출석.xlsx", [
-            (_SID_A, _NAME_A, 85, 90.5, 15),
-            (_SID_B, _NAME_B, 70, 75.0, 12),
-            (_SID_C, _NAME_C, 60, 65.0, 10),
-        ])
+        _write_excel(
+            bronze / "성적출석.xlsx",
+            [
+                (_SID_A, _NAME_A, 85, 90.5, 15),
+                (_SID_B, _NAME_B, 70, 75.0, 12),
+                (_SID_C, _NAME_C, 60, 65.0, 10),
+            ],
+        )
 
-        rc = app(["ingest", "--semester", _SEM, "--course", _COURSE,
-                  "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z"])
+        rc = app(
+            [
+                "ingest",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--now",
+                "2026-06-01T00:00:00Z",
+            ]
+        )
         assert rc == 0, "run1 ingest failed"
-        rc = app(["generate", "--semester", _SEM, "--course", _COURSE,
-                  "--data-root", str(data_root), "--question-set", str(qs_path),
-                  "--backend", "none", "--now", "2026-06-01T01:00:00Z"])
+        rc = app(
+            [
+                "generate",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+                "--backend",
+                "none",
+                "--now",
+                "2026-06-01T01:00:00Z",
+            ]
+        )
         assert rc == 0, "run1 generate failed"
 
         student_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"
@@ -626,18 +693,46 @@ class TestDistributeNoStaleStudentMds:
 
         # --- Run 2: rename C to 최다은 (A, B, C still in store) ---
         _NEW_NAME_C = "최다은"
-        _write_excel(bronze / "성적출석.xlsx", [
-            (_SID_A, _NAME_A, 85, 90.5, 15),
-            (_SID_B, _NAME_B, 70, 75.0, 12),
-            (_SID_C, _NEW_NAME_C, 62, 67.0, 11),
-        ])
+        _write_excel(
+            bronze / "성적출석.xlsx",
+            [
+                (_SID_A, _NAME_A, 85, 90.5, 15),
+                (_SID_B, _NAME_B, 70, 75.0, 12),
+                (_SID_C, _NEW_NAME_C, 62, 67.0, 11),
+            ],
+        )
 
-        rc = app(["ingest", "--semester", _SEM, "--course", _COURSE,
-                  "--data-root", str(data_root), "--now", "2026-06-02T00:00:00Z"])
+        rc = app(
+            [
+                "ingest",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
         assert rc == 0, "run2 ingest failed"
-        rc = app(["generate", "--semester", _SEM, "--course", _COURSE,
-                  "--data-root", str(data_root), "--question-set", str(qs_path),
-                  "--backend", "none", "--now", "2026-06-02T01:00:00Z"])
+        rc = app(
+            [
+                "generate",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--question-set",
+                str(qs_path),
+                "--backend",
+                "none",
+                "--now",
+                "2026-06-02T01:00:00Z",
+            ]
+        )
         assert rc == 0, "run2 generate failed"
 
         run2_mds = {p.name for p in student_dir.glob("*.md")}
@@ -654,9 +749,7 @@ class TestDistributeNoStaleStudentMds:
 
         # Old and new must NOT coexist for the same student
         all_c_mds = [n for n in run2_mds if _SID_C in n]
-        assert len(all_c_mds) == 1, (
-            f"multiple mds for {_SID_C} coexist (stale + new): {all_c_mds}"
-        )
+        assert len(all_c_mds) == 1, f"multiple mds for {_SID_C} coexist (stale + new): {all_c_mds}"
 
 
 class TestDistributeCountFromCodex:
@@ -682,9 +775,9 @@ class TestDistributeCountFromCodex:
         assert rc == 0
 
         import json
+
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         summary = json.loads(manifest_path.read_text(encoding="utf-8"))["bundle_summary"]
 
@@ -693,7 +786,9 @@ class TestDistributeCountFromCodex:
             f"expected 3 (codex), got {summary['total_students_with_codex']} (disk)"
         )
 
-    def test_missing_md_assigned_student_surfaced(self, generated_data_root: Path, roster_path: Path):
+    def test_missing_md_assigned_student_surfaced(
+        self, generated_data_root: Path, roster_path: Path
+    ):
         """SID_A is in the roster but has no Gold md; must be surfaced explicitly."""
         student_dir = generated_data_root / "gold" / "metric-codex" / _KEY / "학생별"
         a_md = next(p for p in student_dir.glob("*.md") if _SID_A in p.name)
@@ -713,17 +808,15 @@ class TestDistributeCountFromCodex:
 
         # MC-U21: the assigned-but-no-md student MUST be surfaced in 미생성.md.
         missing_report = gold / "미생성.md"
-        assert missing_report.exists(), (
-            "미생성.md not written for assigned student with no Gold md"
-        )
+        assert missing_report.exists(), "미생성.md not written for assigned student with no Gold md"
         assert _SID_A in missing_report.read_text(encoding="utf-8"), (
             f"{_SID_A} (assigned, no md) not surfaced in 미생성.md"
         )
 
         import json
+
         manifest_path = (
-            generated_data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
+            generated_data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         )
         summary = json.loads(manifest_path.read_text(encoding="utf-8"))["bundle_summary"]
         # The summary must still show assigned_count correctly and SID_A must NOT
@@ -737,9 +830,7 @@ class TestDistributeCountFromCodex:
         unassigned = len(summary["unassigned_sids"])
         assert assigned + unassigned == total
         per_sum = sum(summary["per_advisor_counts"].values())
-        assert per_sum == assigned, (
-            f"per_advisor sum {per_sum} != assigned_count {assigned}"
-        )
+        assert per_sum == assigned, f"per_advisor sum {per_sum} != assigned_count {assigned}"
 
     def test_missing_md_report_cleared_when_md_appears(
         self, generated_data_root: Path, roster_path: Path
@@ -769,25 +860,19 @@ class TestDistributeCountFromCodex:
         )
 
         # --- Operator regenerates SID_A's Gold md ---
-        (student_dir / a_md_name).write_text(
-            "# 다시 생성된 학생\n\n근거\n", encoding="utf-8"
-        )
+        (student_dir / a_md_name).write_text("# 다시 생성된 학생\n\n근거\n", encoding="utf-8")
 
         # --- Run B: SID_A now has a md → must be cleared from 미생성.md ---
         rc = _run_distribute(generated_data_root, roster_path)
         assert rc == 0
 
-        assert missing_report.exists(), (
-            "미생성.md should be written unconditionally on run B"
-        )
+        assert missing_report.exists(), "미생성.md should be written unconditionally on run B"
         text_b = missing_report.read_text(encoding="utf-8")
         assert _SID_A not in text_b, (
             f"stale {_SID_A} still listed in 미생성.md after its md was created:\n{text_b}"
         )
         # Empty-state body present (no missing students remain).
-        assert "미생성 없음" in text_b, (
-            f"미생성.md missing empty-state body on run B:\n{text_b}"
-        )
+        assert "미생성 없음" in text_b, f"미생성.md missing empty-state body on run B:\n{text_b}"
 
 
 class TestDistributeMissingStudentDir:
@@ -801,12 +886,19 @@ class TestDistributeMissingStudentDir:
         _make_roster(roster)
 
         # No generate run → no gold/학생별/.
-        rc = app([
-            "distribute",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--roster", str(roster),
-            "--now", "2026-06-02T00:00:00Z",
-        ])
+        rc = app(
+            [
+                "distribute",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--roster",
+                str(roster),
+                "--now",
+                "2026-06-02T00:00:00Z",
+            ]
+        )
         assert rc == 2

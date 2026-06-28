@@ -157,15 +157,11 @@ def read_manifest(path: Path) -> MetricCodexManifest:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise LocatedInputError(
-            f"manifest is not valid JSON: {exc}", file=str(path)
-        ) from exc
+        raise LocatedInputError(f"manifest is not valid JSON: {exc}", file=str(path)) from exc
     try:
         return MetricCodexManifest.model_validate(raw)
     except ValidationError as exc:
-        raise LocatedInputError(
-            f"manifest validation failed: {exc}", file=str(path)
-        ) from exc
+        raise LocatedInputError(f"manifest validation failed: {exc}", file=str(path)) from exc
 
 
 __all__ = ["build_manifest", "read_manifest", "write_manifest"]

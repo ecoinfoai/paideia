@@ -149,10 +149,13 @@ class TestReadPseudonymMapDuplicateDetection:
     def test_duplicate_pseudonym_raises_located_error(self, tmp_path: Path) -> None:
         """Two rows sharing the same S{NNN} pseudonym must be rejected at the boundary."""
         path = tmp_path / "pseudonym_map.parquet"
-        _write_map_parquet(path, [
-            {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
-            {"student_id": "2026000002", "name_kr": "이영희", "pseudonym": "S001"},  # dup
-        ])
+        _write_map_parquet(
+            path,
+            [
+                {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
+                {"student_id": "2026000002", "name_kr": "이영희", "pseudonym": "S001"},  # dup
+            ],
+        )
 
         with pytest.raises(LocatedInputError) as exc_info:
             read_pseudonym_map(path)
@@ -166,10 +169,13 @@ class TestReadPseudonymMapDuplicateDetection:
     def test_duplicate_student_id_raises_located_error(self, tmp_path: Path) -> None:
         """Two rows sharing the same student_id must be rejected at the boundary."""
         path = tmp_path / "pseudonym_map.parquet"
-        _write_map_parquet(path, [
-            {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
-            {"student_id": "2026000001", "name_kr": "이영희", "pseudonym": "S002"},  # dup
-        ])
+        _write_map_parquet(
+            path,
+            [
+                {"student_id": "2026000001", "name_kr": "김철수", "pseudonym": "S001"},
+                {"student_id": "2026000001", "name_kr": "이영희", "pseudonym": "S002"},  # dup
+            ],
+        )
 
         with pytest.raises(LocatedInputError) as exc_info:
             read_pseudonym_map(path)

@@ -143,37 +143,58 @@ def full_pipeline_root(tmp_path: Path) -> Path:
     qs_path = bronze / "question_set.yaml"
     _make_question_set(qs_path)
 
-    rc = app([
-        "ingest",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--now", "2026-06-01T00:00:00Z",
-    ])
+    rc = app(
+        [
+            "ingest",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--now",
+            "2026-06-01T00:00:00Z",
+        ]
+    )
     assert rc == 0, f"ingest failed rc={rc}"
 
-    rc = app([
-        "generate",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--question-set", str(qs_path),
-        "--backend", "none",
-        "--now", "2026-06-01T01:00:00Z",
-    ])
+    rc = app(
+        [
+            "generate",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--question-set",
+            str(qs_path),
+            "--backend",
+            "none",
+            "--now",
+            "2026-06-01T01:00:00Z",
+        ]
+    )
     assert rc == 0, f"generate failed rc={rc}"
 
     roster_path = bronze / "지도교수배정.yaml"
     _make_roster(roster_path)
 
-    rc = app([
-        "distribute",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-        "--roster", str(roster_path),
-        "--now", "2026-06-01T02:00:00Z",
-    ])
+    rc = app(
+        [
+            "distribute",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+            "--roster",
+            str(roster_path),
+            "--now",
+            "2026-06-01T02:00:00Z",
+        ]
+    )
     assert rc == 0, f"distribute failed rc={rc}"
 
     return data_root
@@ -185,12 +206,17 @@ def full_pipeline_root(tmp_path: Path) -> Path:
 
 
 def _run_verify(data_root: Path) -> int:
-    return app([
-        "verify",
-        "--semester", _SEM,
-        "--course", _COURSE,
-        "--data-root", str(data_root),
-    ])
+    return app(
+        [
+            "verify",
+            "--semester",
+            _SEM,
+            "--course",
+            _COURSE,
+            "--data-root",
+            str(data_root),
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -203,10 +229,7 @@ class TestVerifyCleanPass:
 
     def test_exits_zero(self, full_pipeline_root: Path) -> None:
         rc = _run_verify(full_pipeline_root)
-        assert rc == 0, (
-            "verify should exit 0 on a clean pipeline but got "
-            f"rc={rc}"
-        )
+        assert rc == 0, f"verify should exit 0 on a clean pipeline but got rc={rc}"
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +242,7 @@ class TestVerifyPriv01StagingPii:
 
     def test_exits_three_on_sid_in_staging(self, full_pipeline_root: Path) -> None:
         # Write a PII-containing file into the staging directory after generate.
-        silver = (
-            full_pipeline_root / "silver" / "metric-codex" / _KEY
-        )
+        silver = full_pipeline_root / "silver" / "metric-codex" / _KEY
         staging_dir = silver / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -236,18 +257,14 @@ class TestVerifyPriv01StagingPii:
         evil_bundle.write_text(json.dumps(payload), encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on PRIV-01 staging PII, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on PRIV-01 staging PII, got rc={rc}"
 
     def test_violation_message_names_priv01(
         self,
         full_pipeline_root: Path,
         capsys: pytest.CaptureFixture,
     ) -> None:
-        silver = (
-            full_pipeline_root / "silver" / "metric-codex" / _KEY
-        )
+        silver = full_pipeline_root / "silver" / "metric-codex" / _KEY
         staging_dir = silver / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -257,13 +274,9 @@ class TestVerifyPriv01StagingPii:
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
-        assert "PRIV-01" in captured.err, (
-            f"Expected PRIV-01 in stderr; got: {captured.err!r}"
-        )
+        assert "PRIV-01" in captured.err, f"Expected PRIV-01 in stderr; got: {captured.err!r}"
 
-    def test_exits_three_on_korean_name_in_staging(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_korean_name_in_staging(self, full_pipeline_root: Path) -> None:
         """A known Korean name (in the pseudonym map) in a staging bundle → PRIV-01.
 
         Exercises the armed name-scan path (assert_no_pii known_names) which the
@@ -283,14 +296,10 @@ class TestVerifyPriv01StagingPii:
             "questions": [],
             "leaked_name": _NAME_A,  # 김철수 — present in the pseudonym map
         }
-        evil_bundle.write_text(
-            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
-        )
+        evil_bundle.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on PRIV-01 Korean-name leak, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on PRIV-01 Korean-name leak, got rc={rc}"
 
     def test_korean_name_violation_names_priv01(
         self,
@@ -303,9 +312,7 @@ class TestVerifyPriv01StagingPii:
 
         evil_bundle = staging_dir / "S002.json"
         payload = {"leaked_name": _NAME_B}  # 이영희 — present in the map
-        evil_bundle.write_text(
-            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
-        )
+        evil_bundle.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
@@ -335,9 +342,7 @@ class TestVerifyPriv03NonBijective:
         df.to_parquet(pseudonym_path, index=False)
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on PRIV-03 non-bijective map, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on PRIV-03 non-bijective map, got rc={rc}"
 
     def test_violation_message_names_priv03(
         self,
@@ -365,10 +370,7 @@ class TestVerifySkip02CountInvariant:
     """Hand-editing the manifest so assigned + unassigned != total → SKIP-02."""
 
     def _manifest_path(self, data_root: Path) -> Path:
-        return (
-            data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
-        )
+        return data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
 
     def test_exits_three_on_broken_count(self, full_pipeline_root: Path) -> None:
         manifest_path = self._manifest_path(full_pipeline_root)
@@ -379,9 +381,7 @@ class TestVerifySkip02CountInvariant:
         manifest_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on SKIP-02 broken count invariant, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on SKIP-02 broken count invariant, got rc={rc}"
 
     def test_violation_message_names_skip02(
         self,
@@ -395,9 +395,7 @@ class TestVerifySkip02CountInvariant:
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
-        assert "SKIP-02" in captured.err, (
-            f"Expected SKIP-02 in stderr; got: {captured.err!r}"
-        )
+        assert "SKIP-02" in captured.err, f"Expected SKIP-02 in stderr; got: {captured.err!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -409,9 +407,7 @@ class TestVerifySkip03CrossLeak:
     """Dropping a foreign student md into an advisor's 지도교수별 dir → SKIP-03."""
 
     def _adv_dir(self, data_root: Path) -> Path:
-        return (
-            data_root / "gold" / "metric-codex" / _KEY / "지도교수별" / _ADV_A
-        )
+        return data_root / "gold" / "metric-codex" / _KEY / "지도교수별" / _ADV_A
 
     def test_exits_three_on_cross_leak(self, full_pipeline_root: Path) -> None:
         adv_a_dir = self._adv_dir(full_pipeline_root)
@@ -422,9 +418,7 @@ class TestVerifySkip03CrossLeak:
         foreign_md.write_text("# 무단침입 학생\n\n근거 없음\n", encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on SKIP-03 cross-leak, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on SKIP-03 cross-leak, got rc={rc}"
 
     def test_violation_message_names_skip03(
         self,
@@ -437,9 +431,7 @@ class TestVerifySkip03CrossLeak:
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
-        assert "SKIP-03" in captured.err, (
-            f"Expected SKIP-03 in stderr; got: {captured.err!r}"
-        )
+        assert "SKIP-03" in captured.err, f"Expected SKIP-03 in stderr; got: {captured.err!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -456,32 +448,22 @@ class TestVerifyEvid01Mutation:
     """
 
     def _student_md(self, data_root: Path) -> Path:
-        student_dir = (
-            data_root / "gold" / "metric-codex" / _KEY / "학생별"
-        )
+        student_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"
         # Pick SID_A's md deterministically.
         md = student_dir / f"{_SID_A}_{_NAME_A}.md"
         assert md.is_file(), f"precondition: {md} must exist after generate"
         return md
 
-    def test_exits_three_on_appended_uncited_claim(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_appended_uncited_claim(self, full_pipeline_root: Path) -> None:
         md = self._student_md(full_pipeline_root)
         original = md.read_text(encoding="utf-8")
         # Append an uncited factual claim (not in any citation).
-        md.write_text(
-            original + "\n- 출석률: 100% (출처 없음)\n", encoding="utf-8"
-        )
+        md.write_text(original + "\n- 출석률: 100% (출처 없음)\n", encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on EVID-01 uncited claim, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on EVID-01 uncited claim, got rc={rc}"
 
-    def test_exits_three_on_changed_cited_value(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_changed_cited_value(self, full_pipeline_root: Path) -> None:
         md = self._student_md(full_pipeline_root)
         original = md.read_text(encoding="utf-8")
         # SID_A's score_total is 85; mutate the rendered value to 99.
@@ -490,9 +472,7 @@ class TestVerifyEvid01Mutation:
         md.write_text(mutated, encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on EVID-01 changed cited value, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on EVID-01 changed cited value, got rc={rc}"
 
     def test_violation_message_names_evid01(
         self,
@@ -505,9 +485,7 @@ class TestVerifyEvid01Mutation:
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
-        assert "EVID-01" in captured.err, (
-            f"Expected EVID-01 in stderr; got: {captured.err!r}"
-        )
+        assert "EVID-01" in captured.err, f"Expected EVID-01 in stderr; got: {captured.err!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -524,25 +502,19 @@ class TestVerifyEvid02NoEvidence:
     """
 
     def _student_md(self, data_root: Path) -> Path:
-        student_dir = (
-            data_root / "gold" / "metric-codex" / _KEY / "학생별"
-        )
+        student_dir = data_root / "gold" / "metric-codex" / _KEY / "학생별"
         md = student_dir / f"{_SID_A}_{_NAME_A}.md"
         assert md.is_file(), f"precondition: {md} must exist after generate"
         return md
 
-    def test_clean_md_contains_no_evidence_sentinel(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_clean_md_contains_no_evidence_sentinel(self, full_pipeline_root: Path) -> None:
         """Precondition: the happy-path md actually carries '근거 없음'."""
         md = self._student_md(full_pipeline_root)
         assert "근거 없음" in md.read_text(encoding="utf-8"), (
             "fixture must produce a no_evidence section for the rich question"
         )
 
-    def test_exits_three_when_no_evidence_removed(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_when_no_evidence_removed(self, full_pipeline_root: Path) -> None:
         md = self._student_md(full_pipeline_root)
         original = md.read_text(encoding="utf-8")
         # Remove the '근거 없음' sentinel and substitute a fabricated value.
@@ -551,9 +523,7 @@ class TestVerifyEvid02NoEvidence:
         md.write_text(mutated, encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on EVID-02 missing '근거 없음', got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on EVID-02 missing '근거 없음', got rc={rc}"
 
     def test_violation_message_names_evid02(
         self,
@@ -562,17 +532,13 @@ class TestVerifyEvid02NoEvidence:
     ) -> None:
         md = self._student_md(full_pipeline_root)
         original = md.read_text(encoding="utf-8")
-        md.write_text(
-            original.replace("근거 없음", "표준점수: 1.5 (날조)"), encoding="utf-8"
-        )
+        md.write_text(original.replace("근거 없음", "표준점수: 1.5 (날조)"), encoding="utf-8")
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
         # EVID-01 (byte-mismatch) AND EVID-02 (missing sentinel) both fire here;
         # the gate must at minimum name EVID-02 for the no_evidence guarantee.
-        assert "EVID-02" in captured.err, (
-            f"Expected EVID-02 in stderr; got: {captured.err!r}"
-        )
+        assert "EVID-02" in captured.err, f"Expected EVID-02 in stderr; got: {captured.err!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -584,14 +550,9 @@ class TestVerifyManifestEmptyHashes:
     """A manifest with empty input_hashes (but valid bundle_summary) → MANIFEST."""
 
     def _manifest_path(self, data_root: Path) -> Path:
-        return (
-            data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
-        )
+        return data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
 
-    def test_exits_three_on_empty_input_hashes(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_empty_input_hashes(self, full_pipeline_root: Path) -> None:
         manifest_path = self._manifest_path(full_pipeline_root)
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
         # Strip provenance; keep bundle_summary intact so the manifest loads.
@@ -599,9 +560,7 @@ class TestVerifyManifestEmptyHashes:
         manifest_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on MANIFEST empty input_hashes, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on MANIFEST empty input_hashes, got rc={rc}"
 
     def test_violation_message_names_manifest(
         self,
@@ -615,9 +574,7 @@ class TestVerifyManifestEmptyHashes:
 
         _run_verify(full_pipeline_root)
         captured = capsys.readouterr()
-        assert "MANIFEST" in captured.err, (
-            f"Expected MANIFEST in stderr; got: {captured.err!r}"
-        )
+        assert "MANIFEST" in captured.err, f"Expected MANIFEST in stderr; got: {captured.err!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -636,14 +593,13 @@ class TestVerifyPriv04Gitignored:
     """
 
     def test_gitignore_excludes_data(self) -> None:
-        repo_root = Path(__file__).parents[4]  # climb: integration → tests → metric-codex → modules → paideia
+        repo_root = Path(__file__).parents[
+            4
+        ]  # climb: integration → tests → metric-codex → modules → paideia
         gitignore = repo_root / ".gitignore"
         assert gitignore.exists(), f"No .gitignore at {gitignore}"
 
-        lines = [
-            ln.strip()
-            for ln in gitignore.read_text(encoding="utf-8").splitlines()
-        ]
+        lines = [ln.strip() for ln in gitignore.read_text(encoding="utf-8").splitlines()]
         data_excluded = any(
             ln in ("data/", "data") or ln.startswith("data/")
             for ln in lines
@@ -665,9 +621,7 @@ class TestVerifyPriv04Gitignored:
             capture_output=True,
         )
 
-    def test_check_reports_violation_when_data_not_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_check_reports_violation_when_data_not_ignored(self, tmp_path: Path) -> None:
         """A real tmp repo WITHOUT a data/ rule → check_priv04_gitignored fires."""
         from metric_codex.verify.checks import check_priv04_gitignored
 
@@ -698,9 +652,7 @@ class TestVerifyPriv04Gitignored:
             f"expected no PRIV-04 violation when data/ is ignored; got {violations}"
         )
 
-    def test_verify_exits_three_on_priv04_in_real_repo(
-        self, tmp_path: Path
-    ) -> None:
+    def test_verify_exits_three_on_priv04_in_real_repo(self, tmp_path: Path) -> None:
         """End-to-end: a full pipeline in a real tmp repo with NO data/ rule
         makes ``verify`` report PRIV-04 and exit 3.
         """
@@ -716,20 +668,45 @@ class TestVerifyPriv04Gitignored:
         qs_path = bronze / "question_set.yaml"
         _make_question_set(qs_path)
 
-        assert app([
-            "ingest", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
-        assert app([
-            "generate", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--question-set", str(qs_path),
-            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
+        assert (
+            app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "none",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         rc = _run_verify(data_root)
-        assert rc == 3, (
-            f"verify should exit 3 on PRIV-04 (data/ not ignored), got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on PRIV-04 (data/ not ignored), got rc={rc}"
 
 
 # ---------------------------------------------------------------------------
@@ -763,25 +740,65 @@ class TestVerifyUnparseableRoster:
         qs_path = bronze / "question_set.yaml"
         _make_question_set(qs_path)
 
-        assert app([
-            "ingest", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
 
-        assert app([
-            "generate", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--question-set", str(qs_path),
-            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "none",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         roster_path = bronze / "지도교수배정.yaml"
         _make_roster(roster_path)
 
-        assert app([
-            "distribute", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--roster", str(roster_path),
-            "--now", "2026-06-01T02:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "distribute",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--roster",
+                    str(roster_path),
+                    "--now",
+                    "2026-06-01T02:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         # Corrupt the roster AFTER distribute (so 지도교수별/ dir exists).
         roster_path.write_text(
@@ -807,19 +824,23 @@ class TestVerifyUnparseableRoster:
         """
         data_root, roster_path = self._build_pipeline_with_bad_roster(tmp_path)
 
-        rc = app([
-            "verify",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--roster", str(roster_path),
-        ])
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--roster",
+                str(roster_path),
+            ]
+        )
         captured = capsys.readouterr()
 
         # Must exit 3 (violation detected).
-        assert rc == 3, (
-            f"verify should exit 3 when roster is unparseable; got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 when roster is unparseable; got rc={rc}"
         # Must name SKIP-03 as the invariant category.
         assert "SKIP-03" in captured.err, (
             f"expected SKIP-03 Violation in stderr; got: {captured.err!r}"
@@ -853,18 +874,22 @@ class TestVerifyUnparseableRoster:
         """
         data_root, roster_path = self._build_pipeline_with_bad_roster(tmp_path)
 
-        rc = app([
-            "verify",
-            "--semester", _SEM,
-            "--course", _COURSE,
-            "--data-root", str(data_root),
-            "--roster", str(roster_path),
-        ])
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+                "--roster",
+                str(roster_path),
+            ]
+        )
         captured = capsys.readouterr()
 
-        assert rc == 3, (
-            f"verify should exit 3 when roster is unparseable; got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 when roster is unparseable; got rc={rc}"
         # The redundant generic note must NOT appear (dedup guard active).
         assert "no roster was supplied" not in captured.err, (
             "the generic 'no roster was supplied' SKIP-03 note must be suppressed "
@@ -879,8 +904,7 @@ class TestVerifyUnparseableRoster:
         )
         # And that single line is the located parse failure naming the roster file.
         assert "could not be parsed" in skip03_lines[0], (
-            f"the sole SKIP-03 line must be the located parse failure; "
-            f"got: {skip03_lines[0]!r}"
+            f"the sole SKIP-03 line must be the located parse failure; got: {skip03_lines[0]!r}"
         )
 
 
@@ -901,9 +925,7 @@ class TestVerifyPriv01CacheAndStagingResponsesPii:
     def _silver(self, data_root: Path) -> Path:
         return data_root / "silver" / "metric-codex" / _KEY
 
-    def test_exits_three_on_sid_in_cache_json(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_sid_in_cache_json(self, full_pipeline_root: Path) -> None:
         """T035 RED: a 10-digit student_id in cache/*.json raw_text → exit 3."""
         silver = self._silver(full_pipeline_root)
         cache_dir = silver / "cache"
@@ -914,9 +936,7 @@ class TestVerifyPriv01CacheAndStagingResponsesPii:
         evil.write_text(json.dumps(payload), encoding="utf-8")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 3, (
-            f"verify should exit 3 on PRIV-01 in cache/raw_text, got rc={rc}"
-        )
+        assert rc == 3, f"verify should exit 3 on PRIV-01 in cache/raw_text, got rc={rc}"
 
     def test_violation_priv01_names_cache_file(
         self,
@@ -937,9 +957,7 @@ class TestVerifyPriv01CacheAndStagingResponsesPii:
             f"Expected PRIV-01 in stderr for cache PII; got: {captured.err!r}"
         )
 
-    def test_exits_three_on_sid_in_staging_responses_json(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_three_on_sid_in_staging_responses_json(self, full_pipeline_root: Path) -> None:
         """T035 RED: a 10-digit student_id in staging_responses/*.json raw_text → exit 3."""
         silver = self._silver(full_pipeline_root)
         sr_dir = silver / "staging_responses"
@@ -989,19 +1007,14 @@ class TestVerifyEvid03LlmReportOnly:
     """
 
     def _manifest_path(self, data_root: Path) -> Path:
-        return (
-            data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
-        )
+        return data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
 
     def _set_llm_backend(self, manifest_path: Path, backend: str) -> None:
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
         raw["llm_backend"] = backend
         manifest_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
-    def test_exits_zero_for_api_backend_gold(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_zero_for_api_backend_gold(self, full_pipeline_root: Path) -> None:
         """T036 RED: llm_backend='api' in manifest → verify exits 0 (non-fatal)."""
         manifest_path = self._manifest_path(full_pipeline_root)
         self._set_llm_backend(manifest_path, "api")
@@ -1028,17 +1041,13 @@ class TestVerifyEvid03LlmReportOnly:
             f"stdout={captured.out!r} stderr={captured.err!r}"
         )
 
-    def test_exits_zero_for_subscription_backend_gold(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_exits_zero_for_subscription_backend_gold(self, full_pipeline_root: Path) -> None:
         """subscription backend is also a non-template path → exit 0."""
         manifest_path = self._manifest_path(full_pipeline_root)
         self._set_llm_backend(manifest_path, "subscription")
 
         rc = _run_verify(full_pipeline_root)
-        assert rc == 0, (
-            f"verify must exit 0 for subscription-rendered Gold, got rc={rc}"
-        )
+        assert rc == 0, f"verify must exit 0 for subscription-rendered Gold, got rc={rc}"
 
     def test_note_goes_to_stderr_not_stdout(
         self,
@@ -1063,8 +1072,7 @@ class TestVerifyEvid03LlmReportOnly:
         )
         # The note must NOT appear on stdout (it was the old behaviour).
         assert "not grounding-verified" not in captured.out, (
-            f"note must NOT appear on stdout after refactor; "
-            f"stdout={captured.out!r}"
+            f"note must NOT appear on stdout after refactor; stdout={captured.out!r}"
         )
 
 
@@ -1116,8 +1124,7 @@ class TestVerifyPriv04GitAbsent:
             violations = check_priv04_gitignored(data_root)
 
         assert violations, (
-            "expected a PRIV-04 violation when git is absent (fail-closed), "
-            "got no violations"
+            "expected a PRIV-04 violation when git is absent (fail-closed), got no violations"
         )
         assert all(v.invariant_id == "PRIV-04" for v in violations), (
             f"all violations must be PRIV-04; got {violations}"
@@ -1128,9 +1135,7 @@ class TestVerifyPriv04GitAbsent:
         assert any(
             phrase in combined_msg
             for phrase in ("cannot determine", "unavailable", "git not found", "git binary")
-        ), (
-            f"violation message must say git check could not run; got: {combined_msg!r}"
-        )
+        ), f"violation message must say git check could not run; got: {combined_msg!r}"
 
     def test_git_absent_exits_three_end_to_end(self, tmp_path: Path) -> None:
         """T055 RED: end-to-end verify in a real git repo with git unavailable → exit 3.
@@ -1151,26 +1156,58 @@ class TestVerifyPriv04GitAbsent:
         qs_path = bronze / "question_set.yaml"
         _make_question_set(qs_path)
 
-        assert app([
-            "ingest", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
-        assert app([
-            "generate", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--question-set", str(qs_path),
-            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
+        assert (
+            app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "none",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            == 0
+        )
 
         # Simulate git binary absent during verify.
         with patch("metric_codex.verify.checks.subprocess.run", side_effect=FileNotFoundError):
-            rc = app([
-                "verify", "--semester", _SEM, "--course", _COURSE,
-                "--data-root", str(data_root),
-            ])
+            rc = app(
+                [
+                    "verify",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                ]
+            )
 
-        assert rc == 3, (
-            f"verify must exit 3 when git is absent (fail-closed); got rc={rc}"
-        )
+        assert rc == 3, f"verify must exit 3 when git is absent (fail-closed); got rc={rc}"
 
 
 # ---------------------------------------------------------------------------
@@ -1237,15 +1274,42 @@ class TestVerifyEvid02PerQuestion:
         qs_path = bronze / "question_set.yaml"
         self._make_question_set_two_no_evidence(qs_path)
 
-        assert app([
-            "ingest", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--now", "2026-06-01T00:00:00Z",
-        ]) == 0
-        assert app([
-            "generate", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root), "--question-set", str(qs_path),
-            "--backend", "none", "--now", "2026-06-01T01:00:00Z",
-        ]) == 0
+        assert (
+            app(
+                [
+                    "ingest",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--now",
+                    "2026-06-01T00:00:00Z",
+                ]
+            )
+            == 0
+        )
+        assert (
+            app(
+                [
+                    "generate",
+                    "--semester",
+                    _SEM,
+                    "--course",
+                    _COURSE,
+                    "--data-root",
+                    str(data_root),
+                    "--question-set",
+                    str(qs_path),
+                    "--backend",
+                    "none",
+                    "--now",
+                    "2026-06-01T01:00:00Z",
+                ]
+            )
+            == 0
+        )
         return data_root
 
     def _student_md(self, data_root: Path) -> Path:
@@ -1254,9 +1318,7 @@ class TestVerifyEvid02PerQuestion:
         assert md.is_file(), f"precondition: {md} must exist after generate"
         return md
 
-    def test_precondition_two_sentinels_in_clean_gold(
-        self, tmp_path: Path
-    ) -> None:
+    def test_precondition_two_sentinels_in_clean_gold(self, tmp_path: Path) -> None:
         """Precondition: the clean template emits '근거 없음' TWICE for 2 no_evidence questions."""
         data_root = self._build_pipeline_two_no_evidence(tmp_path)
         md = self._student_md(data_root)
@@ -1283,29 +1345,29 @@ class TestVerifyEvid02PerQuestion:
         # This preserves the EVID-01 byte-match violation too, but we also need
         # EVID-02 — the key test is that *per-question* detection fires.
         first_pos = content.index("근거 없음")
-        mutated = content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음"):]
+        mutated = content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음") :]
         assert mutated.count("근거 없음") == 1, (
             "precondition: after mutation exactly 1 '근거 없음' must remain"
         )
         md.write_text(mutated, encoding="utf-8")
 
-        manifest_path = (
-            data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
-        )
+        manifest_path = data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
         # Use template backend so byte-match also fires — but EVID-02 must ALSO fire.
-        rc = app([
-            "verify", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root),
-        ])
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+            ]
+        )
         captured = capsys.readouterr()
 
-        assert rc == 3, (
-            f"verify must exit 3 on EVID-02 missing per-question sentinel; got rc={rc}"
-        )
-        assert "EVID-02" in captured.err, (
-            f"EVID-02 must appear in stderr; got: {captured.err!r}"
-        )
+        assert rc == 3, f"verify must exit 3 on EVID-02 missing per-question sentinel; got rc={rc}"
+        assert "EVID-02" in captured.err, f"EVID-02 must appear in stderr; got: {captured.err!r}"
 
     def test_inline_phrase_does_not_mask_missing_standalone_sentinel(
         self, tmp_path: Path, capsys: pytest.CaptureFixture
@@ -1330,7 +1392,7 @@ class TestVerifyEvid02PerQuestion:
         # NON-standalone line so a substring count would still see two occurrences.
         first_pos = content.index("근거 없음")
         without_first = (
-            content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음"):]
+            content[:first_pos] + "데이터 없음" + content[first_pos + len("근거 없음") :]
         )
         # Inject an inline occurrence (the phrase is part of a longer line, not standalone).
         mutated = without_first + "\n- 메모: 군집 라벨 '근거 없음 후보군' (출처: x, rich)\n"
@@ -1345,10 +1407,17 @@ class TestVerifyEvid02PerQuestion:
         )
         md.write_text(mutated, encoding="utf-8")
 
-        rc = app([
-            "verify", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root),
-        ])
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+            ]
+        )
         captured = capsys.readouterr()
 
         assert rc == 3, (
@@ -1363,13 +1432,18 @@ class TestVerifyEvid02PerQuestion:
         """When both sentinels are present the gate is clean (no EVID-02)."""
         data_root = self._build_pipeline_two_no_evidence(tmp_path)
         # Do not mutate anything — clean pipeline must exit 0.
-        rc = app([
-            "verify", "--semester", _SEM, "--course", _COURSE,
-            "--data-root", str(data_root),
-        ])
-        assert rc == 0, (
-            f"clean 2-no_evidence pipeline must exit 0; got rc={rc}"
+        rc = app(
+            [
+                "verify",
+                "--semester",
+                _SEM,
+                "--course",
+                _COURSE,
+                "--data-root",
+                str(data_root),
+            ]
         )
+        assert rc == 0, f"clean 2-no_evidence pipeline must exit 0; got rc={rc}"
 
 
 # ---------------------------------------------------------------------------
@@ -1391,10 +1465,7 @@ class TestVerifyUnassignedInMibajeong:
     """
 
     def _manifest_path(self, data_root: Path) -> Path:
-        return (
-            data_root / "silver" / "metric-codex" / _KEY
-            / "manifest_metric-codex.json"
-        )
+        return data_root / "silver" / "metric-codex" / _KEY / "manifest_metric-codex.json"
 
     def _gold_dir(self, data_root: Path) -> Path:
         return data_root / "gold" / "metric-codex" / _KEY
@@ -1408,8 +1479,7 @@ class TestVerifyUnassignedInMibajeong:
         assert mibaj_md.is_file(), f"precondition: {mibaj_md} must exist after distribute"
         content = mibaj_md.read_text(encoding="utf-8")
         assert _SID_C in content, (
-            f"precondition: 미배정.md must contain unassigned SID {_SID_C!r}; "
-            f"content:\n{content}"
+            f"precondition: 미배정.md must contain unassigned SID {_SID_C!r}; content:\n{content}"
         )
 
     def test_missing_unassigned_sid_emits_violation(
@@ -1454,16 +1524,12 @@ class TestVerifyUnassignedInMibajeong:
         )
         # The violation message must name the missing SID.
         assert ghost_sid in captured.err, (
-            f"violation message must name the missing SID {ghost_sid!r}; "
-            f"stderr={captured.err!r}"
+            f"violation message must name the missing SID {ghost_sid!r}; stderr={captured.err!r}"
         )
 
-    def test_all_unassigned_sids_present_exits_zero(
-        self, full_pipeline_root: Path
-    ) -> None:
+    def test_all_unassigned_sids_present_exits_zero(self, full_pipeline_root: Path) -> None:
         """Clean pipeline: all unassigned SIDs are in 미배정.md → exit 0."""
         rc = _run_verify(full_pipeline_root)
         assert rc == 0, (
-            f"clean pipeline with unassigned SID properly in 미배정.md must "
-            f"exit 0; got rc={rc}"
+            f"clean pipeline with unassigned SID properly in 미배정.md must exit 0; got rc={rc}"
         )

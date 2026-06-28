@@ -195,9 +195,7 @@ def redact_bundle_for_llm(bundle: StudentBundle) -> StudentBundle:
                 )
             )
 
-        redacted_answer = bq.answer.model_copy(
-            update={"citations": redacted_citations}
-        )
+        redacted_answer = bq.answer.model_copy(update={"citations": redacted_citations})
         redacted_questions.append(
             bq.model_copy(
                 update={

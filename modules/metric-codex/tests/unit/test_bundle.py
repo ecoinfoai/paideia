@@ -375,9 +375,7 @@ class TestThirdPartyNameRedactionEndToEnd:
         own_silver = tmp_path / "silver" / "metric-codex" / f"{_SEM}-{_COURSE}"
         write_staging(own_silver, bundles, known_names=frozenset({_NAME_A}))
         # The original codex entry must STILL carry the full label.
-        cluster_entry = next(
-            e for e in entries if e.entry_kind == EntryKind.cluster_label
-        )
+        cluster_entry = next(e for e in entries if e.entry_kind == EntryKind.cluster_label)
         assert cluster_entry.value_text == self._LABEL, (
             "Silver CodexEntry.value_text must retain the original 박교수 label"
         )
@@ -392,9 +390,7 @@ class TestThirdPartyNameRedactionEndToEnd:
         entries, pmap, qs = self._scenario()
         bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
         llm_facts = render_template(redact_bundle_for_llm(bundles[0]))
-        assert "박교수" not in llm_facts, (
-            f"3rd-party name leaked into LLM facts: {llm_facts!r}"
-        )
+        assert "박교수" not in llm_facts, f"3rd-party name leaked into LLM facts: {llm_facts!r}"
         assert "[REDACTED]" in llm_facts
 
     def test_unredacted_bundle_facts_retain_original(self, tmp_path):
@@ -469,9 +465,7 @@ class TestFreetextCategoryKeyAndValueRedactionEndToEnd:
         bundles = build_bundles(codex_entries=entries, pseudonym_map=pmap, question_set=qs)
         redacted = redact_bundle_for_llm(bundles[0])
         citation = redacted.questions[0].answer.citations[0]
-        assert "박교수" not in citation.key, (
-            f"citation.key not redacted: {citation.key!r}"
-        )
+        assert "박교수" not in citation.key, f"citation.key not redacted: {citation.key!r}"
         assert "박교수" not in str(citation.value), (
             f"citation.value not redacted: {citation.value!r}"
         )
@@ -732,9 +726,7 @@ class TestWriteStaging:
         """A genuinely PII-free bundle passes the armed scan and is written."""
         bundles = self._bundles_single()
         own_silver = tmp_path / "silver"
-        paths = write_staging(
-            own_silver, bundles, known_names=frozenset([_NAME_A, _NAME_B])
-        )
+        paths = write_staging(own_silver, bundles, known_names=frozenset([_NAME_A, _NAME_B]))
         assert len(paths) == 1
         assert paths[0].is_file()
 

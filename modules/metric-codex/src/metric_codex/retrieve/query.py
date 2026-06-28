@@ -103,9 +103,7 @@ def load_question_set(path: Path) -> QuestionSet:
     try:
         return QuestionSet(**raw)
     except ValidationError as exc:
-        raise LocatedInputError(
-            f"question_set validation failed: {exc}", file=str(path)
-        ) from exc
+        raise LocatedInputError(f"question_set validation failed: {exc}", file=str(path)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +145,7 @@ def answer_question(
             "Exactly one of 'question' or 'freeform_text' must be provided; got neither."
         )
     if question is not None and freeform_text is not None:
-        raise ValueError(
-            "Exactly one of 'question' or 'freeform_text' must be provided; got both."
-        )
+        raise ValueError("Exactly one of 'question' or 'freeform_text' must be provided; got both.")
 
     if question is not None:
         citations, available_layers, no_evidence = retrieve_evidence(

@@ -73,8 +73,7 @@ def render_template(bundle: StudentBundle) -> str:
             for citation in bq.answer.citations:
                 value_str = _format_value(citation.value)
                 lines.append(
-                    f"- {citation.key}: {value_str}"
-                    f" (출처: {citation.source_id}, {citation.layer})"
+                    f"- {citation.key}: {value_str} (출처: {citation.source_id}, {citation.layer})"
                 )
 
         lines.append("")

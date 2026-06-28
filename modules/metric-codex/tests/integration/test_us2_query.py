@@ -161,9 +161,7 @@ class TestRetrieveEvidenceRichQuestion:
     def test_every_citation_matches_input_entry(self):
         """SC-002: every citation key/value/source_id traces to a real input entry."""
         entries = _make_both_layer_entries()
-        entry_index = {
-            (e.key, e.source_id): e for e in entries
-        }
+        entry_index = {(e.key, e.source_id): e for e in entries}
         citations, _, _ = retrieve_evidence(
             entries,
             entry_kinds={EntryKind.domain_correct_rate},

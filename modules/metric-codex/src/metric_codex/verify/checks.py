@@ -140,9 +140,7 @@ def check_priv01_no_staging_pii(
     Returns:
         List of Violation (empty if no dirs exist or no PII found).
     """
-    known_names: frozenset[str] = frozenset(
-        e.name_kr for e in pseudonym_map if e.name_kr
-    )
+    known_names: frozenset[str] = frozenset(e.name_kr for e in pseudonym_map if e.name_kr)
     violations: list[Violation] = []
 
     # --- staging/: full payload scan (original behaviour) ---
@@ -263,9 +261,7 @@ def _find_git_root_with_content(path: Path) -> Path | None:
     current = path.resolve()
     for candidate in [current, *current.parents]:
         git_dir = candidate / ".git"
-        if git_dir.is_dir() and (
-            (git_dir / "HEAD").exists() or (git_dir / "config").exists()
-        ):
+        if git_dir.is_dir() and ((git_dir / "HEAD").exists() or (git_dir / "config").exists()):
             return candidate
     return None
 
@@ -454,9 +450,7 @@ def check_evidence_grounding(
     bundle_by_pseudonym = {b.pseudonym: b for b in bundles}
 
     # Build pseudonym → student_id reverse lookup.
-    pseudonym_to_sid: dict[str, str] = {
-        e.pseudonym: e.student_id for e in pseudonym_map
-    }
+    pseudonym_to_sid: dict[str, str] = {e.pseudonym: e.student_id for e in pseudonym_map}
 
     for pseudonym, bundle in bundle_by_pseudonym.items():
         sid = pseudonym_to_sid.get(pseudonym)
@@ -492,9 +486,7 @@ def check_evidence_grounding(
             # Violation) so the caller can emit it to stderr without triggering exit 3.
             # The PII boundary is separately enforced by check_priv01_no_staging_pii
             # scanning staging/cache/staging_responses.
-            notes.append(
-                f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)"
-            )
+            notes.append(f"{pseudonym}: LLM-rendered → not grounding-verified (template-only)")
 
         # EVID-02: every no_evidence question must have its own '근거 없음' sentinel.
         # Per-question check (T054 / MC-U17): a whole-file substring test fails when
