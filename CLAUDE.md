@@ -48,5 +48,5 @@ Python 3.11 (uv workspace, paideia umbrella): Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/014-metric-codex-v0-1-1/plan.md
+specs/015-security-hardening/plan.md
 <!-- SPECKIT END -->
