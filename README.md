@@ -4,6 +4,13 @@
 
 # paideia
 
+[![CI](https://github.com/ecoinfoai/paideia/actions/workflows/ci.yml/badge.svg)](https://github.com/ecoinfoai/paideia/actions/workflows/ci.yml)
+[![Docs](https://github.com/ecoinfoai/paideia/actions/workflows/docs.yml/badge.svg)](https://ecoinfoai.github.io/paideia/)
+[![codecov](https://codecov.io/gh/ecoinfoai/paideia/graph/badge.svg)](https://codecov.io/gh/ecoinfoai/paideia)
+[![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
+[![version](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > **paideia (παιδεία)** — the ancient Greek word for the all-round formation and
 > education of a person. The project takes a single university course through one
 > full semester — **diagnose, teach, assess, reflect** — and feeds the results
@@ -56,13 +63,13 @@ The modules mirror the timeline of a semester.
 
 | Order | Module | Role | Status |
 |---|---|---|---|
-| 1 | **needs-map** | Pre-diagnosis analysis (semantic axes · clustering · one-page-per-student cards) | ✅ Shipped |
-| 2 | **examen** | Deterministic drafting of final-exam questions | ✅ Shipped |
-| 3 | **immersio** | Exam result interpretation + personalized student reports + email | ✅ Shipped |
-| 4 | **maieutica** | Weekly quiz / formative-assessment candidate generation | 🚧 In development |
-| 5 | **formative-analysis** | Weekly formative-assessment delivery and analysis | 🚧 Pending integration |
-| 6 | **retro-mester** | Semester retrospective → next-year course design | 🚧 In development |
-| — | **metric-codex** | Student-centric learning-record accumulation and query (downstream project) | 🚧 In development |
+| 1 | **needs-map** | Pre-diagnosis analysis (semantic axes · clustering · one-page-per-student cards) | ✅ Shipped (v0.1.0) |
+| 2 | **examen** | Deterministic drafting of final-exam questions | ✅ Shipped (v0.1.0) |
+| 3 | **immersio** | Exam result interpretation + personalized student reports + email | ✅ Shipped (v0.1.0) |
+| 4 | **maieutica** | Weekly quiz / formative-assessment candidate generation | ✅ Shipped (v0.1.2) |
+| 5 | **retro-mester** | Semester retrospective → next-year course design | ✅ Shipped (v0.1.1) |
+| 6 | **metric-codex** | Student-centric learning-record accumulation and query | ✅ Shipped (v0.1.1) |
+| — | **formative-analysis** | Weekly formative-assessment delivery and analysis | 🚧 Pending integration (code complete in a separate repo) |
 
 ### Data flow over one semester
 
@@ -115,9 +122,12 @@ cd paideia
 uv sync
 
 # Verify the module CLIs
-uv run --package examen   examen   --help
-uv run --package immersio immersio --help
-uv run --package needs-map paideia-needs-map --help
+uv run --package needs-map    paideia-needs-map --help
+uv run --package examen       examen            --help
+uv run --package immersio     immersio          --help
+uv run --package maieutica    maieutica         --help
+uv run --package retro-mester retro-mester      --help
+uv run --package metric-codex metric-codex      --help
 ```
 
 See [docs/quickstart.md](docs/quickstart.md) for a 5-minute first run, and
@@ -131,8 +141,11 @@ See [docs/quickstart.md](docs/quickstart.md) for a 5-minute first run, and
 paideia/
 ├── modules/
 │   ├── needs-map/     # pre-diagnosis analysis
+│   ├── examen/        # exam authoring
 │   ├── immersio/      # result interpretation + reports + email
-│   └── examen/        # exam authoring
+│   ├── maieutica/     # weekly quiz / formative-assessment generation
+│   ├── retro-mester/  # semester retrospective → next-year design
+│   └── metric-codex/  # student-centric learning-record accumulation + query
 ├── shared/
 │   └── paideia_shared/   # Pydantic schemas (Silver/Gold contracts), fonts, LLM utils
 ├── docs/              # documentation site (MkDocs Material → GitHub Pages)

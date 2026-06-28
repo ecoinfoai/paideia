@@ -81,7 +81,20 @@ jobs:
         run: |
           if [ "${{ matrix.package }}" = "paideia_shared" ]; then
             path="shared/paideia_shared/tests"
+            cov="shared/paideia_shared/src"
           else
             path="modules/${{ matrix.package }}/tests"
+            cov="modules/${{ matrix.package }}/src"
           fi
-          uv run --no-sync pytest "$path"
+          uv run --no-sync pytest "$path" --cov="$cov" --cov-report=xml
+
+      # Upload per-package coverage; flags keep the matrix legs separate on
+      # Codecov. continue-on-error so a Codecov outage never reddens CI.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: ${{ matrix.package }}
+          name: ${{ matrix.package }}-py${{ matrix.python-version }}

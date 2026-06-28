@@ -3,6 +3,8 @@ name = "paideia"
 version = "0.1.0"
 description = "한 교과목의 학기 전 주기 데이터 시스템 — 6개 모듈의 우산 워크스페이스"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 
 [tool.uv.workspace]
 members = ["modules/*", "shared/*"]
