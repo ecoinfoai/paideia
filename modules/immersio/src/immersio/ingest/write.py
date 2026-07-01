@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -242,3 +243,13 @@ def write_silver(
         # NOTE: Python's TemporaryDirectory will attempt cleanup of the now-moved
         # path; we shield by recreating an empty dir at the original tmp location.
         Path(tmp).mkdir(exist_ok=True)
+
+    # Restrict PII-containing parquets to owner-only after the atomic move.
+    # student_master carries name_kr; diagnostic_response and exam_result
+    # carry student_id — all three are DAR-01 Silver PII artefacts.
+    for _pii in (
+        "student_master.parquet",
+        "diagnostic_response.parquet",
+        "exam_result.parquet",
+    ):
+        os.chmod(out_dir / _pii, 0o600)
