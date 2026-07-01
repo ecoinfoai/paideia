@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import (
     CohortLabel,
     DispatchReportData,
@@ -131,7 +132,8 @@ def write_dispatch_report_md(
         lines.append("")
 
     out = gold_dir / filename
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _text = "\n".join(lines) + "\n"
+    atomic_write(out, lambda p, _t=_text: p.write_text(_t, encoding="utf-8"))
     return out
 
 

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import (
     CohortLabel,
     CohortRow,
@@ -209,12 +210,15 @@ def write_cohort_silver(rows: list[CohortRow], parquet_path: Path) -> None:
         },
         schema=schema,
     )
-    pq.write_table(
-        table,
+    atomic_write(
         parquet_path,
-        use_dictionary=False,
-        write_statistics=False,
-        compression="snappy",
+        lambda p, _t=table: pq.write_table(
+            _t,
+            p,
+            use_dictionary=False,
+            write_statistics=False,
+            compression="snappy",
+        ),
     )
 
 
@@ -256,23 +260,24 @@ def write_cohort_md(
     combined_lines.extend(_format_cohort_md_table(low_rows, _COHORT_KR_NAME[CohortLabel.LOW_SCORE]))
     combined_lines.extend(_format_cohort_md_table(rest_rows, _COHORT_KR_NAME[CohortLabel.REST]))
     combined_path = output_dir / "cohort_명단.md"
-    combined_path.write_text("\n".join(combined_lines) + "\n", encoding="utf-8")
+    _combined_text = "\n".join(combined_lines) + "\n"
+    atomic_write(combined_path, lambda p, _t=_combined_text: p.write_text(_t, encoding="utf-8"))
 
     low_path = output_dir / "cohort_저득점_명단.md"
-    low_path.write_text(
+    _low_text = (
         "# 저득점 cohort 명단\n\n"
         + "\n".join(_format_cohort_md_table(low_rows, "저득점 (점수 < 60)"))
-        + "\n",
-        encoding="utf-8",
+        + "\n"
     )
+    atomic_write(low_path, lambda p, _t=_low_text: p.write_text(_t, encoding="utf-8"))
 
     rest_path = output_dir / "cohort_나머지_명단.md"
-    rest_path.write_text(
+    _rest_text = (
         "# 나머지 cohort 명단\n\n"
         + "\n".join(_format_cohort_md_table(rest_rows, "나머지 (점수 ≥ 60)"))
-        + "\n",
-        encoding="utf-8",
+        + "\n"
     )
+    atomic_write(rest_path, lambda p, _t=_rest_text: p.write_text(_t, encoding="utf-8"))
 
     return combined_path, low_path, rest_path
 
