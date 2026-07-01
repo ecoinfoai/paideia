@@ -29,6 +29,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from paideia_shared.io import atomic_write
 
 from .joiner import _COMBINED_COLUMN_ORDER
 
@@ -131,12 +132,15 @@ def write_combined_silver(df: pd.DataFrame, path: Path) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     table = pa.Table.from_pandas(out, preserve_index=False)
-    pq.write_table(
-        table,
+    atomic_write(
         path,
-        compression="snappy",
-        use_dictionary=False,
-        write_statistics=False,
+        lambda p: pq.write_table(
+            table,
+            p,
+            compression="snappy",
+            use_dictionary=False,
+            write_statistics=False,
+        ),
     )
 
 

@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import StudentExamMetrics
 
 _SCHEMA_VERSION = "1.0.0"
@@ -89,12 +90,15 @@ def write_student_metrics_parquet(
             b"producer": b"paideia/immersio/0.1.0",
         }
     )
-    pq.write_table(
-        table,
-        str(output_path),
-        compression="snappy",
-        use_dictionary=False,
-        write_statistics=False,
+    atomic_write(
+        output_path,
+        lambda p: pq.write_table(
+            table,
+            p,
+            compression="snappy",
+            use_dictionary=False,
+            write_statistics=False,
+        ),
     )
 
 
