@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas._common import STANDARD_AXIS_KEYS
 
 _AXIS_KR: dict[str, str] = {
@@ -232,16 +233,23 @@ def build_student_reports(
         section = _student_section(int(idx) + 1, row, cohort_mean, top3)
         body_sections.append(section)
 
-        # Per-student .md
+        # Per-student .md — owner-only (student PII: student_id + name_kr).
         sid = str(row["student_id"])
         per_student_path = student_dir / _safe_filename(sid, row.get("name_kr"))
         per_student_text = f"# {row.get('name_kr') or '이름없음'} (학번 `{sid}`)\n\n{section}"
-        per_student_path.write_text(per_student_text, encoding="utf-8")
+        atomic_write(
+            per_student_path,
+            lambda p, _t=per_student_text: p.write_text(_t, encoding="utf-8"),
+        )
         paths.append(per_student_path)
 
     consolidated = gold_dir / "학생별면담시트_합본.md"
     header = _consolidated_header(df_sorted, manifest_dict, cohort_mean)
-    consolidated.write_text(header + "\n".join(body_sections), encoding="utf-8")
+    consolidated_text = header + "\n".join(body_sections)
+    atomic_write(
+        consolidated,
+        lambda p, _t=consolidated_text: p.write_text(_t, encoding="utf-8"),
+    )
     paths.append(consolidated)
 
     return paths
