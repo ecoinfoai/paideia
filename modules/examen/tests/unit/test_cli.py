@@ -406,9 +406,7 @@ class TestSemesterCourseValidation:
         code = _invoke(["ingest", "--semester", "2026-1", "--course", "ANATOMY"])
         assert code == 2
 
-    def test_message_includes_value_and_pattern(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_message_includes_value_and_pattern(self, capsys: pytest.CaptureFixture[str]) -> None:
         """FR-010 — the located error names the offending value and the pattern."""
         code = _invoke(["ingest", "--semester", "../../etc", "--course", "anatomy"])
         assert code == 2

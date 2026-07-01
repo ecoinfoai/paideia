@@ -600,10 +600,20 @@ def _validate_semester_course(args: argparse.Namespace) -> int | None:
         ``None``.
     """
     checks: tuple[tuple[str, str | None, TypeAdapter, str, str], ...] = (
-        ("--semester", getattr(args, "semester", None), _SEMESTER_TA,
-         "SemesterCode", r"^\d{4}-[12SW]$"),
-        ("--course", getattr(args, "course", None), _COURSE_TA,
-         "CourseSlug", r"^[a-z][a-z0-9-]{1,39}$"),
+        (
+            "--semester",
+            getattr(args, "semester", None),
+            _SEMESTER_TA,
+            "SemesterCode",
+            r"^\d{4}-[12SW]$",
+        ),
+        (
+            "--course",
+            getattr(args, "course", None),
+            _COURSE_TA,
+            "CourseSlug",
+            r"^[a-z][a-z0-9-]{1,39}$",
+        ),
     )
     examples = {"--semester": "2026-1", "--course": "anatomy"}
     for flag, value, adapter, type_name, pattern in checks:
