@@ -24,6 +24,9 @@ block.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 # (test file, test name) tuples awaiting bronze CSV refresh.
@@ -59,6 +62,23 @@ _V011_REASON = (
     "8-axis refresh is out of scope for spec 003-needs-map-v0-1-1. "
     "See modules/immersio/tests/conftest.py docstring."
 )
+
+
+@pytest.fixture
+def assert_owner_only():
+    """Return a callable that asserts a path has owner-only permissions.
+
+    Skips when running as root because root bypasses chmod protections,
+    making the mode check meaningless.
+    """
+
+    def _assert(path: Path) -> None:
+        if os.geteuid() == 0:
+            pytest.skip("root bypasses chmod 0o600 protection")
+        mode = path.stat().st_mode & 0o777
+        assert mode & 0o077 == 0, f"expected owner-only, got {oct(mode)}"
+
+    return _assert
 
 
 def pytest_collection_modifyitems(config, items) -> None:  # noqa: ANN001
