@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from paideia_shared.io import atomic_write
 from paideia_shared.schemas import AxisSummaryRow, FactorScoresLongRow
 
 # Fixed CSV column order — must match contracts/exports.md L19-L37 exactly.
@@ -140,25 +141,26 @@ def write_factor_scores_long(
     df = pd.DataFrame(payloads, columns=list(_LONG_COLUMNS))
 
     csv_path = gold_dir / _LONG_FILENAME_CSV
-    df.to_csv(
+    atomic_write(
         csv_path,
-        encoding="utf-8-sig",
-        index=False,
-        lineterminator="\n",
-        na_rep="",
+        lambda p: df.to_csv(
+            p,
+            encoding="utf-8-sig",
+            index=False,
+            lineterminator="\n",
+            na_rep="",
+        ),
     )
 
     yaml_path = gold_dir / _LONG_FILENAME_YAML
     yaml_doc = {"students": payloads}
-    yaml_path.write_text(
-        yaml.safe_dump(
-            yaml_doc,
-            sort_keys=False,
-            allow_unicode=True,
-            default_flow_style=False,
-        ),
-        encoding="utf-8",
+    yaml_text = yaml.safe_dump(
+        yaml_doc,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
     )
+    atomic_write(yaml_path, lambda p: p.write_text(yaml_text, encoding="utf-8"))
     return csv_path, yaml_path
 
 
